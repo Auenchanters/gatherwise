@@ -11,8 +11,11 @@ import { addDays, daysBetween, type IsoDate } from './dates';
 import { DUE_SOON_DAYS } from './schedule';
 import type { EventTemplate } from './templates/types';
 
+/** Every status a vendor can have, in the order it moves through them. */
+export const VENDOR_STATUSES = ['to_contact', 'quoted', 'booked'] as const;
+
 /** How far the organizer has got with a vendor. Only the user changes it. */
-export type VendorStatus = 'to_contact' | 'quoted' | 'booked';
+export type VendorStatus = (typeof VENDOR_STATUSES)[number];
 
 /** How urgent a booking is on a given day; derived from the dates, never stored. */
 export type BookingStatus = 'booked' | 'ok' | 'due_soon' | 'overdue';

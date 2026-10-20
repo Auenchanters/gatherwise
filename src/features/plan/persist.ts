@@ -17,6 +17,7 @@ import {
   type ReadyState,
 } from '../../domain/reducer';
 import { templateFor, templateIds } from '../../domain/templates';
+import { VENDOR_STATUSES } from '../../domain/vendors';
 import { LIMITS } from '../../shared/limits';
 import { err, type Result } from '../../shared/result';
 import {
@@ -38,6 +39,8 @@ type LoadError = 'missing' | 'corrupt' | 'version' | 'stale';
 const MAX_IDS = 500;
 const MAX_ID_CHARS = 80;
 const MAX_VENDORS = 100;
+/** Far more briefs than anyone submits, and low enough that `generation + 1` never repeats. */
+const MAX_GENERATION = 1_000_000_000;
 const { guestsMin, guestsMax } = LIMITS.brief;
 
 const id = z.string().max(MAX_ID_CHARS);
@@ -49,11 +52,11 @@ const envelopeSchema = z.strictObject({
   v: z.literal(1),
   brief: eventBriefSchema,
   plannedGuests: z.int().min(guestsMin).max(guestsMax),
-  generation: z.int().min(0),
+  generation: z.int().min(0).max(MAX_GENERATION),
   progress: z.strictObject({
     doneTasks: ids,
     vendorStatus: z
-      .record(id, z.enum(['to_contact', 'quoted', 'booked']))
+      .record(id, z.enum(VENDOR_STATUSES))
       .refine((statuses) => Object.keys(statuses).length <= MAX_VENDORS),
     checklistDone: ids,
   }),
@@ -85,15 +88,21 @@ export function savePlan(
       return true;
     }
     const { brief, plannedGuests, generation, progress, ai } = state;
+    // Built to the envelope's own input type, so the writer and the reader cannot drift apart.
     // JSON leaves out whichever half of the AI result is undefined.
-    const text = JSON.stringify({
+    const envelope = {
       v: 1,
       brief,
       plannedGuests,
       generation,
-      progress,
+      progress: {
+        doneTasks: [...progress.doneTasks],
+        vendorStatus: progress.vendorStatus,
+        checklistDone: [...progress.checklistDone],
+      },
       ai: { suggestions: ai.suggestions, meta: ai.meta },
-    });
+    } satisfies z.input<typeof envelopeSchema>;
+    const text = JSON.stringify(envelope);
     if (text.length > MAX_STORED_CHARS) return false;
     store.setItem(STORAGE_KEY, text);
     return true;

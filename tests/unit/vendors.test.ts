@@ -17,6 +17,7 @@ import type { EventTemplate } from '../../src/domain/templates/types';
 import {
   bookingStatus,
   requiredVendors,
+  VENDOR_STATUSES,
   type VendorItem,
   type VendorStatus,
 } from '../../src/domain/vendors';
@@ -224,6 +225,13 @@ describe('requiredVendors: the template is shared and stays untouched', () => {
     });
     const b = brief('community');
     expect(requiredVendors(b, frozen, isoDate(b.date))).toEqual(vendorsFor(b));
+  });
+});
+
+describe('VENDOR_STATUSES', () => {
+  it('lists every VendorStatus once, in the order a vendor moves through them', () => {
+    const typed: readonly VendorStatus[] = VENDOR_STATUSES;
+    expect(typed).toEqual(['to_contact', 'quoted', 'booked']);
   });
 });
 

@@ -338,6 +338,8 @@ describe('loadPlan: tampered envelope fields', () => {
     ['stringly planned guests', { plannedGuests: '250' }],
     ['a negative generation', { generation: -1 }],
     ['a fractional generation', { generation: 1.5 }],
+    ['a huge generation', { generation: 1e15 }],
+    ['a generation past the cap', { generation: 1_000_000_001 }],
     ['an unknown top-level key', { plan: { budget: 1 } }],
     ['progress that is not an object', { progress: [] }],
     ['progress with an unknown key', { progress: { ...progress, extra: [] } }],
@@ -370,7 +372,7 @@ describe('loadPlan: tampered envelope fields', () => {
   it('accepts the bounds themselves', () => {
     const edge = tampered({
       plannedGuests: 5000,
-      generation: 0,
+      generation: 1_000_000_000,
       progress: {
         doneTasks: manyIds.slice(0, 500),
         checklistDone: ['x'.repeat(80)],
@@ -378,6 +380,8 @@ describe('loadPlan: tampered envelope fields', () => {
       },
     });
     expect(loaded(edge).progress.doneTasks).toHaveLength(500);
+    expect(loaded(edge).generation).toBe(1_000_000_000);
+    expect(loaded(tampered({ generation: 0 })).generation).toBe(0);
   });
 
   it('keeps ids the plan no longer has, without letting them change it', () => {
@@ -388,17 +392,65 @@ describe('loadPlan: tampered envelope fields', () => {
     expect(back.progress.doneTasks).toContain('ghost');
     expect(back.plan).toEqual(state.plan);
   });
+});
 
-  it('drops a __proto__ key instead of polluting anything', () => {
-    const text = JSON.stringify(good).replace(
-      '"vendorStatus":{',
-      '"vendorStatus":{"__proto__":"booked",',
-    );
-    expect(text).toContain('"__proto__":"booked"');
-    const back = loaded(memoryStore(text));
+describe('loadPlan: prototype pollution payloads', () => {
+  const saved = JSON.stringify(good);
+  const payload = '"__proto__":{"polluted":"booked"}';
+  /** The saved text with a hostile key put first inside the object that `opener` opens. */
+  const injected = (opener: string, hostile = payload): string => {
+    expect(saved).toContain(opener);
+    return saved.replace(opener, `${opener}${hostile},`);
+  };
+  const outcome = (text: string): string => {
+    const result = loadPlan(memoryStore(text), today);
+    return result.ok ? result.value.ai.status : result.error;
+  };
+  const prototypeIsClean = (): void => {
+    expect(Object.prototype.hasOwnProperty.call(Object.prototype, 'polluted')).toBe(false);
+    expect(Reflect.get({}, 'polluted')).toBeUndefined();
+    expect(Reflect.get(Object.prototype, 'booked')).toBeUndefined();
+  };
+
+  it.each<[string, string, string]>([
+    ['vendorStatus', injected('"vendorStatus":{'), 'applied'],
+    ['progress', injected('"progress":{'), 'corrupt'],
+    ['brief', injected('"brief":{'), 'corrupt'],
+    ['the envelope itself', saved.replace('{', `{${payload},`), 'corrupt'],
+    ['the suggestions', injected('"suggestions":{'), 'idle'],
+    ['an idea', injected('"ideas":[{'), 'idle'],
+    ['an extra task', injected('"extraTasks":[{'), 'idle'],
+    ['the meta', injected('"meta":{'), 'idle'],
+    [
+      'vendorStatus, as a constructor path',
+      injected('"vendorStatus":{', '"constructor":{"prototype":{"polluted":"booked"}}'),
+      'corrupt',
+    ],
+    [
+      'vendorStatus, as a prototype key',
+      injected('"vendorStatus":{', '"prototype":{"polluted":"booked"}'),
+      'corrupt',
+    ],
+  ])(
+    'loads or refuses a __proto__ key in %s without touching Object.prototype',
+    (_where, text, expected) => {
+      expect(outcome(text)).toBe(expected);
+      prototypeIsClean();
+    },
+  );
+
+  it('drops the hostile vendorStatus key and keeps the real ones', () => {
+    const back = loaded(memoryStore(injected('"vendorStatus":{')));
     expect(Object.keys(back.progress.vendorStatus)).toEqual(['tent_shamiana']);
     expect(Object.getPrototypeOf(back.progress.vendorStatus)).toBe(Object.prototype);
-    expect(Object.hasOwn({}, 'booked')).toBe(false);
+    expect(Reflect.get(back.progress.vendorStatus, 'polluted')).toBeUndefined();
+    prototypeIsClean();
+  });
+
+  it('also holds for a plain string value, the form the first payload used', () => {
+    const back = loaded(memoryStore(injected('"vendorStatus":{', '"__proto__":"booked"')));
+    expect(Object.keys(back.progress.vendorStatus)).toEqual(['tent_shamiana']);
+    prototypeIsClean();
   });
 });
 

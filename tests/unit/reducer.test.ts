@@ -166,9 +166,10 @@ describe('purity', () => {
   it.each(everyAction)('$type works on deep-frozen state and leaves it untouched', (action) => {
     for (const state of [inProgress(), initialPlanState]) {
       const frozen = deepFreeze(structuredClone(state));
-      const snapshot = JSON.stringify(frozen);
-      expect(() => planReducer(frozen, action)).not.toThrow();
-      expect(JSON.stringify(frozen)).toBe(snapshot);
+      const frozenAction = deepFreeze(structuredClone(action));
+      const snapshot = JSON.stringify([frozen, frozenAction]);
+      expect(() => planReducer(frozen, frozenAction)).not.toThrow();
+      expect(JSON.stringify([frozen, frozenAction])).toBe(snapshot);
     }
   });
 
@@ -444,7 +445,58 @@ describe('date/changed and today/changed', () => {
   });
 });
 
+describe('an action the types forbid', () => {
+  /** A type guard that lies, so a test can send what TypeScript would stop it sending. */
+  const claimsAction = (value: unknown): value is PlanAction => value !== undefined;
+  const sendUnknown = (state: PlanState, action: unknown): PlanState => {
+    if (!claimsAction(action)) throw new Error('unreachable');
+    return planReducer(state, action);
+  };
+
+  it.each([{ type: 'nope' }, { type: 'guests/Changed', guests: 400 }, { generation: 1 }, {}])(
+    'leaves the state as it was for %j',
+    (action) => {
+      for (const state of [inProgress(), initialPlanState]) {
+        expect(sendUnknown(state, action)).toBe(state);
+      }
+    },
+  );
+});
+
 describe('ticking tasks and vendors', () => {
+  it('changes only the progress for a vendor status or checklist tick: the plan is the same object', () => {
+    const before = inProgress();
+    const status = ready(
+      planReducer(before, { type: 'vendor/status', vendorId: 'sound_lighting', status: 'booked' }),
+    );
+    const check = ready(planReducer(before, { type: 'vendor/check', itemId: 'sound_lighting:2' }));
+    for (const next of [status, check]) {
+      expect(next.plan).toBe(before.plan);
+      expect(next.adjustments).toBe(before.adjustments);
+      expect(next.ai).toBe(before.ai);
+      expect(next.brief).toBe(before.brief);
+      expect(next.progress).not.toBe(before.progress);
+    }
+    expect(status.progress.vendorStatus).toEqual({
+      tent_shamiana: 'quoted',
+      sound_lighting: 'booked',
+    });
+    expect(check.progress.checklistDone).toEqual(['tent_shamiana:0', 'sound_lighting:2']);
+  });
+
+  it('still clears an earlier error on a vendor status or checklist tick', () => {
+    const failed = ready(planReducer(inProgress(), { type: 'guests/changed', guests: 0 }));
+    expect(failed.error).toBeDefined();
+    for (const action of [
+      { type: 'vendor/status', vendorId: 'tent_shamiana', status: 'booked' },
+      { type: 'vendor/check', itemId: 'tent_shamiana:3' },
+    ] satisfies PlanAction[]) {
+      const next = ready(planReducer(failed, action));
+      expect(next, action.type).not.toHaveProperty('error');
+      expect(next.plan, action.type).toBe(failed.plan);
+    }
+  });
+
   it('toggles a task on and off', () => {
     const on = ready(planReducer(applied(), { type: 'task/toggled', taskId: 'define_goals' }));
     expect(on.progress.doneTasks).toEqual(['define_goals']);

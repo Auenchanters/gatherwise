@@ -148,6 +148,16 @@ const keepResult = ({ suggestions, meta }: AiState): Pick<AiState, 'suggestions'
   ...(meta ? { meta } : {}),
 });
 
+/**
+ * `state` with new progress and nothing else changed; the plan and `ai` keep their identity. Used
+ * where the progress cannot change the plan (`vendorView` lays it over the vendors). Like any
+ * successful action it leaves no `error`.
+ */
+function withProgress(state: ReadyState, progress: Progress): ReadyState {
+  const { phase, brief, today, plannedGuests, generation, ai, plan, adjustments } = state;
+  return { phase, brief, today, plannedGuests, generation, progress, ai, plan, adjustments };
+}
+
 /** Starts over with `brief`. A date that cannot be planned keeps whatever state there was. */
 function submit(state: PlanState, brief: EventBrief, today: IsoDate): PlanState {
   const next = restorePlanState({
@@ -166,7 +176,8 @@ function submit(state: PlanState, brief: EventBrief, today: IsoDate): PlanState 
  * The generation only ever goes up: a submitted brief takes the next one, and `plan/reset` keeps it.
  *
  * Every edit re-derives the plan locally and leaves `ai` as it was, so only `ai/*` actions concern
- * the model (the zero-call guarantee). Guests change `brief.guests` but not `plannedGuests`, so the
+ * the model (the zero-call guarantee). A vendor status or checklist tick cannot change the plan, so it
+ * keeps the same `plan` object (stable for memoisation) and only the progress is new. Guests change `brief.guests` but not `plannedGuests`, so the
  * budget rescales; a new budget re-plans at the current guest count. Actions that need a plan do
  * nothing on an empty state, `ai/*` actions do nothing when their `generation` is not the current
  * one, and a task, vendor or checklist id the plan does not have is ignored (progress stays bounded).
@@ -218,22 +229,23 @@ export function planReducer(state: PlanState, action: PlanAction): PlanState {
         : state;
     case 'vendor/status':
       return plan.vendors.some((v) => v.id === action.vendorId)
-        ? change(state, {
-            progress: {
-              ...progress,
-              vendorStatus: { ...progress.vendorStatus, [action.vendorId]: action.status },
-            },
+        ? withProgress(state, {
+            ...progress,
+            vendorStatus: { ...progress.vendorStatus, [action.vendorId]: action.status },
           })
         : state;
     case 'vendor/check':
       return plan.vendors.some((v) => v.checklist.some((c) => c.id === action.itemId))
-        ? change(state, {
-            progress: {
-              ...progress,
-              checklistDone: toggled(progress.checklistDone, action.itemId),
-            },
+        ? withProgress(state, {
+            ...progress,
+            checklistDone: toggled(progress.checklistDone, action.itemId),
           })
         : state;
+    default:
+      // `action` is `never` here, so adding an action without handling it fails to compile. At run
+      // time it can still be something untyped, which leaves the state as it was.
+      action satisfies never;
+      return state;
   }
 }
 
