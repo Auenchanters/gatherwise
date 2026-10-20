@@ -9,7 +9,7 @@ export default defineConfig({
     env: { TZ: 'America/New_York' },
     coverage: {
       provider: 'v8',
-      include: ['src/domain/**', 'src/shared/**', 'server/**'],
+      include: ['src/domain/**', 'src/shared/**', 'src/features/**/*.ts', 'server/**'],
       // Ambient declarations compile to nothing, so there is nothing to cover.
       exclude: [...coverageConfigDefaults.exclude, '**/*.d.ts'],
       reporter: ['text', 'json-summary', 'html'],
