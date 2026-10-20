@@ -6,8 +6,11 @@
  */
 import assert from 'node:assert/strict';
 
-// Imported after this line, so the handler is unconfigured even on a build machine with a key.
+// The modules are imported after these lines, and Vercel exposes project env vars to the build:
+// without the key the handler stays unconfigured (no model call), and without APP_ORIGIN the
+// smoke runs the same whatever origin the project is configured for.
 delete process.env.GEMINI_API_KEY;
+delete process.env.APP_ORIGIN;
 const { default: health } = await import('../artifacts/runtime/api/health.js');
 const { default: plan } = await import('../artifacts/runtime/api/plan.js');
 const base = 'https://gatherwise.example';

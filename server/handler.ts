@@ -8,8 +8,8 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { EventKind } from '../src/domain/templates/types.js';
-import type { AiMeta } from '../src/shared/schema.js';
-import { createInferenceGate, type InferenceGate } from './capacity.js';
+import { aiMetaSchema } from '../src/shared/schema.js';
+import { createInferenceGate } from './capacity.js';
 import { AppError, errorResponse, type ErrorCode } from './errors.js';
 import { logRequest } from './log.js';
 import { buildPrompt, parseSuggestions, type Prompt } from './prompt.js';
@@ -31,19 +31,20 @@ export interface HandlerOptions {
   readonly generate?: Generate;
   /** The model id reported in `meta.model`. */
   readonly model?: string;
-  /** `APP_ORIGIN`; without it only the request's own origin is accepted. */
+  /** `APP_ORIGIN`, accepted in addition to the request's own origin. */
   readonly origin?: string;
   /** The clock for the date window and the rate limit. */
   readonly now?: () => Date;
   readonly rateLimit?: RateLimiter;
-  readonly capacity?: InferenceGate;
 }
 
 /** Facts about a request gathered for its log line as handling proceeds. */
 interface Trace {
-  kind?: EventKind;
+  event?: EventKind;
   inputTokens?: number;
   outputTokens?: number;
+  /** Set for an unexpected fault, so a 500 is traceable without logging what was thrown. */
+  kind?: 'internal';
 }
 
 const isObject = (value: unknown): value is object => typeof value === 'object' && value !== null;
@@ -62,7 +63,21 @@ const isTimeout = (error: unknown): boolean =>
   'name' in error &&
   (error.name === 'AbortError' || error.name === 'TimeoutError');
 
-/** Runs the model call, turning any failure into a public code judged by the error's shape. */
+/**
+ * The public code for a failed model call, judged by the error's shape. Inspecting a hostile value
+ * (a throwing getter or Proxy trap) must not escape as a 500, so that falls back to unavailable.
+ */
+function modelFailure(error: unknown): ErrorCode {
+  try {
+    if (isBusy(error)) return 'AI_BUSY';
+    if (isTimeout(error)) return 'AI_TIMEOUT';
+  } catch {
+    // Fall through: an error we cannot even inspect is just an unavailable provider.
+  }
+  return 'AI_UNAVAILABLE';
+}
+
+/** Runs the model call, turning any failure into a catalogued public error. */
 async function callModel(
   generate: Generate,
   prompt: Prompt,
@@ -71,10 +86,7 @@ async function callModel(
   try {
     return await generate(prompt, signal);
   } catch (error) {
-    let code: ErrorCode = 'AI_UNAVAILABLE';
-    if (isBusy(error)) code = 'AI_BUSY';
-    else if (isTimeout(error)) code = 'AI_TIMEOUT';
-    throw new AppError(code);
+    throw new AppError(modelFailure(error));
   }
 }
 
@@ -90,13 +102,13 @@ export function createHandler(
 ): (request: Request) => Promise<Response> {
   const { generate, model = DEFAULT_MODEL, origin, now = () => new Date() } = options;
   const rateLimit = options.rateLimit ?? createRateLimiter();
-  const withCapacity = options.capacity ?? createInferenceGate();
+  const withCapacity = createInferenceGate();
 
   async function planRoute(request: Request, requestId: string, trace: Trace): Promise<Response> {
     validateTransport(request, origin);
     rateLimit(clientId(request), now().getTime());
     const brief = await readBrief(request);
-    trace.kind = brief.kind;
+    trace.event = brief.kind;
     const plan = planFor(brief, now());
     if (!generate) throw new AppError('AI_NOT_CONFIGURED');
     request.signal.throwIfAborted();
@@ -107,8 +119,10 @@ export function createHandler(
     const { inputTokens, outputTokens } = generation;
     Object.assign(trace, { inputTokens, outputTokens });
     const suggestions = parseSuggestions(generation.text, brief.kind);
-    const meta: AiMeta = { model, latencyMs, inputTokens, outputTokens, requestId };
-    return Response.json({ suggestions, meta }, { headers: NO_STORE });
+    // Checked at runtime too: a bad model id or token count must not reach the client's store.
+    const meta = aiMetaSchema.safeParse({ model, latencyMs, inputTokens, outputTokens, requestId });
+    if (!meta.success) throw new AppError('INVALID_RESPONSE');
+    return Response.json({ suggestions, meta: meta.data }, { headers: NO_STORE });
   }
 
   async function route(
@@ -138,6 +152,7 @@ export function createHandler(
     } catch (error) {
       const failure = toAppError(error, request);
       code = failure.code;
+      if (code === 'INTERNAL_ERROR') trace.kind = 'internal';
       response = errorResponse(failure);
     }
     logRequest({
@@ -152,12 +167,18 @@ export function createHandler(
   };
 }
 
-const env = process.env;
-const key = env.GEMINI_API_KEY;
-const configuredModel = env.GEMINI_MODEL ?? DEFAULT_MODEL;
+/** An environment setting, trimmed; unset and blank (`NAME=`) both mean "not set". */
+function setting(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value === '' ? undefined : value;
+}
+
+const key = setting('GEMINI_API_KEY');
+const configuredModel = setting('GEMINI_MODEL') ?? DEFAULT_MODEL;
+const appOrigin = setting('APP_ORIGIN');
 /** The production handler, configured from the environment once per warm instance. */
 export const handleRequest = createHandler({
   model: configuredModel,
   ...(key ? { generate: createGeminiGenerator(key, configuredModel) } : {}),
-  ...(env.APP_ORIGIN ? { origin: env.APP_ORIGIN } : {}),
+  ...(appOrigin ? { origin: appOrigin } : {}),
 });

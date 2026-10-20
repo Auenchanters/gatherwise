@@ -64,9 +64,11 @@ describe('validateTransport', () => {
     expect(await failure(() => validateTransport(none, undefined))).toMatchObject({ status: 415 });
   });
 
-  it('rejects a foreign Origin and any cross-site fetch with 403', async () => {
+  it('rejects a foreign, empty or opaque Origin and any cross-site fetch with 403', async () => {
     for (const headers of [
       { origin: 'https://evil.example' },
+      { origin: '' },
+      { origin: 'null' },
       { 'sec-fetch-site': 'cross-site' },
       { origin: 'https://gatherwise.example', 'sec-fetch-site': 'cross-site' },
     ]) {
@@ -77,11 +79,16 @@ describe('validateTransport', () => {
     }
   });
 
-  it('uses APP_ORIGIN, when set, instead of the request URL', async () => {
+  it('accepts APP_ORIGIN as well as the own origin of the request URL, and nothing else', async () => {
     const app = 'https://gatherwise.vercel.app';
     expect(() => validateTransport(post('{}', { origin: app }), app)).not.toThrow();
     const own = post('{}', { origin: 'https://gatherwise.example' });
-    expect(await failure(() => validateTransport(own, app))).toMatchObject({ status: 403 });
+    expect(() => validateTransport(own, app)).not.toThrow();
+    for (const origin of ['https://evil.example', '']) {
+      expect(await failure(() => validateTransport(post('{}', { origin }), app))).toMatchObject({
+        status: 403,
+      });
+    }
   });
 
   it('rejects a declared Content-Length over the cap before reading anything', async () => {

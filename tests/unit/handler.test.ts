@@ -9,6 +9,16 @@ import type { Generate } from '../../server/provider.js';
 import { aiMetaSchema, type EventBrief } from '../../src/shared/schema.js';
 import { brief } from '../support/fixtures.js';
 
+// Only `handleRequest` (built from the environment) reaches the SDK; every other test injects
+// `generate`. The mock keeps that path offline too.
+const sdk = vi.hoisted(() => ({ generateContent: vi.fn() }));
+vi.mock('@google/genai', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@google/genai')>()),
+  GoogleGenAI: class {
+    models = { generateContent: sdk.generateContent };
+  },
+}));
+
 const ORIGIN = 'https://gatherwise.example';
 const NOW = new Date('2026-10-21T10:00:00Z');
 
@@ -146,11 +156,20 @@ describe('request matrix', () => {
     expect(response.status).toBe(403);
   });
 
-  it('accepts the configured APP_ORIGIN', async () => {
+  it('with APP_ORIGIN set, accepts it and the own origin of the deployment, and nothing else', async () => {
     const app = 'https://gatherwise.vercel.app';
     const handler = handlerWith({ generate: answering(), origin: app });
     expect((await handler(post(undefined, { origin: app }))).status).toBe(200);
-    expect((await handler(post())).status).toBe(403);
+    // A preview deployment calls its own URL, which is not APP_ORIGIN.
+    expect((await handler(post())).status).toBe(200);
+    expect((await handler(post(undefined, { origin: 'https://evil.example' }))).status).toBe(403);
+  });
+
+  it('403 for an empty Origin header', async () => {
+    const generate = answering();
+    const response = await handlerWith({ generate })(post(undefined, { origin: '' }));
+    expect(response.status).toBe(403);
+    expect(generate).not.toHaveBeenCalled();
   });
 
   it('400 INVALID_JSON for a malformed body', async () => {
@@ -247,6 +266,32 @@ describe('request matrix', () => {
     expect((await errorOf(response)).code).toBe('AI_BUSY');
   });
 
+  it('502 AI_UNAVAILABLE, not 500, when inspecting the error itself throws', async () => {
+    const hostile = new Proxy(new Error('trap'), {
+      has() {
+        throw new Error('has trap');
+      },
+      get() {
+        throw new Error('get trap');
+      },
+    });
+    const response = await handlerWith({ generate: failing(hostile) })(post());
+    expect(response.status).toBe(502);
+    expect((await errorOf(response)).code).toBe('AI_UNAVAILABLE');
+  });
+
+  it('frees its slot after every failure: three failures in a row, then a success', async () => {
+    const generate = vi
+      .fn<Generate>()
+      .mockRejectedValueOnce(new Error('one'))
+      .mockRejectedValueOnce(new Error('two'))
+      .mockRejectedValueOnce(new Error('three'))
+      .mockResolvedValue({ text: JSON.stringify(SUGGESTIONS), inputTokens: 1, outputTokens: 1 });
+    const handler = handlerWith({ generate });
+    for (let i = 0; i < 3; i += 1) expect((await handler(post())).status).toBe(502);
+    expect((await handler(post())).status).toBe(200);
+  });
+
   it.each(['AbortError', 'TimeoutError'])(
     '504 AI_TIMEOUT when the SDK times out with %s',
     async (name) => {
@@ -314,6 +359,18 @@ describe('request matrix', () => {
     expect(signal).toBeInstanceOf(AbortSignal);
   });
 
+  it('502 INVALID_RESPONSE if the metadata would break its own contract', async () => {
+    for (const model of ['', 'm'.repeat(81)]) {
+      const response = await handlerWith({ generate: answering(), model })(post());
+      expect(response.status).toBe(502);
+      expect((await errorOf(response)).code).toBe('INVALID_RESPONSE');
+    }
+    const negative = vi.fn<Generate>(() =>
+      Promise.resolve({ text: JSON.stringify(SUGGESTIONS), inputTokens: -1, outputTokens: 1 }),
+    );
+    expect((await handlerWith({ generate: negative })(post())).status).toBe(502);
+  });
+
   it('404 with a static message that never echoes the path', async () => {
     const response = await handlerWith()(new Request(`${ORIGIN}/api/secret-<b>path</b>`));
     expect(response.status).toBe(404);
@@ -342,6 +399,15 @@ describe('request matrix', () => {
     const { code, message } = await errorOf(response);
     expect(code).toBe('INTERNAL_ERROR');
     expect(message).not.toContain('private');
+    // Traceable in the logs as an internal fault, still without the thrown message.
+    expect(error).toHaveBeenCalledOnce();
+    const line = String(error.mock.calls[0]?.[0]);
+    expect(line).not.toContain('private');
+    expect(JSON.parse(line)).toMatchObject({
+      status: 500,
+      code: 'INTERNAL_ERROR',
+      kind: 'internal',
+    });
   });
 });
 
@@ -388,10 +454,11 @@ describe('request logging', () => {
     expect(success).toMatchObject({
       route: '/api/plan',
       status: 200,
-      kind: 'community',
+      event: 'community',
       inputTokens: 300,
       outputTokens: 420,
     });
+    expect(success).not.toHaveProperty('kind');
     expect(success).toHaveProperty('latencyMs', expect.any(Number));
     expect(invalid).toMatchObject({ status: 502, code: 'INVALID_RESPONSE', inputTokens: 300 });
     expect(unavailable).toMatchObject({ status: 502, code: 'AI_UNAVAILABLE' });
@@ -417,23 +484,54 @@ describe('default clock', () => {
 });
 
 describe('handleRequest from the environment', () => {
-  const health = async (): Promise<unknown> => {
+  /** Re-imports the handler so it is built from the env stubbed in the test. */
+  const freshHandler = async () => {
     vi.resetModules();
-    const { handleRequest } = await import('../../server/handler.js');
+    return (await import('../../server/handler.js')).handleRequest;
+  };
+  const health = async (): Promise<unknown> => {
+    const handleRequest = await freshHandler();
     const body: unknown = await (await handleRequest(new Request(`${ORIGIN}/api/health`))).json();
     return body;
   };
+  /** `meta.model` of a successful plan through the env-built handler (SDK mocked above). */
+  const reportedModel = async (): Promise<unknown> => {
+    sdk.generateContent.mockResolvedValue({ text: JSON.stringify(SUGGESTIONS) });
+    const handleRequest = await freshHandler();
+    const soon = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+    const response = await handleRequest(post({ brief: brief('community', { date: soon }) }));
+    expect(response.status).toBe(200);
+    const body: unknown = await response.json();
+    return typeof body === 'object' && body !== null && 'meta' in body
+      ? aiMetaSchema.parse(body.meta).model
+      : undefined;
+  };
 
-  it('is not configured without GEMINI_API_KEY, and falls back to the default model', async () => {
+  it('is not configured without GEMINI_API_KEY', async () => {
     vi.stubEnv('GEMINI_API_KEY', '');
-    vi.stubEnv('GEMINI_MODEL', undefined);
     await expect(health()).resolves.toEqual({ status: 'ok', ai: 'not_configured' });
   });
 
-  it('is configured with a key, a model override and APP_ORIGIN', async () => {
+  it('is configured with a key, and honours a model override and APP_ORIGIN', async () => {
     vi.stubEnv('GEMINI_API_KEY', 'test-key-not-a-secret');
     vi.stubEnv('GEMINI_MODEL', 'gemini-test');
-    vi.stubEnv('APP_ORIGIN', ORIGIN);
+    vi.stubEnv('APP_ORIGIN', 'https://gatherwise.vercel.app');
     await expect(health()).resolves.toEqual({ status: 'ok', ai: 'configured' });
+    await expect(reportedModel()).resolves.toBe('gemini-test');
+    expect(sdk.generateContent).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gemini-test' }),
+    );
+  });
+
+  it.each([
+    ['unset', undefined],
+    ['blank', '   '],
+  ])('uses gemini-3.5-flash-lite when GEMINI_MODEL is %s', async (_name, value) => {
+    vi.stubEnv('GEMINI_API_KEY', 'test-key-not-a-secret');
+    vi.stubEnv('GEMINI_MODEL', value);
+    await expect(reportedModel()).resolves.toBe('gemini-3.5-flash-lite');
+    expect(sdk.generateContent).toHaveBeenLastCalledWith(
+      expect.objectContaining({ model: 'gemini-3.5-flash-lite' }),
+    );
   });
 });

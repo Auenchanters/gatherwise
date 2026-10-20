@@ -15,7 +15,10 @@ export interface RequestLog {
   readonly route: string;
   readonly status: number;
   readonly code?: ErrorCode;
-  readonly kind?: EventKind;
+  /** `internal` marks an unexpected fault (a bug), so it can be traced without its message. */
+  readonly kind?: 'internal';
+  /** The event kind of the brief, once it has parsed. */
+  readonly event?: EventKind;
   readonly latencyMs: number;
   readonly inputTokens?: number;
   readonly outputTokens?: number;

@@ -20,16 +20,19 @@ const planRequestSchema = z.strictObject({ brief: eventBriefSchema });
 
 /**
  * Steps 2 to 4: rejects a non-JSON content type (415), a foreign `Origin` or a cross-site fetch
- * (403) and a declared `Content-Length` over the cap (413). `appOrigin` is `APP_ORIGIN`; without
- * it the request's own origin is the only one allowed. A request with no `Origin` (curl, a server)
- * passes this step and still meets every other limit.
+ * (403) and a declared `Content-Length` over the cap (413).
+ * Allowed origins are the request URL's own origin plus `appOrigin` (`APP_ORIGIN`) when set, so a
+ * preview deployment calling itself is accepted. Browsers set `Origin` truthfully, so this stays
+ * CSRF-safe. A present but empty or opaque (`null`) `Origin` is rejected; a request with no
+ * `Origin` at all (curl, a server) passes this step and still meets every other limit.
  */
 export function validateTransport(request: Request, appOrigin: string | undefined): void {
   const type = request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
   if (type !== 'application/json') throw new AppError('JSON_REQUIRED');
   const origin = request.headers.get('origin');
-  const allowed = appOrigin ?? new URL(request.url).origin;
-  if ((origin && origin !== allowed) || request.headers.get('sec-fetch-site') === 'cross-site')
+  const allowed = [new URL(request.url).origin, appOrigin];
+  const foreign = origin !== null && !allowed.includes(origin);
+  if (foreign || request.headers.get('sec-fetch-site') === 'cross-site')
     throw new AppError('ORIGIN_REJECTED');
   if (Number(request.headers.get('content-length')) > MAX_BODY_BYTES)
     throw new AppError('BODY_TOO_LARGE');

@@ -26,6 +26,22 @@ describe('sanitizeText', () => {
     expect(sanitizeText('x\uD800y', 50)).toBe('xy');
   });
 
+  it('removes invisible Unicode tag characters (ASCII smuggling), even inside a flag emoji', () => {
+    const smuggled = `Hi${String.fromCodePoint(0xe0049, 0xe0047, 0xe004e, 0xe007f)} there`;
+    expect(sanitizeText(smuggled, 50)).toBe('Hi there');
+    // The cost: a subdivision flag (England = black flag + tag letters) degrades to a plain black flag.
+    const england = String.fromCodePoint(
+      0x1f3f4,
+      0xe0067,
+      0xe0062,
+      0xe0065,
+      0xe006e,
+      0xe0067,
+      0xe007f,
+    );
+    expect(sanitizeText(england, 50)).toBe(String.fromCodePoint(0x1f3f4));
+  });
+
   it('collapses whitespace runs, keeping one newline where a run contained one', () => {
     expect(sanitizeText('  many   spaces\t\there  ', 50)).toBe('many spaces here');
     expect(sanitizeText('first \r\n\n\n  second', 50)).toBe('first\nsecond');

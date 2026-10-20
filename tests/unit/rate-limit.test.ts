@@ -69,7 +69,10 @@ describe('createInferenceGate', () => {
     });
     for (const release of releases) release();
     await Promise.all(held);
-    await expect(gate(() => Promise.reject(new Error('boom')))).rejects.toThrow('boom');
+    // Three failures in a row: if any leaked its slot, the gate would now be full.
+    for (let i = 0; i < 3; i += 1) {
+      await expect(gate(() => Promise.reject(new Error('boom')))).rejects.toThrow('boom');
+    }
     await expect(gate(() => Promise.resolve('after'))).resolves.toBe('after');
   });
 });
