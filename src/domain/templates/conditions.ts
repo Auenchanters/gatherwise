@@ -27,8 +27,8 @@ export const hostedOutsideHome: Condition = (b) => b.venue !== 'home';
 
 const MINUTES_PER_HOUR = 60;
 
-/** Minutes after midnight for an `HH:MM` string. */
-const minutesOf = (hhmm: string): number =>
+/** Minutes after midnight for an `HH:MM` string. Also used by the volunteer shift planner. */
+export const minutesOf = (hhmm: string): number =>
   Number(hhmm.slice(0, 2)) * MINUTES_PER_HOUR + Number(hhmm.slice(3, 5));
 
 /**
