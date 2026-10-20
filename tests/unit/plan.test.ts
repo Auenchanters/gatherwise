@@ -222,6 +222,33 @@ describe('buildPlan', () => {
   });
 });
 
+describe('planned guest count (it comes from stored state, not the brief schema)', () => {
+  const b = brief('community');
+  const message = /^Planned guest count must be a whole number from 1 to 5000$/u;
+
+  it.each([-5, 0, 2.5, 6000, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects %s with a RangeError naming the planned guest count',
+    (plannedGuests) => {
+      const input = {
+        brief: b,
+        today,
+        eventDate: isoDate(b.date),
+        plannedGuests,
+        doneTasks: new Set<string>(),
+      };
+      expect(() => assemblePlan(input)).toThrow(RangeError);
+      expect(() => assemblePlan(input)).toThrow(message);
+      expect(() => buildPlan(b, today, { plannedGuests })).toThrow(RangeError);
+      expect(() => buildPlan(b, today, { plannedGuests })).toThrow(message);
+    },
+  );
+
+  it('accepts the limits themselves', () => {
+    expect(planOf(b, { plannedGuests: 1 }).plannedGuests).toBe(1);
+    expect(planOf(b, { plannedGuests: 5000 }).plannedGuests).toBe(5000);
+  });
+});
+
 describe('assemblePlan', () => {
   it('throws an invariant error if the tasks it is given form a cycle', () => {
     const b = brief('community');

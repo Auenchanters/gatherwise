@@ -2,7 +2,8 @@
  * Merging Gemini's suggestions: the one place untrusted model output meets the engine.
  * Does: trims and caps every string, clamps or drops every number, drops ids the plan cannot use,
  * logs each change as an `Adjustment` for the "Engine adjustments" panel, then re-assembles the
- * plan with what survived.
+ * plan with what survived. Every input item is accounted for: kept, dropped with one adjustment,
+ * or cut by a list cap that says how many it cut.
  * Never does: trust model numbers; discard the whole response for one bad value; change the
  * budget total; throw on any `AiSuggestions`-shaped input (NaN, ±Infinity, 1e300, huge lists,
  * emoji or right-to-left text included).
@@ -36,152 +37,153 @@ export interface MergeContext {
 }
 
 const ai = LIMITS.ai;
-type Log = Adjustment[];
-
-const dropped = (log: Log, target: string, detail: string): void => {
-  log.push({ kind: 'dropped', target, detail });
-};
-
-// ponytail: counts code points, not graphemes, so a cut can still split a ZWJ emoji sequence;
-// switch to Intl.Segmenter if that shows up.
-/**
- * Trims `raw`, then cuts it to `max` code points (never inside a surrogate pair) and drops the
- * space left at the cut. Empty means the caller drops the item.
- */
-function capText(raw: string, max: number, target: string, what: string, log: Log): string {
-  const chars = Array.from(raw.trim());
-  if (chars.length <= max) return chars.join('');
-  log.push({
-    kind: 'truncated',
-    target,
-    detail: `${what} shortened from ${chars.length} to ${max} characters`,
-  });
-  return chars.slice(0, max).join('').trimEnd();
-}
-
-/** The first `max` items; logs how many were cut. */
-function capList<T>(items: readonly T[], max: number, target: string, noun: string, log: Log) {
-  if (items.length > max) {
-    log.push({
-      kind: 'truncated',
-      target,
-      detail: `Kept the first ${max} of ${items.length} ${noun}`,
-    });
-  }
-  return items.slice(0, max);
-}
 
 const clamp = (n: number, min: number, max: number): number => Math.min(max, Math.max(min, n));
 
-/** A model amount in major units for display; one too big for minor units is shown raw. */
-function shownMoney(major: number, currency: Currency): string {
-  const scaled = Math.round(major * MINOR_PER_MAJOR[currency]);
-  return isMinor(scaled) ? formatMoney(scaled, currency) : String(major);
+/** Text trimmed and cut to a cap; `from` and `to` are its length in code points before and after. */
+interface Cut {
+  readonly text: string;
+  readonly from: number;
+  readonly to: number;
+}
+
+// ponytail: counts code points, not graphemes, so a cut can still split a ZWJ emoji sequence;
+// switch to Intl.Segmenter if that shows up.
+/** Trims `raw` and cuts it to `max` code points (never inside a surrogate pair), then trims the cut. */
+function cut(raw: string, max: number): Cut {
+  const chars = Array.from(raw.trim());
+  const text = chars.slice(0, max).join('').trimEnd();
+  return { text, from: chars.length, to: Array.from(text).length };
 }
 
 /**
- * A cost in whole major units from 0 to the whole budget, in minor units. Not a finite amount,
- * or negative, becomes 0; rounding to a whole unit is not logged.
+ * Starts normalizing one response: the context, the lookups every list needs (built once), and
+ * the recorder each helper reports its changes to.
  */
-function capCost(raw: number, title: string, target: string, brief: EventBrief, log: Log): Minor {
-  const { budget, currency } = brief;
-  const valid = Number.isFinite(raw) && raw >= 0;
-  const whole = valid ? Math.round(raw) : 0;
-  const cost = Math.min(whole, budget);
-  if (!valid || cost < whole) {
+function startPass(ctx: MergeContext) {
+  const log: Adjustment[] = [];
+  const add = (kind: Adjustment['kind'], target: string, detail: string): void => {
+    log.push({ kind, target, detail });
+  };
+  return {
+    ctx,
+    log,
+    /** Category id to label; a category missing here is not in this plan. */
+    categories: new Map(ctx.template.categories.map((c) => [c.id, c.label])),
+    dropped: (target: string, detail: string): void => {
+      add('dropped', target, detail);
+    },
+    clamped: (target: string, detail: string): void => {
+      add('clamped', target, detail);
+    },
+    /** The cut text, logging the cut when there was one. */
+    text(c: Cut, target: string, what: string): string {
+      if (c.to < c.from)
+        add('truncated', target, `${what} shortened from ${c.from} to ${c.to} characters`);
+      return c.text;
+    },
+    /** The first `max` items, logging how many were cut. */
+    list<T>(items: readonly T[], max: number, target: string, noun: string): readonly T[] {
+      if (items.length > max)
+        add('truncated', target, `Kept the first ${max} of ${items.length} ${noun}`);
+      return items.slice(0, max);
+    },
+    /** A finite day count rounded and clamped; rounding alone is not an adjustment. */
+    days(n: number, min: number, max: number, target: string, what: string): number {
+      const rounded = Math.round(n) + 0; // `+ 0` turns a rounded -0 into 0
+      const days = clamp(rounded, min, max);
+      if (days !== rounded) add('clamped', target, `${what} clamped from ${rounded} to ${days}`);
+      return days;
+    },
+  };
+}
+type Pass = ReturnType<typeof startPass>;
+
+/** An amount in major units as text; one that is not finite or not whole paise is put in words. */
+function moneyText(major: number, currency: Currency): string {
+  const perMajor = MINOR_PER_MAJOR[currency];
+  const scaled = Math.round(major * perMajor);
+  return isMinor(scaled) && scaled / perMajor === major
+    ? formatMoney(scaled, currency)
+    : 'an unusable amount';
+}
+
+/**
+ * A cost in whole major units from 0 to the whole budget, in minor units. A cost that is not
+ * finite becomes 0. Rounding to a whole unit is not an adjustment; moving beyond it is.
+ */
+function capCost(raw: number, title: string, target: string, p: Pass): Minor {
+  const { budget, currency } = p.ctx.brief;
+  const rounded = Number.isFinite(raw) ? Math.round(raw) + 0 : undefined;
+  const cost = rounded === undefined ? 0 : clamp(rounded, 0, budget);
+  if (cost !== rounded) {
     const why = cost === budget ? ' (the whole budget)' : '';
-    log.push({
-      kind: 'clamped',
+    p.clamped(
       target,
-      detail: `Cost of '${title}' clamped from ${shownMoney(raw, currency)} to ${shownMoney(cost, currency)}${why}`,
-    });
+      `Cost of '${title}' clamped from ${moneyText(raw, currency)} to ${moneyText(cost, currency)}${why}`,
+    );
   }
   return toMinor(cost, currency);
 }
 
-function normalizeIdeas(ideas: AiSuggestions['ideas'], ctx: MergeContext, log: Log): Idea[] {
-  const known = new Set(ctx.template.categories.map((c) => c.id));
+// Each list checks an item's structure (text present, ids known, numbers finite) before cutting or
+// clamping anything, so a dropped item logs exactly one adjustment.
+
+function normalizeIdeas(ideas: AiSuggestions['ideas'], p: Pass): Idea[] {
   const out: Idea[] = [];
-  for (const [i, raw] of capList(ideas, ai.ideasMax, 'ideas', 'ideas', log).entries()) {
+  for (const [i, raw] of p.list(ideas, ai.ideasMax, 'ideas', 'ideas').entries()) {
     const at = `ideas[${i}]`;
-    const title = capText(raw.title, ai.ideaTitleMax, `${at}.title`, `Title of idea ${i + 1}`, log);
-    if (title === '') {
-      dropped(log, at, `Dropped idea ${i + 1}: it has no title`);
-      continue;
+    const title = cut(raw.title, ai.ideaTitleMax);
+    const description = cut(raw.description, ai.ideaDescriptionMax);
+    if (title.text === '') {
+      p.dropped(at, `Dropped idea ${i + 1}: it has no title`);
+    } else if (description.text === '') {
+      p.dropped(at, `Dropped idea '${title.text}': it has no description`);
+    } else if (!p.categories.has(raw.categoryId)) {
+      p.dropped(at, `Dropped idea '${title.text}': its budget category is not in this plan`);
+    } else {
+      const name = p.text(title, `${at}.title`, `Title of idea ${i + 1}`);
+      const about = p.text(description, `${at}.description`, `Description of '${name}'`);
+      const personalization = p.text(
+        cut(raw.personalization, ai.personalizationMax),
+        `${at}.personalization`,
+        `Personalization of '${name}'`,
+      );
+      out.push({
+        id: `ai-idea-${out.length + 1}`,
+        title: name,
+        description: about,
+        categoryId: raw.categoryId,
+        estimatedCost: capCost(raw.estimatedCost, name, `${at}.estimatedCost`, p),
+        ...(personalization === '' ? {} : { personalization }),
+        source: 'ai',
+      });
     }
-    const description = capText(
-      raw.description,
-      ai.ideaDescriptionMax,
-      `${at}.description`,
-      `Description of '${title}'`,
-      log,
-    );
-    if (description === '') {
-      dropped(log, at, `Dropped idea '${title}': it has no description`);
-      continue;
-    }
-    if (!known.has(raw.categoryId)) {
-      dropped(log, at, `Dropped idea '${title}': its budget category is not in this plan`);
-      continue;
-    }
-    const personalization = capText(
-      raw.personalization,
-      ai.personalizationMax,
-      `${at}.personalization`,
-      `Personalization of '${title}'`,
-      log,
-    );
-    out.push({
-      id: `ai-idea-${out.length + 1}`,
-      title,
-      description,
-      categoryId: raw.categoryId,
-      estimatedCost: capCost(raw.estimatedCost, title, `${at}.estimatedCost`, ctx.brief, log),
-      ...(personalization === '' ? {} : { personalization }),
-      source: 'ai',
-    });
   }
   return out;
 }
 
-function normalizeHints(
-  hints: AiSuggestions['weightHints'],
-  ctx: MergeContext,
-  log: Log,
-): WeightHint[] {
-  const labels = new Map(ctx.template.categories.map((c) => [c.id, c.label]));
+function normalizeHints(hints: AiSuggestions['weightHints'], p: Pass): WeightHint[] {
   const out: WeightHint[] = [];
-  const list = capList(hints, ai.weightHintsMax, 'weightHints', 'weight hints', log);
+  const list = p.list(hints, ai.weightHintsMax, 'weightHints', 'weight hints');
   for (const [i, { categoryId, factor }] of list.entries()) {
     const at = `weightHints[${i}]`;
-    const label = labels.get(categoryId);
+    const label = p.categories.get(categoryId);
     if (label === undefined) {
-      dropped(log, at, 'Dropped a weight hint for a budget category that is not in this plan');
+      p.dropped(at, 'Dropped a weight hint for a budget category that is not in this plan');
     } else if (!Number.isFinite(factor)) {
-      dropped(log, at, `Dropped the weight hint for ${label}: ${factor} is not a usable factor`);
+      p.dropped(at, `Dropped the weight hint for ${label}: its factor is not a usable number`);
     } else if (out.some((h) => h.categoryId === categoryId)) {
-      dropped(log, at, `Dropped a second weight hint for ${label}`);
+      p.dropped(at, `Dropped a second weight hint for ${label}`);
     } else {
       const kept = clamp(factor, ai.factorMin, ai.factorMax);
       if (kept !== factor) {
-        log.push({
-          kind: 'clamped',
-          target: `${at}.factor`,
-          detail: `Weight hint for ${label} clamped from ${factor} to ${kept}`,
-        });
+        p.clamped(`${at}.factor`, `Weight hint for ${label} clamped from ${factor} to ${kept}`);
       }
       out.push({ categoryId, factor: kept });
     }
   }
   return out;
-}
-
-/** Rounds and clamps a finite day count; `+ 0` turns a rounded `-0` into `0`. */
-function capDays(n: number, min: number, max: number, target: string, what: string, log: Log) {
-  const days = clamp(Math.round(n), min, max) + 0;
-  if (days !== n)
-    log.push({ kind: 'clamped', target, detail: `${what} clamped from ${n} to ${days}` });
-  return days;
 }
 
 /**
@@ -193,24 +195,22 @@ function keptDependencies(
   after: readonly string[],
   task: Pick<TaskDef, 'title' | 'leadDays' | 'durationDays'>,
   at: string,
-  ctx: MergeContext,
-  log: Log,
+  p: Pass,
 ): TaskId[] {
   const kept: TaskId[] = [];
-  const list = capList(after, ai.afterMax, `${at}.after`, `tasks '${task.title}' follows`, log);
+  const list = p.list(after, ai.afterMax, `${at}.after`, `tasks '${task.title}' follows`);
   for (const [j, id] of list.entries()) {
     const target = `${at}.after[${j}]`;
-    const dep = ctx.activeTasks.get(id);
+    const dep = p.ctx.activeTasks.get(id);
     if (dep === undefined) {
-      dropped(log, target, `'${task.title}' no longer waits on a task that is not in this plan`);
+      p.dropped(target, `'${task.title}' no longer waits on a task that is not in this plan`);
     } else if (dep.leadDays < task.leadDays + task.durationDays) {
-      dropped(
-        log,
+      p.dropped(
         target,
         `'${task.title}' no longer waits on '${dep.title}', which is due after it has to start`,
       );
     } else if (kept.includes(id)) {
-      dropped(log, target, `'${task.title}' already waits on '${dep.title}'`);
+      p.dropped(target, `'${task.title}' already waits on '${dep.title}'`);
     } else {
       kept.push(id);
     }
@@ -218,98 +218,78 @@ function keptDependencies(
   return kept;
 }
 
-function normalizeTasks(
-  tasks: AiSuggestions['extraTasks'],
-  ctx: MergeContext,
-  log: Log,
-): TaskDef[] {
-  const known = new Set(ctx.template.categories.map((c) => c.id));
+function normalizeTasks(tasks: AiSuggestions['extraTasks'], p: Pass): TaskDef[] {
   const out: TaskDef[] = [];
-  for (const [i, raw] of capList(
-    tasks,
-    ai.extraTasksMax,
-    'extraTasks',
-    'extra tasks',
-    log,
-  ).entries()) {
+  for (const [i, raw] of p.list(tasks, ai.extraTasksMax, 'extraTasks', 'extra tasks').entries()) {
     const at = `extraTasks[${i}]`;
-    const title = capText(
-      raw.title,
-      ai.taskTitleMax,
-      `${at}.title`,
-      `Title of extra task ${i + 1}`,
-      log,
-    );
-    if (title === '') {
-      dropped(log, at, `Dropped extra task ${i + 1}: it has no title`);
-      continue;
+    const title = cut(raw.title, ai.taskTitleMax);
+    if (title.text === '') {
+      p.dropped(at, `Dropped extra task ${i + 1}: it has no title`);
+    } else if (!p.categories.has(raw.categoryId)) {
+      p.dropped(at, `Dropped extra task '${title.text}': its budget category is not in this plan`);
+    } else if (!Number.isFinite(raw.durationDays)) {
+      p.dropped(at, `Dropped extra task '${title.text}': its duration is not a number of days`);
+    } else if (!Number.isFinite(raw.leadDays)) {
+      p.dropped(at, `Dropped extra task '${title.text}': its lead time is not a number of days`);
+    } else {
+      const name = p.text(title, `${at}.title`, `Title of extra task ${i + 1}`);
+      const durationDays = p.days(
+        raw.durationDays,
+        ai.durationMin,
+        ai.durationMax,
+        `${at}.durationDays`,
+        `Duration of '${name}' in days`,
+      );
+      const leadDays = p.days(
+        raw.leadDays,
+        ai.leadMin,
+        ai.leadMax,
+        `${at}.leadDays`,
+        `Lead time of '${name}' in days`,
+      );
+      out.push({
+        id: `ai-task-${out.length + 1}`,
+        title: name,
+        categoryId: raw.categoryId,
+        durationDays,
+        leadDays,
+        dependsOn: keptDependencies(raw.after, { title: name, leadDays, durationDays }, at, p),
+      });
     }
-    if (!known.has(raw.categoryId)) {
-      dropped(log, at, `Dropped extra task '${title}': its budget category is not in this plan`);
-      continue;
-    }
-    if (!Number.isFinite(raw.durationDays) || !Number.isFinite(raw.leadDays)) {
-      const field = Number.isFinite(raw.durationDays) ? 'lead time' : 'duration';
-      dropped(log, at, `Dropped extra task '${title}': its ${field} is not a number of days`);
-      continue;
-    }
-    const durationDays = capDays(
-      raw.durationDays,
-      ai.durationMin,
-      ai.durationMax,
-      `${at}.durationDays`,
-      `Duration of '${title}' in days`,
-      log,
-    );
-    const leadDays = capDays(
-      raw.leadDays,
-      ai.leadMin,
-      ai.leadMax,
-      `${at}.leadDays`,
-      `Lead time of '${title}' in days`,
-      log,
-    );
-    out.push({
-      id: `ai-task-${out.length + 1}`,
-      title,
-      categoryId: raw.categoryId,
-      durationDays,
-      leadDays,
-      dependsOn: keptDependencies(raw.after, { title, leadDays, durationDays }, at, ctx, log),
-    });
   }
   return out;
 }
 
 function normalizeQuestions(
   entries: AiSuggestions['vendorQuestions'],
-  ctx: MergeContext,
-  log: Log,
+  p: Pass,
 ): Record<string, readonly string[]> {
-  const labels = new Map(ctx.template.vendors.map((v) => [v.id, v.label]));
+  const labels = new Map(p.ctx.template.vendors.map((v) => [v.id, v.label]));
   const out = new Map<string, readonly string[]>();
-  const list = capList(entries, ai.vendorQuestionsMax, 'vendorQuestions', 'vendors', log);
+  const list = p.list(entries, ai.vendorQuestionsMax, 'vendorQuestions', 'vendors');
   for (const [i, { vendorId, questions }] of list.entries()) {
     const at = `vendorQuestions[${i}]`;
     const label = labels.get(vendorId) ?? 'an unknown vendor';
-    if (!ctx.vendorIds.has(vendorId)) {
-      dropped(log, at, `Dropped questions for ${label}: this plan does not need that vendor`);
-      continue;
+    const asked = questions.slice(0, ai.questionsPerVendorMax);
+    if (!p.ctx.vendorIds.has(vendorId)) {
+      p.dropped(at, `Dropped questions for ${label}: this plan does not need that vendor`);
+    } else if (out.has(vendorId)) {
+      p.dropped(at, `Dropped a second set of questions for ${label}`);
+    } else if (asked.every((q) => q.trim() === '')) {
+      p.dropped(at, `Dropped the questions for ${label}: none had any text`);
+    } else {
+      const kept: string[] = [];
+      const noun = `questions for ${label}`;
+      for (const [j, raw] of p
+        .list(questions, ai.questionsPerVendorMax, `${at}.questions`, noun)
+        .entries()) {
+        const target = `${at}.questions[${j}]`;
+        const question = cut(raw, ai.questionMax);
+        if (question.text === '') p.dropped(target, `Dropped an empty question for ${label}`);
+        else kept.push(p.text(question, target, `Question ${j + 1} for ${label}`));
+      }
+      out.set(vendorId, kept);
     }
-    if (out.has(vendorId)) {
-      dropped(log, at, `Dropped a second set of questions for ${label}`);
-      continue;
-    }
-    const kept: string[] = [];
-    const asked = capList(questions, ai.questionsPerVendorMax, `${at}.questions`, 'questions', log);
-    for (const [j, raw] of asked.entries()) {
-      const target = `${at}.questions[${j}]`;
-      const question = capText(raw, ai.questionMax, target, `Question ${j + 1} for ${label}`, log);
-      if (question === '') dropped(log, target, `Dropped an empty question for ${label}`);
-      else kept.push(question);
-    }
-    if (kept.length === 0) dropped(log, at, `Dropped ${label}: no questions were left`);
-    else out.set(vendorId, kept);
   }
   return Object.fromEntries(out);
 }
@@ -320,6 +300,7 @@ function normalizeQuestions(
  * is dropped. Lists keep their first `LIMITS.ai` items. Ids the template or the brief cannot use
  * are dropped. Costs become whole major units from 0 to the brief's budget; weight factors are
  * clamped to their band; durations and lead times are rounded and clamped to whole days.
+ * Rounding alone is never logged.
  *
  * No response can create a dependency cycle: extra tasks may only follow active template tasks
  * (the schema allows template ids only) and nothing follows an extra task, so there is no
@@ -330,26 +311,31 @@ export function normalizeSuggestions(
   s: AiSuggestions,
   ctx: MergeContext,
 ): { addenda: AiAddenda; adjustments: Adjustment[] } {
-  const log: Log = [];
+  const p = startPass(ctx);
   const addenda: AiAddenda = {
-    summary: capText(s.summary, ai.summaryMax, 'summary', 'Summary', log),
-    ideas: normalizeIdeas(s.ideas, ctx, log),
-    weightHints: normalizeHints(s.weightHints, ctx, log),
-    extraTasks: normalizeTasks(s.extraTasks, ctx, log),
-    vendorQuestions: normalizeQuestions(s.vendorQuestions, ctx, log),
+    summary: p.text(cut(s.summary, ai.summaryMax), 'summary', 'Summary'),
+    ideas: normalizeIdeas(s.ideas, p),
+    weightHints: normalizeHints(s.weightHints, p),
+    extraTasks: normalizeTasks(s.extraTasks, p),
+    vendorQuestions: normalizeQuestions(s.vendorQuestions, p),
   };
-  return { addenda, adjustments: log };
+  return { addenda, adjustments: p.log };
 }
 
 /**
- * Normalizes `s` against `plan` and rebuilds the plan with it, keeping today, the planned and
- * current guest counts and the ticked template tasks. The new addenda replace any earlier ones,
- * so a tick on an old AI task is not carried over to a new task that reuses its id.
+ * Normalizes `s` against `plan` and rebuilds the plan with it, keeping today and the planned and
+ * current guest counts. The new addenda replace any earlier ones.
+ *
+ * Ticked tasks: `opts.doneTasks` is used as given, AI task ids included. `ai-task-N` ids follow
+ * the response order, so re-merging a stored response with the user's done set keeps their ticks.
+ * Without it, the ticked template tasks are read from the plan; old AI ticks are left out so they
+ * cannot land on a different task that reuses the id.
  * The budget total never changes: hints only re-weight the categories within it.
  */
 export function mergeSuggestions(
   plan: Plan,
   s: AiSuggestions,
+  opts: { readonly doneTasks?: ReadonlySet<TaskId> } = {},
 ): { plan: Plan; adjustments: Adjustment[] } {
   const { brief, today, eventDate, plannedGuests } = plan;
   const template = templateFor(brief.kind);
@@ -363,11 +349,13 @@ export function mergeSuggestions(
     activeTasks,
     vendorIds: new Set(plan.vendors.map((v) => v.id)),
   });
-  const doneTasks = new Set(
-    plan.schedule.tasks
-      .filter((t) => t.status === 'done' && activeTasks.has(t.id))
-      .map((t) => t.id),
-  );
+  const doneTasks =
+    opts.doneTasks ??
+    new Set(
+      plan.schedule.tasks
+        .filter((t) => t.status === 'done' && activeTasks.has(t.id))
+        .map((t) => t.id),
+    );
   return {
     plan: assemblePlan({ brief, today, eventDate, plannedGuests, doneTasks, addenda }),
     adjustments,

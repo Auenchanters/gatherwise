@@ -30,8 +30,8 @@ const SEED = { seed: 20_261_023, numRuns: 150 };
 const today = isoDate('2026-10-21');
 const ai = LIMITS.ai;
 
-function planOf(b: EventBrief, opts?: Parameters<typeof buildPlan>[2]): Plan {
-  const result = buildPlan(b, today, opts);
+function planOf(b: EventBrief, opts?: Parameters<typeof buildPlan>[2], day = today): Plan {
+  const result = buildPlan(b, day, opts);
   if (!result.ok) throw new Error(`expected a plan, got ${JSON.stringify(result.error)}`);
   return result.value;
 }
@@ -244,10 +244,13 @@ describe('strings', () => {
     ]);
   });
 
-  it('never leaves trailing space where it cut', () => {
+  it('never leaves trailing space where it cut, and reports the length it kept', () => {
     const title = `${'a'.repeat(ai.ideaTitleMax - 1)} tail`;
     expect(addendaOf({ ideas: [idea({ title })] }).ideas[0]?.title).toBe(
       'a'.repeat(ai.ideaTitleMax - 1),
+    );
+    expect(merge({ ideas: [idea({ title })] }).adjustments[0]?.detail).toBe(
+      `Title of idea 1 shortened from ${ai.ideaTitleMax + 4} to ${ai.ideaTitleMax - 1} characters`,
     );
   });
 });
@@ -282,6 +285,20 @@ describe('ideas', () => {
     ]);
   });
 
+  it('logs one drop for a dropped idea, never the cuts it would have needed', () => {
+    const long = idea({
+      title: 't'.repeat(500),
+      personalization: 'p'.repeat(500),
+      estimatedCost: Number.NaN,
+    });
+    expect(logOf({ ideas: [{ ...long, categoryId: 'catering' }] })).toEqual([
+      { kind: 'dropped', target: 'ideas[0]' },
+    ]);
+    expect(logOf({ ideas: [{ ...long, description: ' ' }] })).toEqual([
+      { kind: 'dropped', target: 'ideas[0]' },
+    ]);
+  });
+
   it('numbers ideas in output order after a drop', () => {
     const ideas = [idea({ title: '' }), idea({ title: 'B' }), idea({ title: 'C' })];
     expect(addendaOf({ ideas }).ideas.map((i) => [i.id, i.title])).toEqual([
@@ -311,18 +328,35 @@ describe('ideas', () => {
         toMinor(150_000, 'INR'),
       );
     }
-    const [huge] = merge({ ideas: [idea({ estimatedCost: 1e300 })] }).adjustments;
-    expect(huge?.detail).toContain('1e+300');
   });
 
-  it('rounds a cost to a whole major unit, and keeps a cost equal to the budget', () => {
-    expect(
-      logOf({ ideas: [idea({ estimatedCost: 1500.6 }), idea({ estimatedCost: 150_000 })] }),
-    ).toEqual([]);
-    const ideas = addendaOf({
-      ideas: [idea({ estimatedCost: 1500.6 }), idea({ estimatedCost: 150_000 })],
-    }).ideas;
-    expect(ideas.map((i) => i.estimatedCost)).toEqual([150_100, 15_000_000]);
+  it('puts an amount it cannot show exactly into words', () => {
+    const detailFor = (estimatedCost: number) =>
+      merge({ ideas: [idea({ title: 'Lamps', estimatedCost })] }).adjustments[0]?.detail;
+    const toZero = "Cost of 'Lamps' clamped from an unusable amount to ₹0.00";
+    expect(detailFor(Number.NaN)).toBe(toZero);
+    expect(detailFor(Number.NEGATIVE_INFINITY)).toBe(toZero);
+    expect(detailFor(-2.345)).toBe(toZero);
+    expect(detailFor(1e300)).toBe(
+      "Cost of 'Lamps' clamped from an unusable amount to ₹1,50,000.00 (the whole budget)",
+    );
+    expect(detailFor(Number.MAX_VALUE)).toBe(
+      "Cost of 'Lamps' clamped from an unusable amount to ₹1,50,000.00 (the whole budget)",
+    );
+    expect(detailFor(-500)).toBe("Cost of 'Lamps' clamped from -₹500.00 to ₹0.00");
+  });
+
+  it('rounds a cost to a whole unit without logging it, and keeps the budget itself', () => {
+    const ideas = [1500.6, 150_000, 150_000.4, -0.4, -1e-7].map((estimatedCost) =>
+      idea({ estimatedCost }),
+    );
+    expect(logOf({ ideas })).toEqual([]);
+    expect(addendaOf({ ideas }).ideas.map((i) => i.estimatedCost)).toEqual([
+      150_100, 15_000_000, 15_000_000, 0, 0,
+    ]);
+    expect(logOf({ ideas: [idea({ estimatedCost: 150_000.5 })] })).toEqual([
+      { kind: 'clamped', target: 'ideas[0].estimatedCost' },
+    ]);
   });
 });
 
@@ -352,6 +386,9 @@ describe('weight hints', () => {
         { kind: 'dropped', target: 'weightHints[0]' },
       ]);
     }
+    expect(merge({ weightHints: [hint('decor', Number.NaN)] }).adjustments[0]?.detail).toBe(
+      'Dropped the weight hint for Décor: its factor is not a usable number',
+    );
   });
 
   it(`clamps a factor into ${ai.factorMin}..${ai.factorMax}`, () => {
@@ -384,6 +421,15 @@ describe('extra tasks', () => {
     ]);
   });
 
+  it('logs one drop for a dropped task, never the cuts it would have needed', () => {
+    expect(
+      logOf({ extraTasks: [extra({ title: 'x'.repeat(500), durationDays: Number.NaN })] }),
+    ).toEqual([{ kind: 'dropped', target: 'extraTasks[0]' }]);
+    expect(
+      logOf({ extraTasks: [extra({ title: 'x'.repeat(500), categoryId: 'catering' })] }),
+    ).toEqual([{ kind: 'dropped', target: 'extraTasks[0]' }]);
+  });
+
   it('drops a task whose duration or lead time is not a finite number', () => {
     for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
       expect(logOf({ extraTasks: [extra({ durationDays: bad })] })).toEqual([
@@ -400,7 +446,7 @@ describe('extra tasks', () => {
       [-5, ai.durationMin],
       [0, ai.durationMin],
       [100, ai.durationMax],
-      [2.4, 2],
+      [0.4, ai.durationMin],
       [1e300, ai.durationMax],
     ];
     for (const [durationDays, expected] of cases) {
@@ -410,14 +456,35 @@ describe('extra tasks', () => {
       ]);
       expect(addendaOf({ extraTasks }).extraTasks[0]?.durationDays).toBe(expected);
     }
+    expect(merge({ extraTasks: [extra({ durationDays: -5, after: [] })] }).adjustments).toEqual([
+      {
+        kind: 'clamped',
+        target: 'extraTasks[0].durationDays',
+        detail: "Duration of 'Order clay diyas' in days clamped from -5 to 1",
+      },
+    ]);
+  });
+
+  it('rounds days to whole numbers without logging it', () => {
+    const extraTasks = [
+      extra({ durationDays: 2.4, leadDays: 3.6, after: [] }),
+      extra({ durationDays: 59.5, leadDays: -0.2, after: [] }),
+    ];
+    expect(logOf({ extraTasks })).toEqual([]);
+    const kept = addendaOf({ extraTasks }).extraTasks;
+    expect(kept.map((t) => [t.durationDays, t.leadDays])).toEqual([
+      [2, 4],
+      [60, 0],
+    ]);
+    expect(Object.is(kept[1]?.leadDays, -0)).toBe(false);
   });
 
   it(`rounds and clamps the lead time into ${ai.leadMin}..${ai.leadMax} days`, () => {
     const cases: [number, number][] = [
       [1000, ai.leadMax],
       [-30, ai.leadMin],
-      [3.6, 4],
-      [-0.2, 0],
+      [-7.6, ai.leadMin],
+      [365.7, ai.leadMax],
     ];
     for (const [leadDays, expected] of cases) {
       const extraTasks = [extra({ leadDays, after: [] })];
@@ -426,8 +493,6 @@ describe('extra tasks', () => {
       ]);
       expect(addendaOf({ extraTasks }).extraTasks[0]?.leadDays).toBe(expected);
     }
-    const [zero] = addendaOf({ extraTasks: [extra({ leadDays: -0.2, after: [] })] }).extraTasks;
-    expect(Object.is(zero?.leadDays, -0)).toBe(false);
   });
 
   it(`keeps the first ${ai.afterMax} dependencies`, () => {
@@ -516,8 +581,7 @@ describe('vendor questions', () => {
     expect(logOf({ vendorQuestions: [asks('generator', ['', 'Fuel?'])] })).toEqual([
       { kind: 'dropped', target: 'vendorQuestions[0].questions[0]' },
     ]);
-    expect(logOf({ vendorQuestions: [asks('generator', [' '])] })).toEqual([
-      { kind: 'dropped', target: 'vendorQuestions[0].questions[0]' },
+    expect(logOf({ vendorQuestions: [asks('generator', [' ', '', '\t'])] })).toEqual([
       { kind: 'dropped', target: 'vendorQuestions[0]' },
     ]);
     expect(logOf({ vendorQuestions: [asks('generator', [])] })).toEqual([
@@ -570,6 +634,17 @@ describe('mergeSuggestions', () => {
     expect(refreshed.addenda?.extraTasks.map((t) => t.title)).toEqual(['Hire a rangoli artist']);
     expect(status('ai-task-1')).not.toBe('done');
     expect(status('define_goals')).toBe('done');
+  });
+
+  it('keeps AI task ticks when the same response is re-merged with the done set', () => {
+    const first = mergeSuggestions(base, clean).plan;
+    const done = new Set(['ai-task-1', 'define_goals']);
+    const again = mergeSuggestions(first, clean, { doneTasks: done }).plan;
+    const status = (id: string) => again.schedule.tasks.find((t) => t.id === id)?.status;
+    expect(again.addenda).toEqual(first.addenda);
+    expect(status('ai-task-1')).toBe('done');
+    expect(status('define_goals')).toBe('done');
+    expect(status('set_budget')).not.toBe('done');
   });
 
   it('never moves a template task: extra tasks only add to the timeline', () => {
@@ -675,13 +750,51 @@ describe('any suggestion-shaped junk (property)', () => {
 
   const withinCap = (s: string, max: number): boolean => codePoints(s) <= max && s === s.trim();
 
+  /** How many items a list cap cut, read back from its "Kept the first N of M" detail. */
+  const cutBy = (adjustments: readonly Adjustment[], list: string): number => {
+    const cap = adjustments.find((a) => a.kind === 'truncated' && a.target === list);
+    if (!cap) return 0;
+    const counts = /^Kept the first (\d+) of (\d+) /u.exec(cap.detail);
+    if (!counts) throw new Error(`no counts in "${cap.detail}"`);
+    return Number(counts[2]) - Number(counts[1]);
+  };
+
+  it('accounts for every item: kept, dropped with one adjustment, or cut by the cap', () => {
+    fc.assert(
+      fc.property(scenario, ({ b, leadTime, s }) => {
+        const plan = planOf(b, {}, addDays(isoDate(b.date), -leadTime));
+        const { plan: merged, adjustments } = mergeSuggestions(plan, s);
+        const addenda = merged.addenda;
+        if (!addenda) throw new Error('expected addenda');
+        const lists: [string, number, number][] = [
+          ['ideas', s.ideas.length, addenda.ideas.length],
+          ['weightHints', s.weightHints.length, addenda.weightHints.length],
+          ['extraTasks', s.extraTasks.length, addenda.extraTasks.length],
+          [
+            'vendorQuestions',
+            s.vendorQuestions.length,
+            Object.keys(addenda.vendorQuestions).length,
+          ],
+        ];
+        for (const [list, given, kept] of lists) {
+          const item = new RegExp(`^${list}\\[\\d+\\]$`, 'u');
+          const drops = adjustments.filter((a) => a.kind === 'dropped' && item.test(a.target));
+          expect(kept + drops.length + cutBy(adjustments, list), list).toBe(given);
+          // A dropped item is reported once, with nothing logged beneath it.
+          for (const drop of drops) {
+            const under = adjustments.filter((a) => a.target.startsWith(`${drop.target}.`));
+            expect(under, drop.target).toEqual([]);
+          }
+        }
+      }),
+      SEED,
+    );
+  });
+
   it('normalizes everything into a plan that still adds up', () => {
     fc.assert(
       fc.property(scenario, ({ b, leadTime, plannedGuests, s }) => {
-        const day = addDays(isoDate(b.date), -leadTime);
-        const result = buildPlan(b, day, { plannedGuests });
-        if (!result.ok) throw new Error(JSON.stringify(result.error));
-        const plan = result.value;
+        const plan = planOf(b, { plannedGuests }, addDays(isoDate(b.date), -leadTime));
 
         const { plan: merged, adjustments } = mergeSuggestions(plan, s);
         const { budget } = merged;

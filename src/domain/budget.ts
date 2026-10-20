@@ -141,6 +141,18 @@ export function buildBudget(
 }
 
 /**
+ * Checks a guest count that did not come through the brief schema, such as a stored or edited one.
+ * `what` names it in the message, e.g. "Planned guest count".
+ * @throws RangeError if `guests` is not a whole number within the brief limits.
+ */
+export function checkGuestCount(guests: number, what = 'Guest count'): void {
+  const { guestsMin, guestsMax } = LIMITS.brief;
+  if (!Number.isInteger(guests) || guests < guestsMin || guests > guestsMax) {
+    throw new RangeError(`${what} must be a whole number from ${guestsMin} to ${guestsMax}`);
+  }
+}
+
+/**
  * Moves a budget to a new guest count. Per-guest lines scale by the ratio, each rounded to the
  * nearest paisa; fixed lines stay. The total never changes, so the contingency becomes whatever
  * the lines leave of it: a rise in cost is absorbed by the contingency first, and anything beyond
@@ -149,10 +161,7 @@ export function buildBudget(
  * @throws RangeError if `guests` is not a whole number within the brief limits.
  */
 export function rescaleGuests(budget: Budget, guests: number): Budget {
-  const { guestsMin, guestsMax } = LIMITS.brief;
-  if (!Number.isInteger(guests) || guests < guestsMin || guests > guestsMax) {
-    throw new RangeError(`Guest count must be a whole number from ${guestsMin} to ${guestsMax}`);
-  }
+  checkGuestCount(guests);
   const drafts = budget.lines.map((line) =>
     line.scales === 'per_guest'
       ? { ...line, allocated: minor(Math.round((line.allocated * guests) / budget.guests)) }

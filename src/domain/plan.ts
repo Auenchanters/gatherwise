@@ -10,7 +10,13 @@
 import { err, ok, type Result } from '../shared/result';
 import type { EventBrief } from '../shared/schema';
 import { breakEven, type BreakEven } from './break-even';
-import { buildBudget, rescaleGuests, type Budget, type WeightHint } from './budget';
+import {
+  buildBudget,
+  checkGuestCount,
+  rescaleGuests,
+  type Budget,
+  type WeightHint,
+} from './budget';
 import type { IsoDate } from './dates';
 import { ideaFit, standardIdeas, type Idea, type IdeaFit } from './ideas';
 import { eventDateOf, schedule, type Schedule, type ScheduleError } from './schedule';
@@ -78,6 +84,8 @@ export type PlanError = Extract<ScheduleError, { kind: 'invalid_date' }>;
  */
 export function assemblePlan(input: PlanInput): Plan {
   const { brief, today, eventDate, plannedGuests, doneTasks, addenda } = input;
+  // plannedGuests comes from stored state, not the brief schema, so it is checked here.
+  checkGuestCount(plannedGuests, 'Planned guest count');
   const template = templateFor(brief.kind);
   const hints = addenda?.weightHints ?? [];
   const budget =
