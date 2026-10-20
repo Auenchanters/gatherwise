@@ -6,6 +6,10 @@ import reactHooks from 'eslint-plugin-react-hooks';
 
 export default tseslint.config(
   {
+    // Suppression comments are banned outright: they are ignored and reported if present.
+    linterOptions: { noInlineConfig: true, reportUnusedDisableDirectives: 'error' },
+  },
+  {
     ignores: ['dist/**', 'coverage/**', '.vercel/**', 'playwright-report/**', 'test-results/**'],
   },
   {
@@ -22,6 +26,10 @@ export default tseslint.config(
     },
     rules: {
       'no-console': ['error', { allow: ['warn', 'error'] }],
+      '@typescript-eslint/ban-ts-comment': [
+        'error',
+        { 'ts-expect-error': true, 'ts-ignore': true, 'ts-nocheck': true, 'ts-check': true },
+      ],
       '@typescript-eslint/explicit-module-boundary-types': 'error',
       '@typescript-eslint/no-confusing-void-expression': ['error', { ignoreArrowShorthand: true }],
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
