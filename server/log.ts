@@ -1,0 +1,29 @@
+/**
+ * One structured log line per API request.
+ * Does: write a JSON line of ids, numbers and fixed labels: `console.info` normally,
+ * `console.error` for a 5xx.
+ * Never does: log brief text, model text, provider messages, request paths or IP addresses; the
+ * line's type only has room for the fields below.
+ */
+import type { EventKind } from '../src/domain/templates/types.js';
+import type { ErrorCode } from './errors.js';
+
+/** Everything a request log line may hold. */
+export interface RequestLog {
+  readonly requestId: string;
+  /** A known route, or `unknown`; never the raw path. */
+  readonly route: string;
+  readonly status: number;
+  readonly code?: ErrorCode;
+  readonly kind?: EventKind;
+  readonly latencyMs: number;
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
+}
+
+/** Writes one request's log line. */
+export function logRequest(line: RequestLog): void {
+  const text = JSON.stringify(line);
+  if (line.status >= 500) console.error(text);
+  else console.info(text);
+}

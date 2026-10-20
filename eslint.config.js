@@ -43,6 +43,11 @@ export default tseslint.config(
     },
   },
   {
+    // The request log is the one place server code writes routine lines, at info level.
+    files: ['server/log.ts'],
+    rules: { 'no-console': ['error', { allow: ['info', 'warn', 'error'] }] },
+  },
+  {
     // Plain Node scripts have no type information; only the baseline rules apply.
     files: ['scripts/**/*.mjs'],
     extends: [js.configs.recommended],

@@ -1,0 +1,86 @@
+/**
+ * Text sanitizing for everything that crosses the model boundary, in either direction.
+ * Does: pins the tag, control-character, whitespace and code-point-cap rules, and checks that
+ * every string in a model response is cleaned while ids and numbers pass through untouched.
+ */
+import { describe, expect, it } from 'vitest';
+import { sanitizeSuggestions, sanitizeText } from '../../server/sanitize.js';
+import { LIMITS } from '../../src/shared/limits.js';
+import type { AiSuggestions } from '../../src/shared/schema.js';
+
+describe('sanitizeText', () => {
+  it('strips an HTML payload and a bell character', () => {
+    expect(sanitizeText('<img src=x onerror=alert(1)>Hi\u0007', 50)).toBe('Hi');
+  });
+
+  it('replaces whole tags with a space and drops any stray angle bracket', () => {
+    expect(sanitizeText('<script>alert(1)</script>Party', 50)).toBe('alert(1) Party');
+    expect(sanitizeText('a < b > c', 50)).toBe('a b c');
+    expect(sanitizeText('<b unterminated', 50)).toBe('b unterminated');
+  });
+
+  it('removes control, lone-surrogate and bidi-override characters but keeps newlines', () => {
+    expect(sanitizeText('a\u0000b\u001b[31mc\u007f\u0085d', 50)).toBe('ab[31mcd');
+    expect(sanitizeText('line one\nline two', 50)).toBe('line one\nline two');
+    expect(sanitizeText('\u202Egnp.exe\u202C', 50)).toBe('gnp.exe');
+    expect(sanitizeText('x\uD800y', 50)).toBe('xy');
+  });
+
+  it('collapses whitespace runs, keeping one newline where a run contained one', () => {
+    expect(sanitizeText('  many   spaces\t\there  ', 50)).toBe('many spaces here');
+    expect(sanitizeText('first \r\n\n\n  second', 50)).toBe('first\nsecond');
+  });
+
+  it('caps by code points, never splitting a surrogate pair', () => {
+    expect(sanitizeText('abcdef', 3)).toBe('abc');
+    expect(sanitizeText('🎉🎂🎈🎁', 2)).toBe('🎉🎂');
+    expect(Array.from(sanitizeText('x'.repeat(500), 80))).toHaveLength(80);
+    expect(sanitizeText('ab   cd', 3)).toBe('ab');
+  });
+
+  it('keeps emoji, joiners and non-Latin scripts intact', () => {
+    const text = 'दिवाली मेला 🎉 حفلة 👩‍👩‍👧 தீபாவளி';
+    expect(sanitizeText(text, 100)).toBe(text);
+  });
+});
+
+describe('sanitizeSuggestions', () => {
+  const dirty: AiSuggestions = {
+    summary: '<b>Bold</b> plan\u0007',
+    ideas: [
+      {
+        title: '<script>alert(1)</script>Lantern walk',
+        description: 'x'.repeat(400),
+        categoryId: 'decor',
+        estimatedCost: 1e12,
+        personalization: 'vibe <i>family</i>',
+      },
+    ],
+    weightHints: [{ categoryId: 'decor', factor: 9 }],
+    extraTasks: [
+      {
+        title: 'Book <u>drums</u>',
+        categoryId: 'decor',
+        durationDays: -3,
+        leadDays: 999,
+        after: [],
+      },
+    ],
+    vendorQuestions: [{ vendorId: 'generator', questions: ['Fuel\u0000 included?', '<a>x</a>'] }],
+  };
+
+  it('cleans and caps every string while leaving ids and numbers for the engine', () => {
+    const clean = sanitizeSuggestions(dirty);
+    expect(clean.summary).toBe('Bold plan');
+    expect(clean.ideas[0]?.title).toBe('alert(1) Lantern walk');
+    expect(clean.ideas[0]?.description).toHaveLength(LIMITS.ai.ideaDescriptionMax);
+    expect(clean.ideas[0]?.personalization).toBe('vibe family');
+    expect(clean.ideas[0]?.estimatedCost).toBe(1e12);
+    expect(clean.weightHints).toEqual(dirty.weightHints);
+    expect(clean.extraTasks[0]).toEqual({ ...dirty.extraTasks[0], title: 'Book drums' });
+    expect(clean.vendorQuestions[0]).toEqual({
+      vendorId: 'generator',
+      questions: ['Fuel included?', 'x'],
+    });
+  });
+});
