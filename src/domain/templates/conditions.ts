@@ -22,6 +22,9 @@ export const amplifiedSound: Condition = (b) => b.amplifiedSound;
 export const isOutdoor: Condition = (b) =>
   b.venue === 'outdoor_public' || b.venue === 'outdoor_private';
 
+/** True unless the event is held at home, where there is no venue to book. */
+export const hostedOutsideHome: Condition = (b) => b.venue !== 'home';
+
 const MINUTES_PER_HOUR = 60;
 
 /** Minutes after midnight for an `HH:MM` string. */

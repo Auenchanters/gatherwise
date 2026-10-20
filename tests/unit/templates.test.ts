@@ -19,7 +19,8 @@ import {
   TOILET_GUESTS,
   WASTE_GUESTS,
 } from '../../src/domain/templates/community';
-import { endsAfter, isOutdoor } from '../../src/domain/templates/conditions';
+import { always, endsAfter, isOutdoor } from '../../src/domain/templates/conditions';
+import { QUOTE } from '../../src/domain/templates/copy';
 import { nonEmpty, templateFor, templateIds } from '../../src/domain/templates';
 import type { EventTemplate, TaskId } from '../../src/domain/templates/types';
 import { weddingTemplate } from '../../src/domain/templates/wedding';
@@ -86,9 +87,15 @@ const vendorOn = (t: EventTemplate, vendorId: string, b: EventBrief): boolean =>
   byId(t.vendors, vendorId).when(b);
 const hasDuplicates = (ids: readonly string[]): boolean => new Set(ids).size !== ids.length;
 
+/** Indoor, no sound, no food, no alcohol, 10 guests: the brief that triggers the fewest rules. */
+const MINIMAL_BRIEF: Record<EventTemplate['kind'], EventBrief> = {
+  community: community(),
+  wedding: wedding(),
+  birthday: birthday(),
+};
 const SAMPLES: Record<EventTemplate['kind'], EventBrief[]> = {
   community: [
-    community(),
+    MINIMAL_BRIEF.community,
     community({
       guests: 250,
       subtype: 'sports_day',
@@ -97,8 +104,11 @@ const SAMPLES: Record<EventTemplate['kind'], EventBrief[]> = {
     }),
     community({ guests: 400, accessibility: ['elderly'], startTime: '17:00', durationHours: 4 }),
   ],
-  wedding: [wedding(), wedding({ guests: 300, venue: 'outdoor_private', servesFood: true })],
-  birthday: [birthday(), birthday({ subtype: 'kids', servesFood: true, guests: 60 })],
+  wedding: [
+    MINIMAL_BRIEF.wedding,
+    wedding({ guests: 300, venue: 'outdoor_private', servesFood: true }),
+  ],
+  birthday: [MINIMAL_BRIEF.birthday, birthday({ subtype: 'kids', servesFood: true, guests: 60 })],
 };
 
 describe.each([
@@ -144,6 +154,14 @@ describe.each([
     }
   });
 
+  it('keeps titles short and puts caveats in notes', () => {
+    for (const t of template.tasks) {
+      expect(t.title.length, t.id).toBeLessThanOrEqual(60);
+      expect(t.title, t.id).not.toMatch(/[()—]/u);
+      if (t.note !== undefined) expect(t.note.trim().length, t.id).toBeGreaterThan(0);
+    }
+  });
+
   it('lets every dependency finish before its dependent starts', () => {
     // lead = days before the event by which a task FINISHES; it starts durationDays earlier.
     for (const task of template.tasks) {
@@ -175,16 +193,24 @@ describe.each([
     }
   });
 
-  it('explains every vendor with a non-empty reason, for any brief', () => {
+  it('keeps checklists currency-neutral and opens quotes with the shared line', () => {
     for (const v of template.vendors) {
-      for (const b of SAMPLES[kind]) expect(v.reason(b).trim().length, v.id).toBeGreaterThan(0);
+      for (const item of v.checklist) expect(item, v.id).not.toMatch(/GST/u);
+      expect(v.checklist[0], v.id).toBe(QUOTE);
+    }
+  });
+
+  it('explains every vendor with a non-empty reason that reads as a recommendation', () => {
+    for (const v of template.vendors) {
+      for (const b of SAMPLES[kind]) {
+        expect(v.reason(b).trim().length, v.id).toBeGreaterThan(0);
+        expect(v.reason(b), v.id).toMatch(/^Recommended: /u);
+      }
     }
   });
 
   it('always has at least one vendor, even for a minimal brief', () => {
-    const [minimal] = SAMPLES[kind];
-    expect(minimal).toBeDefined();
-    if (minimal) expect(template.vendors.some((v) => v.when(minimal))).toBe(true);
+    expect(template.vendors.some((v) => v.when(MINIMAL_BRIEF[kind]))).toBe(true);
   });
 
   it('exposes non-empty id tuples for the AI schema', () => {
@@ -198,7 +224,7 @@ describe.each([
 describe('template sizes', () => {
   it('keeps each template in its planned range', () => {
     expect(communityTemplate.tasks.length).toBeGreaterThanOrEqual(16);
-    expect(communityTemplate.tasks.length).toBeLessThanOrEqual(22);
+    expect(communityTemplate.tasks.length).toBeLessThanOrEqual(24);
     expect(communityTemplate.volunteerRoles.length).toBeGreaterThanOrEqual(5);
     expect(communityTemplate.volunteerRoles.length).toBeLessThanOrEqual(7);
     for (const t of [weddingTemplate, birthdayTemplate]) {
@@ -272,6 +298,76 @@ describe('community template (spec A6)', () => {
     for (const [id, lead] of pinned) {
       expect(byId(communityTemplate.vendors, id).bookByLeadDays, id).toBe(lead);
     }
+  });
+
+  it('leaves the 11 unconditional A6 tasks without a condition and gives the other 5 one', () => {
+    const unconditional = [
+      'define_goals',
+      'form_committee',
+      'set_budget',
+      'book_venue',
+      'vendor_quotes',
+      'book_vendors',
+      'volunteer_recruitment',
+      'publicity',
+      'volunteer_briefing',
+      'final_walkthrough',
+      'post_event_report',
+    ];
+    const conditional = [
+      'public_space_permission',
+      'sound_permission',
+      'sponsor_outreach',
+      'food_safety_check',
+      'accessibility_plan',
+    ];
+    expect(unconditional).toHaveLength(11);
+    for (const id of unconditional)
+      expect(byId(communityTemplate.tasks, id).when, id).toBeUndefined();
+    for (const id of conditional) expect(byId(communityTemplate.tasks, id).when, id).toBeDefined();
+  });
+
+  it('adds exactly one always-on vendor beyond A6, printing_signage, booked before publicity', () => {
+    const alwaysOn = communityTemplate.vendors.filter((v) => v.when === always).map((v) => v.id);
+    expect(alwaysOn).toEqual(['printing_signage']);
+    const forMinimal = communityTemplate.vendors.filter((v) => v.when(MINIMAL_BRIEF.community));
+    expect(forMinimal.map((v) => v.id)).toEqual(['printing_signage']);
+    const posters = byId(communityTemplate.vendors, 'printing_signage');
+    const publicity = byId(communityTemplate.tasks, 'publicity');
+    expect(posters.bookByLeadDays).toBe(28);
+    expect(posters.bookByLeadDays).toBeGreaterThanOrEqual(
+      publicity.leadDays + publicity.durationDays,
+    );
+  });
+
+  it('points permit tasks at the local authority through their notes', () => {
+    for (const id of ['public_space_permission', 'sound_permission', 'alcohol_licence']) {
+      const task = byId(communityTemplate.tasks, id);
+      expect(task.note, id).toMatch(/local authority/iu);
+    }
+    expect(byId(communityTemplate.tasks, 'public_space_permission').title).toBe(
+      'Apply for public-space permission',
+    );
+    expect(byId(communityTemplate.tasks, 'public_space_permission').note).toBe(
+      'Check with your local authority — processing times vary by city',
+    );
+  });
+
+  it('plans an alcohol licence about 14 days out, only when alcohol is served', () => {
+    const licence = byId(communityTemplate.tasks, 'alcohol_licence');
+    expect(licence.leadDays).toBe(14);
+    expect(included(communityTemplate, 'alcohol_licence', community({ servesAlcohol: true }))).toBe(
+      true,
+    );
+    expect(included(communityTemplate, 'alcohol_licence', community())).toBe(false);
+  });
+
+  it('rosters volunteers after recruiting them and before the briefing starts', () => {
+    const roster = byId(communityTemplate.tasks, 'volunteer_shift_roster');
+    const briefing = byId(communityTemplate.tasks, 'volunteer_briefing');
+    expect(roster.dependsOn).toEqual(['volunteer_recruitment']);
+    expect(roster.leadDays).toBeGreaterThanOrEqual(briefing.leadDays + briefing.durationDays);
+    expect(included(communityTemplate, 'volunteer_shift_roster', community())).toBe(true);
   });
 
   it('names its thresholds', () => {
@@ -383,6 +479,9 @@ describe('community template (spec A6)', () => {
     );
     expect(reason).toContain('250');
     expect(reason).toContain(String(CROWD_SAFETY_GUESTS));
+    expect(reason).toBe(
+      'Recommended: 250 guests is above the 150-guest rule of thumb for crowd safety',
+    );
   });
 
   it('has the volunteer roles a community event needs', () => {
@@ -433,6 +532,20 @@ describe('wedding template', () => {
     expect(included(t, 'book_music_dj', wedding())).toBe(false);
   });
 
+  it('skips the venue booking for a wedding at home', () => {
+    const on = (venue: EventBrief['venue']) =>
+      included(weddingTemplate, 'book_venue', wedding({ venue }));
+    expect(on('home')).toBe(false);
+    for (const venue of [
+      'indoor_hall',
+      'outdoor_public',
+      'outdoor_private',
+      'restaurant',
+    ] as const) {
+      expect(on(venue)).toBe(true);
+    }
+  });
+
   it('cites the brief in its reasons', () => {
     const b = wedding({ guests: 321, servesFood: true });
     expect(byId(weddingTemplate.vendors, 'caterer').reason(b)).toContain('321');
@@ -456,6 +569,18 @@ describe('birthday template', () => {
     expect(included(t, 'plan_menu', birthday())).toBe(false);
     expect(included(t, 'dietary_check', birthday({ dietary: ['vegan'] }))).toBe(true);
     expect(included(t, 'dietary_check', birthday())).toBe(false);
+  });
+
+  it('decides on photos before the photographer book-by date', () => {
+    const photos = byId(birthdayTemplate.tasks, 'plan_photos');
+    const photographer = byId(birthdayTemplate.vendors, 'photographer');
+    expect(photos.leadDays).toBeGreaterThanOrEqual(photographer.bookByLeadDays);
+  });
+
+  it('checks dietary needs before the cake is ordered', () => {
+    const dietary = byId(birthdayTemplate.tasks, 'dietary_check');
+    const cake = byId(birthdayTemplate.tasks, 'order_cake');
+    expect(dietary.leadDays).toBeGreaterThanOrEqual(cake.leadDays + cake.durationDays);
   });
 
   it('always has a cake and decor, and the rest on their conditions', () => {

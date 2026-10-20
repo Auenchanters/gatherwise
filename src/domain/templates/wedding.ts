@@ -5,10 +5,26 @@
  * Never computes dates or money. Lead times are typical planning heuristics, not rules; a venue is
  * usually booked about six months out.
  */
-import { always, amplifiedSound, isOutdoor, servesAlcohol, servesFood } from './conditions';
+import {
+  CANCELLATION,
+  ALCOHOL_LICENCE,
+  DIETARY_NEEDS,
+  MUSIC_LISTS,
+  QUOTE,
+  SOUND_CUTOFF,
+  TENT_SIZE,
+} from './copy';
+import {
+  always,
+  amplifiedSound,
+  hostedOutsideHome,
+  isOutdoor,
+  servesAlcohol,
+  servesFood,
+} from './conditions';
 import type { CategoryDef, EventTemplate, TaskDef, VendorDef } from './types';
 
-const categories: CategoryDef[] = [
+const categories: readonly CategoryDef[] = [
   { id: 'venue', label: 'Venue', weight: 20, scales: 'fixed' },
   { id: 'catering', label: 'Catering', weight: 32, scales: 'per_guest' },
   { id: 'decor_flowers', label: 'Décor & flowers', weight: 12, scales: 'fixed' },
@@ -20,8 +36,10 @@ const categories: CategoryDef[] = [
 ];
 
 // leadDays is days before the event by which a task finishes (negative: after it), so a
-// dependency's leadDays is at least its dependent's leadDays + durationDays.
-const tasks: TaskDef[] = [
+// dependency's leadDays is at least its dependent's leadDays + durationDays. `book_venue` is
+// skipped for a wedding at home, so nothing depends on it; vendors follow the guest list instead,
+// and their later lead times keep them after the venue in the schedule.
+const tasks: readonly TaskDef[] = [
   {
     id: 'set_budget',
     title: 'Agree the budget and who contributes',
@@ -41,10 +59,12 @@ const tasks: TaskDef[] = [
   {
     id: 'book_venue',
     title: 'Book the venue for the ceremony and reception',
+    note: 'Ask for the date to be held in writing, with the deposit and cancellation terms',
     categoryId: 'venue',
     durationDays: 14,
     leadDays: 180,
     dependsOn: ['draft_guest_list'],
+    when: hostedOutsideHome,
   },
   {
     id: 'book_photographer',
@@ -52,7 +72,7 @@ const tasks: TaskDef[] = [
     categoryId: 'photo_video',
     durationDays: 7,
     leadDays: 150,
-    dependsOn: ['book_venue'],
+    dependsOn: ['draft_guest_list'],
   },
   {
     id: 'book_caterer',
@@ -60,7 +80,7 @@ const tasks: TaskDef[] = [
     categoryId: 'catering',
     durationDays: 14,
     leadDays: 120,
-    dependsOn: ['book_venue'],
+    dependsOn: ['draft_guest_list'],
     when: servesFood,
   },
   {
@@ -69,7 +89,7 @@ const tasks: TaskDef[] = [
     categoryId: 'decor_flowers',
     durationDays: 10,
     leadDays: 90,
-    dependsOn: ['book_venue'],
+    dependsOn: ['draft_guest_list'],
   },
   {
     id: 'book_music_dj',
@@ -77,7 +97,7 @@ const tasks: TaskDef[] = [
     categoryId: 'music_entertainment',
     durationDays: 7,
     leadDays: 90,
-    dependsOn: ['book_venue'],
+    dependsOn: ['draft_guest_list'],
     when: amplifiedSound,
   },
   {
@@ -94,7 +114,7 @@ const tasks: TaskDef[] = [
     categoryId: 'invitations_gifts',
     durationDays: 14,
     leadDays: 60,
-    dependsOn: ['draft_guest_list', 'book_venue'],
+    dependsOn: ['draft_guest_list'],
   },
   {
     id: 'menu_tasting',
@@ -139,46 +159,45 @@ const tasks: TaskDef[] = [
   },
 ];
 
-const quote = 'Get a written quote including GST';
-const cancellation = 'Confirm cancellation policy and refund window';
-
-const vendors: VendorDef[] = [
+const vendors: readonly VendorDef[] = [
   {
     id: 'photographer_videographer',
     label: 'Photographer & videographer',
     when: always,
     reason: (b) =>
-      `Photo and video coverage is a standard booking for a wedding of ${b.guests} guests`,
+      `Recommended: photo and video coverage is a standard booking for a wedding of ${b.guests} guests`,
     bookByLeadDays: 150,
     checklist: [
-      quote,
+      QUOTE,
       'Review full albums from recent weddings, not just highlights',
       'Confirm coverage hours, team size and when edited photos will arrive',
-      cancellation,
+      CANCELLATION,
     ],
   },
   {
     id: 'caterer',
     label: 'Caterer',
     when: servesFood,
-    reason: (b) => `Needed because food is served to ${b.guests} guests`,
+    reason: (b) =>
+      `Recommended: serving food to ${b.guests} guests goes more smoothly with a caterer`,
     bookByLeadDays: 120,
     checklist: [
-      quote,
+      QUOTE,
       'Book a tasting before you confirm the menu',
-      'Confirm the menu covers the dietary needs on your guest list',
+      DIETARY_NEEDS,
       'Agree the headcount deadline and what changes to the price after it',
-      cancellation,
+      CANCELLATION,
     ],
   },
   {
     id: 'decorator_florist',
     label: 'Decorator & florist',
     when: always,
-    reason: (b) => `Venue styling and flowers shape the look of the day for ${b.guests} guests`,
+    reason: (b) =>
+      `Recommended: venue styling and flowers shape the look of the day for ${b.guests} guests`,
     bookByLeadDays: 90,
     checklist: [
-      quote,
+      QUOTE,
       'Ask for photos of similar set-ups at your kind of venue',
       'Confirm set-up and clear-down times with the venue',
       'Agree what is swapped in if a flower is out of season',
@@ -188,24 +207,26 @@ const vendors: VendorDef[] = [
     id: 'music_dj',
     label: 'DJ or band',
     when: amplifiedSound,
-    reason: (b) => `Needed because you plan amplified sound for ${b.guests} guests`,
+    reason: (b) =>
+      `Recommended: amplified sound for ${b.guests} guests needs proper equipment and a sound technician`,
     bookByLeadDays: 90,
     checklist: [
-      quote,
+      QUOTE,
       'Confirm the equipment list, a backup system and set-up time',
-      'Share must-play and do-not-play lists',
-      'Confirm overtime charges and the venue sound cut-off time',
+      MUSIC_LISTS,
+      SOUND_CUTOFF,
     ],
   },
   {
     id: 'bar_service',
     label: 'Bar service',
     when: servesAlcohol,
-    reason: (b) => `Needed because alcohol is served to ${b.guests} guests`,
+    reason: (b) =>
+      `Recommended: serving alcohol to ${b.guests} guests is best handled by trained bar staff`,
     bookByLeadDays: 45,
     checklist: [
-      quote,
-      'Ask what licence is needed to serve alcohol (check with your local authority)',
+      QUOTE,
+      ALCOHOL_LICENCE,
       'Confirm the number of bartenders for your guest count',
       'Agree how last orders are called and how age is checked',
     ],
@@ -215,11 +236,11 @@ const vendors: VendorDef[] = [
     label: 'Marquee or tent',
     when: isOutdoor,
     reason: (b) =>
-      `Needed because the event is outdoors for ${b.durationHours} hours and guests need cover from sun and rain`,
+      `Recommended: an outdoor event running ${b.durationHours} hours leaves guests exposed to sun and rain`,
     bookByLeadDays: 60,
     checklist: [
-      quote,
-      'Confirm size, flooring and side walls for your guest count',
+      QUOTE,
+      TENT_SIZE,
       'Ask about a backup plan for heavy rain or wind',
       'Confirm set-up and dismantling times',
     ],

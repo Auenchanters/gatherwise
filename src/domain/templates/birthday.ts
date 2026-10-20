@@ -5,20 +5,27 @@
  * Never computes dates or money. Lead times are typical planning heuristics, sized for a party
  * planned over about five weeks; a milestone party may want more time.
  */
-import { always, amplifiedSound, servesAlcohol, servesFood } from './conditions';
+import {
+  CANCELLATION,
+  ALCOHOL_LICENCE,
+  DIETARY_NEEDS,
+  MUSIC_LISTS,
+  QUOTE,
+  SOUND_CUTOFF,
+} from './copy';
+import { always, amplifiedSound, hostedOutsideHome, servesAlcohol, servesFood } from './conditions';
 import type { CategoryDef, Condition, EventTemplate, TaskDef, VendorDef } from './types';
 
-/** Above this many guests a non-milestone birthday also gets a photographer. */
+/** Above this many guests a non-milestone birthday is also recommended a photographer. */
 export const BIRTHDAY_PHOTOGRAPHER_GUESTS = 50;
 
 const isKidsParty: Condition = (b) => b.kind === 'birthday' && b.subtype === 'kids';
 const isMilestone: Condition = (b) => b.kind === 'birthday' && b.subtype === 'milestone';
 const needsPhotographer: Condition = (b) =>
   isMilestone(b) || b.guests > BIRTHDAY_PHOTOGRAPHER_GUESTS;
-const hostedOutsideHome: Condition = (b) => b.venue !== 'home';
 const hasDietaryNeeds: Condition = (b) => b.dietary.length > 0;
 
-const categories: CategoryDef[] = [
+const categories: readonly CategoryDef[] = [
   { id: 'venue', label: 'Venue', weight: 18, scales: 'fixed' },
   { id: 'food_beverage', label: 'Food & beverage', weight: 32, scales: 'per_guest' },
   { id: 'cake_dessert', label: 'Cake & dessert', weight: 8, scales: 'per_guest' },
@@ -30,8 +37,10 @@ const categories: CategoryDef[] = [
 ];
 
 // leadDays is days before the event by which a task finishes (negative: after it), so a
-// dependency's leadDays is at least its dependent's leadDays + durationDays.
-const tasks: TaskDef[] = [
+// dependency's leadDays is at least its dependent's leadDays + durationDays. Two orderings are not
+// dependencies, because their first task is conditional: dietary_check finishes before order_cake
+// starts, and plan_photos finishes before the photographer's book-by date.
+const tasks: readonly TaskDef[] = [
   {
     id: 'set_budget',
     title: 'Agree the budget',
@@ -95,8 +104,17 @@ const tasks: TaskDef[] = [
     title: 'Chase RSVPs and confirm numbers',
     categoryId: 'invitations',
     durationDays: 3,
-    leadDays: 8,
+    leadDays: 12,
     dependsOn: ['send_invitations'],
+  },
+  {
+    id: 'dietary_check',
+    title: 'Check allergies and dietary needs with whoever is cooking',
+    categoryId: 'food_beverage',
+    durationDays: 1,
+    leadDays: 10,
+    dependsOn: ['confirm_rsvps'],
+    when: hasDietaryNeeds,
   },
   {
     id: 'order_cake',
@@ -104,16 +122,7 @@ const tasks: TaskDef[] = [
     categoryId: 'cake_dessert',
     durationDays: 2,
     leadDays: 7,
-    dependsOn: ['choose_theme_and_guests'],
-  },
-  {
-    id: 'dietary_check',
-    title: 'Check allergies and dietary needs with whoever is cooking',
-    categoryId: 'food_beverage',
-    durationDays: 1,
-    leadDays: 6,
     dependsOn: ['confirm_rsvps'],
-    when: hasDietaryNeeds,
   },
   {
     id: 'buy_favours',
@@ -125,10 +134,10 @@ const tasks: TaskDef[] = [
   },
   {
     id: 'plan_photos',
-    title: 'Choose who takes the photos',
+    title: 'Decide who takes the photos, or hire a photographer',
     categoryId: 'photography',
     durationDays: 1,
-    leadDays: 3,
+    leadDays: 24,
     dependsOn: ['choose_theme_and_guests'],
   },
   {
@@ -149,18 +158,16 @@ const tasks: TaskDef[] = [
   },
 ];
 
-const quote = 'Get a written quote including GST';
-const cancellation = 'Confirm cancellation policy and refund window';
-
-const vendors: VendorDef[] = [
+const vendors: readonly VendorDef[] = [
   {
     id: 'cake_bakery',
     label: 'Cake & bakery',
     when: always,
-    reason: (b) => `A cake is the centrepiece of a birthday, sized here for ${b.guests} guests`,
+    reason: (b) =>
+      `Recommended: a cake is the centrepiece of a birthday, sized here for ${b.guests} guests`,
     bookByLeadDays: 7,
     checklist: [
-      quote,
+      QUOTE,
       'Confirm flavour, size and servings for your guest count',
       'Ask about egg-free, nut-free or other options for guests with allergies',
       'Agree the pick-up or delivery time and who carries it',
@@ -170,23 +177,24 @@ const vendors: VendorDef[] = [
     id: 'caterer_or_snacks',
     label: 'Caterer or snacks',
     when: servesFood,
-    reason: (b) => `Needed because food is served to ${b.guests} guests`,
+    reason: (b) =>
+      `Recommended: serving food to ${b.guests} guests goes more smoothly with a caterer`,
     bookByLeadDays: 14,
     checklist: [
-      quote,
-      'Confirm the menu covers the dietary needs on your guest list',
+      QUOTE,
+      DIETARY_NEEDS,
       'Ask how portions are sized for your guest count',
-      cancellation,
+      CANCELLATION,
     ],
   },
   {
     id: 'decor_balloons',
     label: 'Decor & balloons',
     when: always,
-    reason: (b) => `Decor and balloons set the theme for ${b.guests} guests`,
+    reason: (b) => `Recommended: decor and balloons set the theme for ${b.guests} guests`,
     bookByLeadDays: 14,
     checklist: [
-      quote,
+      QUOTE,
       'Confirm what is included: balloons, backdrop, table setting and set-up',
       'Ask whether helium and delivery are part of the price',
       'Agree the set-up time with the venue',
@@ -197,10 +205,10 @@ const vendors: VendorDef[] = [
     label: 'Kids entertainer',
     when: isKidsParty,
     reason: (b) =>
-      `Needed because a kids' party with ${b.guests} guests needs something to keep them busy`,
+      `Recommended: a kids' party with ${b.guests} guests needs something to keep them busy`,
     bookByLeadDays: 21,
     checklist: [
-      quote,
+      QUOTE,
       "Ask for references from recent kids' parties",
       'Confirm the activity length and the age range it suits',
       'Ask whether the staff are background-checked',
@@ -210,24 +218,21 @@ const vendors: VendorDef[] = [
     id: 'music_dj',
     label: 'DJ or sound',
     when: amplifiedSound,
-    reason: (b) => `Needed because you plan amplified sound for ${b.guests} guests`,
+    reason: (b) =>
+      `Recommended: amplified sound for ${b.guests} guests needs proper equipment and a sound technician`,
     bookByLeadDays: 14,
-    checklist: [
-      quote,
-      'Confirm the equipment list and set-up time',
-      'Share must-play and do-not-play lists',
-      'Confirm overtime charges and the venue sound cut-off time',
-    ],
+    checklist: [QUOTE, 'Confirm the equipment list and set-up time', MUSIC_LISTS, SOUND_CUTOFF],
   },
   {
     id: 'bar_service',
     label: 'Bar service',
     when: servesAlcohol,
-    reason: (b) => `Needed because alcohol is served to ${b.guests} guests`,
+    reason: (b) =>
+      `Recommended: serving alcohol to ${b.guests} guests is best handled by trained bar staff`,
     bookByLeadDays: 14,
     checklist: [
-      quote,
-      'Ask what licence is needed to serve alcohol (check with your local authority)',
+      QUOTE,
+      ALCOHOL_LICENCE,
       'Confirm the number of bartenders for your guest count',
       'Agree how age is checked',
     ],
@@ -238,14 +243,14 @@ const vendors: VendorDef[] = [
     when: needsPhotographer,
     reason: (b) =>
       isMilestone(b)
-        ? 'Needed because a milestone birthday is worth capturing properly'
-        : `Needed because ${b.guests} guests exceeds the ${BIRTHDAY_PHOTOGRAPHER_GUESTS}-guest threshold for a photographer`,
+        ? 'Recommended: a milestone birthday is worth capturing properly'
+        : `Recommended: ${b.guests} guests is above the ${BIRTHDAY_PHOTOGRAPHER_GUESTS}-guest rule of thumb for a photographer`,
     bookByLeadDays: 21,
     checklist: [
-      quote,
+      QUOTE,
       'Review a full gallery from a recent party',
       'Confirm coverage hours and when edited photos will arrive',
-      cancellation,
+      CANCELLATION,
     ],
   },
 ];

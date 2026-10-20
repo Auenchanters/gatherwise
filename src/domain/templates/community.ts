@@ -7,7 +7,15 @@
  * rules; permit processing varies by city, so permit tasks always point to the local authority.
  */
 import type { EventBrief } from '../../shared/schema';
-import { amplifiedSound, always, endsAfter, isOutdoor, servesFood } from './conditions';
+import { CANCELLATION, QUOTE, TENT_SIZE } from './copy';
+import {
+  always,
+  amplifiedSound,
+  endsAfter,
+  isOutdoor,
+  servesAlcohol,
+  servesFood,
+} from './conditions';
 import type {
   CategoryDef,
   Condition,
@@ -17,13 +25,13 @@ import type {
   VolunteerRole,
 } from './types';
 
-/** Above this many guests a written waste plan is needed. */
+/** Above this many guests a written waste plan is recommended. */
 export const WASTE_GUESTS = 50;
-/** Above this many guests an outdoor event needs portable toilets. */
+/** Above this many guests an outdoor event should have portable toilets. */
 export const TOILET_GUESTS = 100;
-/** Above this many guests trained crowd management is needed. */
+/** Above this many guests trained crowd management is recommended. */
 export const CROWD_SAFETY_GUESTS = 150;
-/** Above this many guests first aid and an ambulance plan are needed. */
+/** Above this many guests first aid and an ambulance plan are recommended. */
 export const FIRST_AID_GUESTS = 300;
 /** An outdoor event that ends after this time (`HH:MM`) needs its own power and lighting. */
 export const EVENING_CUTOFF = '18:00';
@@ -40,13 +48,13 @@ const needsPublicSpacePermission: Condition = (b) => b.venue === 'outdoor_public
 /** Names the first-aid rule that applied: crowd size first, then sports day, then elderly guests. */
 function firstAidReason(b: EventBrief): string {
   if (b.guests > FIRST_AID_GUESTS) {
-    return `Required because ${b.guests} guests exceeds the ${FIRST_AID_GUESTS}-guest threshold for on-site first aid`;
+    return `Recommended: ${b.guests} guests is above the ${FIRST_AID_GUESTS}-guest rule of thumb for on-site first aid`;
   }
-  if (isSportsDay(b)) return 'Required because a sports day carries a higher risk of injuries';
-  return 'Required because elderly guests are attending and may need medical help';
+  if (isSportsDay(b)) return 'Recommended: a sports day carries a higher risk of injuries';
+  return 'Recommended: elderly guests are attending and may need medical help sooner';
 }
 
-const categories: CategoryDef[] = [
+const categories: readonly CategoryDef[] = [
   { id: 'venue_permits', label: 'Venue & permits', weight: 12, scales: 'fixed' },
   { id: 'stage_av', label: 'Stage & AV', weight: 15, scales: 'fixed' },
   { id: 'food_beverage', label: 'Food & beverage', weight: 25, scales: 'per_guest' },
@@ -67,7 +75,7 @@ const categories: CategoryDef[] = [
 // Tasks are filed under the budget category they most affect; general planning steps sit under
 // `venue_permits` as the admin bucket. leadDays is days before the event by which a task finishes
 // (negative: after it), so a dependency's leadDays is at least its dependent's leadDays + durationDays.
-const tasks: TaskDef[] = [
+const tasks: readonly TaskDef[] = [
   {
     id: 'define_goals',
     title: 'Define goals and the programme',
@@ -102,8 +110,8 @@ const tasks: TaskDef[] = [
   },
   {
     id: 'public_space_permission',
-    title:
-      'Apply for public-space permission (check with your local authority — processing times vary by city)',
+    title: 'Apply for public-space permission',
+    note: 'Check with your local authority — processing times vary by city',
     categoryId: 'venue_permits',
     durationDays: 21,
     leadDays: 10,
@@ -112,7 +120,8 @@ const tasks: TaskDef[] = [
   },
   {
     id: 'sound_permission',
-    title: 'Request sound permission (check with your local authority — rules and timings vary)',
+    title: 'Request sound permission',
+    note: 'Check with your local authority — rules and timings vary',
     categoryId: 'venue_permits',
     durationDays: 10,
     leadDays: 7,
@@ -213,6 +222,7 @@ const tasks: TaskDef[] = [
   {
     id: 'insurance_check',
     title: 'Check what insurance cover the event needs',
+    note: 'Ask your insurer and the venue; do not assume you are covered',
     categoryId: 'venue_permits',
     durationDays: 3,
     leadDays: 28,
@@ -252,34 +262,50 @@ const tasks: TaskDef[] = [
     leadDays: -5,
     dependsOn: [],
   },
+  {
+    id: 'alcohol_licence',
+    title: 'Apply for the alcohol licence',
+    note: 'Check with your local authority — licence rules and processing times vary',
+    categoryId: 'venue_permits',
+    durationDays: 10,
+    leadDays: 14,
+    dependsOn: ['book_venue'],
+    when: servesAlcohol,
+  },
+  {
+    id: 'volunteer_shift_roster',
+    title: 'Draw up the volunteer shift roster',
+    categoryId: 'volunteer_care',
+    durationDays: 2,
+    leadDays: 7,
+    dependsOn: ['volunteer_recruitment'],
+  },
 ];
 
-const quote = 'Get a written quote including GST';
-const cancellation = 'Confirm cancellation policy and refund window';
-
-const vendors: VendorDef[] = [
+const vendors: readonly VendorDef[] = [
   {
     id: 'tent_shamiana',
     label: 'Tent / shamiana',
     when: isOutdoor,
     reason: (b) =>
-      `Required because the event is outdoors for ${b.durationHours} hours and guests need cover from sun and rain`,
+      `Recommended: an outdoor event running ${b.durationHours} hours leaves guests exposed to sun and rain`,
     bookByLeadDays: 21,
     checklist: [
-      quote,
-      'Confirm size, side walls and flooring for your guest count',
+      QUOTE,
+      TENT_SIZE,
       'Ask whether set-up and dismantling are included, and the set-up time',
-      cancellation,
+      CANCELLATION,
     ],
   },
   {
     id: 'sound_lighting',
     label: 'Sound & lighting',
     when: amplifiedSound,
-    reason: (b) => `Required because you plan amplified sound for ${b.guests} guests`,
+    reason: (b) =>
+      `Recommended: amplified sound for ${b.guests} guests needs proper speakers and a technician`,
     bookByLeadDays: 21,
     checklist: [
-      quote,
+      QUOTE,
       'Confirm the equipment list: speakers, microphones, mixer and a technician on site',
       'Ask what backup equipment is included',
       'Agree the sound-check time and a finish time that matches your sound permission',
@@ -289,13 +315,14 @@ const vendors: VendorDef[] = [
     id: 'caterer_or_stalls',
     label: 'Caterer or food stalls',
     when: servesFood,
-    reason: (b) => `Required because food is served to ${b.guests} guests`,
+    reason: (b) =>
+      `Recommended: serving food to ${b.guests} guests goes more smoothly with a caterer or organised stalls`,
     bookByLeadDays: 21,
     checklist: [
-      quote,
+      QUOTE,
       'Ask for their food-safety licence or registration',
       'Confirm the menu covers the dietary needs on your list and labels allergens',
-      cancellation,
+      CANCELLATION,
     ],
   },
   {
@@ -303,10 +330,10 @@ const vendors: VendorDef[] = [
     label: 'Portable toilets',
     when: (b) => isOutdoor(b) && b.guests > TOILET_GUESTS,
     reason: (b) =>
-      `Required because an outdoor event with ${b.guests} guests exceeds the ${TOILET_GUESTS}-guest threshold for portable toilets`,
+      `Recommended: ${b.guests} guests outdoors is above the ${TOILET_GUESTS}-guest rule of thumb for portable toilets`,
     bookByLeadDays: 14,
     checklist: [
-      quote,
+      QUOTE,
       'Confirm the number of units for your guest count, including at least one accessible unit',
       'Ask how often units are cleaned and restocked during the event',
       'Confirm delivery, placement and pick-up times',
@@ -317,10 +344,10 @@ const vendors: VendorDef[] = [
     label: 'Security & crowd management',
     when: (b) => b.guests > CROWD_SAFETY_GUESTS,
     reason: (b) =>
-      `Required because ${b.guests} guests exceeds the ${CROWD_SAFETY_GUESTS}-guest crowd-safety threshold`,
+      `Recommended: ${b.guests} guests is above the ${CROWD_SAFETY_GUESTS}-guest rule of thumb for crowd safety`,
     bookByLeadDays: 14,
     checklist: [
-      quote,
+      QUOTE,
       'Ask for a public-liability insurance certificate',
       'Agree the number of guards, entry points and shift hours',
       'Share your site map and agree who they report to on the day',
@@ -333,7 +360,7 @@ const vendors: VendorDef[] = [
     reason: firstAidReason,
     bookByLeadDays: 10,
     checklist: [
-      quote,
+      QUOTE,
       'Confirm trained first-aid staff or a nurse on site for the whole event',
       'Agree how an ambulance would be called and which hospital is nearest',
       'Choose a signposted first-aid spot with shade and a stocked kit',
@@ -344,10 +371,10 @@ const vendors: VendorDef[] = [
     label: 'Waste management',
     when: (b) => b.guests > WASTE_GUESTS,
     reason: (b) =>
-      `Required because ${b.guests} guests exceeds the ${WASTE_GUESTS}-guest threshold for a waste plan`,
+      `Recommended: ${b.guests} guests is above the ${WASTE_GUESTS}-guest rule of thumb for a waste plan`,
     bookByLeadDays: 10,
     checklist: [
-      quote,
+      QUOTE,
       'Confirm the number of bins and separate wet, dry and recyclable collection',
       'Agree when waste is collected and who clears the site afterwards',
       'Ask for a receipt or confirmation of where the waste goes',
@@ -358,31 +385,34 @@ const vendors: VendorDef[] = [
     label: 'Generator',
     when: (b) => isOutdoor(b) && endsAfter(b, EVENING_CUTOFF),
     reason: (b) =>
-      `Required because an outdoor event starting at ${b.startTime} for ${b.durationHours} hours ends after ${EVENING_CUTOFF}, when lighting and power are needed`,
+      `Recommended: an outdoor event starting at ${b.startTime} for ${b.durationHours} hours ends after ${EVENING_CUTOFF}, when lighting and power are needed`,
     bookByLeadDays: 14,
     checklist: [
-      quote,
+      QUOTE,
       'Confirm the capacity in kVA against your lighting and sound load',
       'Ask about fuel, a trained operator and the noise rating',
       'Agree a safe spot away from crowds and tents',
     ],
   },
   {
+    // Not in spec A6: the one vendor every community plan gets, so the vendor list is never empty.
+    // Booked before publicity starts, because posters have to exist before they can be put up.
     id: 'printing_signage',
     label: 'Printing & signage',
     when: always,
-    reason: (b) => `Signs and posters help ${b.guests} guests find the event and its facilities`,
-    bookByLeadDays: 14,
+    reason: (b) =>
+      `Recommended: signs and posters help ${b.guests} guests find the event and its facilities`,
+    bookByLeadDays: 28,
     checklist: [
-      quote,
+      QUOTE,
       'Confirm sizes and file formats for banners, posters and directional signs',
       'Proofread names, dates and times before printing',
-      'Confirm delivery at least a few days before the event',
+      'Confirm delivery before publicity starts',
     ],
   },
 ];
 
-const volunteerRoles: VolunteerRole[] = [
+const volunteerRoles: readonly VolunteerRole[] = [
   {
     id: 'registration_desk',
     label: 'Registration desk',
