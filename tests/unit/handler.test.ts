@@ -6,7 +6,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { createHandler, type HandlerOptions } from '../../server/handler.js';
 import type { Generate } from '../../server/provider.js';
-import { aiMetaSchema, type EventBrief } from '../../src/shared/schema.js';
+import { isoDate } from '../../src/domain/dates.js';
+import { buildPlan } from '../../src/domain/plan.js';
+import { buildPrompt } from '../../src/shared/prompt.js';
+import { aiMetaSchema, eventBriefSchema, type EventBrief } from '../../src/shared/schema.js';
 import { brief } from '../support/fixtures.js';
 
 // Only `handleRequest` (built from the environment) reaches the SDK; every other test injects
@@ -358,6 +361,21 @@ describe('request matrix', () => {
     expect(prompt?.user).toContain('Maple Court Diwali Mela');
     expect(signal).toBeInstanceOf(AbortSignal);
   });
+
+  it.each(['community', 'wedding', 'birthday'] as const)(
+    'sends the generator exactly the shared prompt for a %s brief, byte for byte',
+    async (kind) => {
+      // The UI rebuilds the prompt locally from the same pure function and shows it as "sent";
+      // this pins that what it shows is what the server really sent.
+      const generate = answering();
+      await handlerWith({ generate })(post({ brief: brief(kind) }));
+      const plan = buildPlan(eventBriefSchema.parse(brief(kind)), isoDate('2026-10-21'));
+      if (!plan.ok) throw new Error('fixture brief must plan');
+      const [sent] = generate.mock.calls[0] ?? [];
+      expect(sent).toStrictEqual(buildPrompt(plan.value));
+      expect(JSON.stringify(sent)).toBe(JSON.stringify(buildPrompt(plan.value)));
+    },
+  );
 
   it('502 INVALID_RESPONSE if the metadata would break its own contract', async () => {
     for (const model of ['', 'm'.repeat(81)]) {

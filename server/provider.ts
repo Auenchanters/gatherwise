@@ -6,7 +6,7 @@
  * the handler classifies them without ever echoing their messages.
  */
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
-import type { Prompt } from './prompt.js';
+import type { Prompt } from '../src/shared/prompt.js';
 
 /** What one model call returns. */
 export interface Generation {

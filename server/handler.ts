@@ -8,11 +8,12 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { EventKind } from '../src/domain/templates/types.js';
+import { buildPrompt, type Prompt } from '../src/shared/prompt.js';
 import { aiMetaSchema } from '../src/shared/schema.js';
 import { createInferenceGate } from './capacity.js';
 import { AppError, errorResponse, type ErrorCode } from './errors.js';
 import { logRequest } from './log.js';
-import { buildPrompt, parseSuggestions, type Prompt } from './prompt.js';
+import { parseSuggestions } from './prompt.js';
 import { createGeminiGenerator, type Generate, type Generation } from './provider.js';
 import { clientId, createRateLimiter, type RateLimiter } from './rate-limit.js';
 import { planFor, readBrief, validateTransport } from './request.js';
