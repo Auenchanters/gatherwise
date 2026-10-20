@@ -36,13 +36,16 @@ export const FIRST_AID_GUESTS = 300;
 /** An outdoor event that ends after this time (`HH:MM`) needs its own power and lighting. */
 export const EVENING_CUTOFF = '18:00';
 
-const sponsorsExpected: Condition = (b) => b.kind === 'community' && (b.income?.sponsors ?? 0) > 0;
+/** True for a community event that expects sponsor money. */
+export const sponsorsExpected: Condition = (b) =>
+  b.kind === 'community' && (b.income?.sponsors ?? 0) > 0;
 const hasStalls: Condition = (b) => b.kind === 'community' && (b.income?.stallCount ?? 0) > 0;
 const isSportsDay: Condition = (b) => b.kind === 'community' && b.subtype === 'sports_day';
 const hasElderlyGuests: Condition = (b) => b.accessibility.includes('elderly');
 const needsFirstAid: Condition = (b) =>
   b.guests > FIRST_AID_GUESTS || isSportsDay(b) || hasElderlyGuests(b);
-const needsAccessibilityPlan: Condition = (b) => b.accessibility.length > 0;
+/** True when any guest has an accessibility need. */
+export const needsAccessibilityPlan: Condition = (b) => b.accessibility.length > 0;
 const needsPublicSpacePermission: Condition = (b) => b.venue === 'outdoor_public';
 
 /** Names the first-aid rule that applied: crowd size first, then sports day, then elderly guests. */

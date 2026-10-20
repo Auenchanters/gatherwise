@@ -19,11 +19,14 @@ import type { CategoryDef, Condition, EventTemplate, TaskDef, VendorDef } from '
 /** Above this many guests a non-milestone birthday is also recommended a photographer. */
 export const BIRTHDAY_PHOTOGRAPHER_GUESTS = 50;
 
-const isKidsParty: Condition = (b) => b.kind === 'birthday' && b.subtype === 'kids';
-const isMilestone: Condition = (b) => b.kind === 'birthday' && b.subtype === 'milestone';
+/** True for a kids' party. */
+export const isKidsParty: Condition = (b) => b.kind === 'birthday' && b.subtype === 'kids';
+/** True for a milestone birthday. */
+export const isMilestone: Condition = (b) => b.kind === 'birthday' && b.subtype === 'milestone';
 const needsPhotographer: Condition = (b) =>
   isMilestone(b) || b.guests > BIRTHDAY_PHOTOGRAPHER_GUESTS;
-const hasDietaryNeeds: Condition = (b) => b.dietary.length > 0;
+/** True when the guest list has any dietary need. */
+export const hasDietaryNeeds: Condition = (b) => b.dietary.length > 0;
 
 const categories: readonly CategoryDef[] = [
   { id: 'venue', label: 'Venue', weight: 18, scales: 'fixed' },
