@@ -6,10 +6,10 @@
  * Never does: read the clock (`today` and the event date are parameters); decide which vendors
  * apply (templates do, through `when`); change the template, which is shared by every plan.
  */
-import type { EventBrief } from '../shared/schema';
-import { addDays, daysBetween, type IsoDate } from './dates';
-import { DUE_SOON_DAYS } from './schedule';
-import type { EventTemplate } from './templates/types';
+import type { EventBrief } from '../shared/schema.js';
+import { addDays, daysBetween, type IsoDate } from './dates.js';
+import { DUE_SOON_DAYS } from './schedule.js';
+import type { EventTemplate } from './templates/types.js';
 
 /** Every status a vendor can have, in the order it moves through them. */
 export const VENDOR_STATUSES = ['to_contact', 'quoted', 'booked'] as const;

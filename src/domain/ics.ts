@@ -10,9 +10,9 @@
  * Never does: read the clock (the `DTSTAMP` is a parameter); emit unescaped user or model text;
  * modify its inputs.
  */
-import type { EventBrief } from '../shared/schema';
-import { addDays, type IsoDate } from './dates';
-import type { Schedule } from './schedule';
+import type { EventBrief } from '../shared/schema.js';
+import { addDays, type IsoDate } from './dates.js';
+import type { Schedule } from './schedule.js';
 
 const CRLF = '\r\n';
 const MAX_OCTETS = 75;

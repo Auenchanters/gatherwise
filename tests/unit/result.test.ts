@@ -5,7 +5,7 @@
  * Never does: exercise anything beyond the two constructors; the module owns nothing else.
  */
 import { describe, expect, it } from 'vitest';
-import { err, ok, type Result } from '../../src/shared/result';
+import { err, ok, type Result } from '../../src/shared/result.js';
 
 /** Reads each branch through the discriminant, so a broken union fails to compile. */
 const show = (result: Result<number, string>): string =>

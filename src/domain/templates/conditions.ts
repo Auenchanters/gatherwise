@@ -3,8 +3,8 @@
  * Does: answers yes/no questions about a brief (is the venue outdoors, does it run late).
  * Never does: compute dates or money, or read the clock.
  */
-import type { EventBrief } from '../../shared/schema';
-import type { Condition } from './types';
+import type { EventBrief } from '../../shared/schema.js';
+import type { Condition } from './types.js';
 
 /** True for every brief; use it for tasks and vendors every plan needs. */
 export const always: Condition = () => true;

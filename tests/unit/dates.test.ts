@@ -14,7 +14,7 @@ import {
   isoDate,
   parseIsoDate,
   type IsoDate,
-} from '../../src/domain/dates';
+} from '../../src/domain/dates.js';
 
 const d = isoDate;
 const SEED = { seed: 20261020 };
@@ -187,7 +187,7 @@ describe('formatDate', () => {
     vi.resetModules();
     const spy = vi.spyOn(Intl, 'DateTimeFormat');
     try {
-      const fresh = await import('../../src/domain/dates');
+      const fresh = await import('../../src/domain/dates.js');
       for (const day of ['2026-01-01', '2026-06-15', '2026-12-31']) {
         fresh.formatDate(fresh.isoDate(day), 'en-IN');
       }

@@ -7,23 +7,23 @@
  * Never does: read the clock, call the model, or accept AI output that has not been through
  * `normalizeSuggestions` (merge.ts); `AiAddenda` is that function's output.
  */
-import { err, ok, type Result } from '../shared/result';
-import type { EventBrief } from '../shared/schema';
-import { breakEven, type BreakEven } from './break-even';
+import { err, ok, type Result } from '../shared/result.js';
+import type { EventBrief } from '../shared/schema.js';
+import { breakEven, type BreakEven } from './break-even.js';
 import {
   buildBudget,
   checkGuestCount,
   rescaleGuests,
   type Budget,
   type WeightHint,
-} from './budget';
-import type { IsoDate } from './dates';
-import { ideaFit, standardIdeas, type Idea, type IdeaFit } from './ideas';
-import { eventDateOf, schedule, type Schedule, type ScheduleError } from './schedule';
-import { templateFor } from './templates';
-import type { TaskDef, TaskId } from './templates/types';
-import { requiredVendors, type VendorItem } from './vendors';
-import { planShifts, type ShiftPlan } from './volunteers';
+} from './budget.js';
+import type { IsoDate } from './dates.js';
+import { ideaFit, standardIdeas, type Idea, type IdeaFit } from './ideas.js';
+import { eventDateOf, schedule, type Schedule, type ScheduleError } from './schedule.js';
+import { templateFor } from './templates/index.js';
+import type { TaskDef, TaskId } from './templates/types.js';
+import { requiredVendors, type VendorItem } from './vendors.js';
+import { planShifts, type ShiftPlan } from './volunteers.js';
 
 /** Gemini's suggestions after the engine has clamped, cut and checked them. */
 export interface AiAddenda {

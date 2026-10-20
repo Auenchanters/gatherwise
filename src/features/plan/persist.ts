@@ -9,23 +9,23 @@
  * content is wrong (the result says why instead).
  */
 import { z } from 'zod';
-import type { IsoDate } from '../../domain/dates';
+import type { IsoDate } from '../../domain/dates.js';
 import {
   restorePlanState,
   type AiState,
   type PlanState,
   type ReadyState,
-} from '../../domain/reducer';
-import { templateFor, templateIds } from '../../domain/templates';
-import { VENDOR_STATUSES } from '../../domain/vendors';
-import { LIMITS } from '../../shared/limits';
-import { err, type Result } from '../../shared/result';
+} from '../../domain/reducer.js';
+import { templateFor, templateIds } from '../../domain/templates/index.js';
+import { VENDOR_STATUSES } from '../../domain/vendors.js';
+import { LIMITS } from '../../shared/limits.js';
+import { err, type Result } from '../../shared/result.js';
 import {
   aiMetaSchema,
   aiSuggestionsSchema,
   eventBriefSchema,
   type EventBrief,
-} from '../../shared/schema';
+} from '../../shared/schema.js';
 
 /** The storage key; the version in it changes with the stored shape. */
 export const STORAGE_KEY = 'gatherwise.plan.v1';

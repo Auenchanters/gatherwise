@@ -5,7 +5,7 @@
  * Never does: carry fractions between calls, read the clock, or touch the host locale
  * (every currency has a fixed formatting locale).
  */
-import type { Currency } from '../shared/schema';
+import type { Currency } from '../shared/schema.js';
 
 /** A safe integer count of minor units. May be negative (a deficit is real money). */
 export type Minor = number & { readonly __brand: 'Minor' };

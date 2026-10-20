@@ -8,14 +8,14 @@
  * Never does: call the model; read the clock (`today` arrives in the action); mutate state or action.
  * Whether a response is still wanted is decided by its `generation`, which never repeats, not by timing.
  */
-import { LIMITS } from '../shared/limits';
-import { err, ok, type Result } from '../shared/result';
-import type { AiMeta, AiSuggestions, EventBrief } from '../shared/schema';
-import type { IsoDate } from './dates';
-import { AI_TASK_PREFIX, mergeSuggestions, type Adjustment } from './merge';
-import { buildPlan, type Plan } from './plan';
-import type { TaskId } from './templates/types';
-import type { VendorItem, VendorStatus } from './vendors';
+import { LIMITS } from '../shared/limits.js';
+import { err, ok, type Result } from '../shared/result.js';
+import type { AiMeta, AiSuggestions, EventBrief } from '../shared/schema.js';
+import type { IsoDate } from './dates.js';
+import { AI_TASK_PREFIX, mergeSuggestions, type Adjustment } from './merge.js';
+import { buildPlan, type Plan } from './plan.js';
+import type { TaskId } from './templates/types.js';
+import type { VendorItem, VendorStatus } from './vendors.js';
 
 /** What the user has ticked or set. Ids stay here even when the plan no longer has them. */
 interface Progress {

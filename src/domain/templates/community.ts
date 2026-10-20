@@ -6,8 +6,8 @@
  * Never computes dates or money. Lead times and thresholds are typical planning heuristics, not
  * rules; permit processing varies by city, so permit tasks always point to the local authority.
  */
-import type { EventBrief } from '../../shared/schema';
-import { CANCELLATION, QUOTE, TENT_SIZE } from './copy';
+import type { EventBrief } from '../../shared/schema.js';
+import { CANCELLATION, QUOTE, TENT_SIZE } from './copy.js';
 import {
   always,
   amplifiedSound,
@@ -15,7 +15,7 @@ import {
   isOutdoor,
   servesAlcohol,
   servesFood,
-} from './conditions';
+} from './conditions.js';
 import type {
   CategoryDef,
   Condition,
@@ -23,7 +23,7 @@ import type {
   TaskDef,
   VendorDef,
   VolunteerRole,
-} from './types';
+} from './types.js';
 
 /** Above this many guests a written waste plan is recommended. */
 export const WASTE_GUESTS = 50;

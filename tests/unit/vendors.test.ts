@@ -8,20 +8,20 @@
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { addDays, isoDate } from '../../src/domain/dates';
-import { DUE_SOON_DAYS } from '../../src/domain/schedule';
-import { templateFor } from '../../src/domain/templates';
-import { communityTemplate } from '../../src/domain/templates/community';
-import type { EventBrief } from '../../src/shared/schema';
-import type { EventTemplate } from '../../src/domain/templates/types';
+import { addDays, isoDate } from '../../src/domain/dates.js';
+import { DUE_SOON_DAYS } from '../../src/domain/schedule.js';
+import { templateFor } from '../../src/domain/templates/index.js';
+import { communityTemplate } from '../../src/domain/templates/community.js';
+import type { EventBrief } from '../../src/shared/schema.js';
+import type { EventTemplate } from '../../src/domain/templates/types.js';
 import {
   bookingStatus,
   requiredVendors,
   VENDOR_STATUSES,
   type VendorItem,
   type VendorStatus,
-} from '../../src/domain/vendors';
-import { brief, briefArb } from '../support/fixtures';
+} from '../../src/domain/vendors.js';
+import { brief, briefArb } from '../support/fixtures.js';
 
 const SEED = { seed: 20261021, numRuns: 300 };
 const today = isoDate('2026-10-21');

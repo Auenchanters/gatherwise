@@ -16,13 +16,20 @@ import {
   type Budget,
   type BudgetLine,
   type WeightHint,
-} from '../../src/domain/budget';
-import { allocate, formatMoney, isMinor, minor, toMinor, type Minor } from '../../src/domain/money';
-import { templateFor } from '../../src/domain/templates';
-import { communityTemplate } from '../../src/domain/templates/community';
-import type { EventKind, EventTemplate } from '../../src/domain/templates/types';
-import { LIMITS } from '../../src/shared/limits';
-import { brief, briefArb } from '../support/fixtures';
+} from '../../src/domain/budget.js';
+import {
+  allocate,
+  formatMoney,
+  isMinor,
+  minor,
+  toMinor,
+  type Minor,
+} from '../../src/domain/money.js';
+import { templateFor } from '../../src/domain/templates/index.js';
+import { communityTemplate } from '../../src/domain/templates/community.js';
+import type { EventKind, EventTemplate } from '../../src/domain/templates/types.js';
+import { LIMITS } from '../../src/shared/limits.js';
+import { brief, briefArb } from '../support/fixtures.js';
 
 const SEED = { seed: 20261020, numRuns: 300 };
 const sum = (values: readonly Minor[]): number => values.reduce((acc, v) => acc + v, 0);

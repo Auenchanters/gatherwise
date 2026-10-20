@@ -13,7 +13,7 @@ import {
   QUOTE,
   SOUND_CUTOFF,
   TENT_SIZE,
-} from './copy';
+} from './copy.js';
 import {
   always,
   amplifiedSound,
@@ -21,8 +21,8 @@ import {
   isOutdoor,
   servesAlcohol,
   servesFood,
-} from './conditions';
-import type { CategoryDef, EventTemplate, TaskDef, VendorDef } from './types';
+} from './conditions.js';
+import type { CategoryDef, EventTemplate, TaskDef, VendorDef } from './types.js';
 
 const categories: readonly CategoryDef[] = [
   { id: 'venue', label: 'Venue', weight: 20, scales: 'fixed' },

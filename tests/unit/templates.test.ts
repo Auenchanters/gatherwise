@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import {
   birthdayTemplate,
   BIRTHDAY_PHOTOGRAPHER_GUESTS,
-} from '../../src/domain/templates/birthday';
+} from '../../src/domain/templates/birthday.js';
 import {
   communityTemplate,
   CROWD_SAFETY_GUESTS,
@@ -18,13 +18,13 @@ import {
   FIRST_AID_GUESTS,
   TOILET_GUESTS,
   WASTE_GUESTS,
-} from '../../src/domain/templates/community';
-import { always, endsAfter, isOutdoor } from '../../src/domain/templates/conditions';
-import { QUOTE } from '../../src/domain/templates/copy';
-import { nonEmpty, templateFor, templateIds } from '../../src/domain/templates';
-import type { EventTemplate, TaskId } from '../../src/domain/templates/types';
-import { weddingTemplate } from '../../src/domain/templates/wedding';
-import type { EventBrief } from '../../src/shared/schema';
+} from '../../src/domain/templates/community.js';
+import { always, endsAfter, isOutdoor } from '../../src/domain/templates/conditions.js';
+import { QUOTE } from '../../src/domain/templates/copy.js';
+import { nonEmpty, templateFor, templateIds } from '../../src/domain/templates/index.js';
+import type { EventTemplate, TaskId } from '../../src/domain/templates/types.js';
+import { weddingTemplate } from '../../src/domain/templates/wedding.js';
+import type { EventBrief } from '../../src/shared/schema.js';
 
 type Fields = Omit<Extract<EventBrief, { kind: 'wedding' }>, 'kind' | 'subtype'>;
 const MINIMAL: Fields = {

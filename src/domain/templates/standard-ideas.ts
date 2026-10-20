@@ -5,10 +5,10 @@
  * Never does: compute money (ideas.ts prices them), claim legal or permit authority, or name a tax;
  * the currency is selectable.
  */
-import { hasDietaryNeeds, isKidsParty, isMilestone } from './birthday';
-import { needsAccessibilityPlan, sponsorsExpected } from './community';
-import { amplifiedSound, servesFood } from './conditions';
-import type { Condition, EventKind } from './types';
+import { hasDietaryNeeds, isKidsParty, isMilestone } from './birthday.js';
+import { needsAccessibilityPlan, sponsorsExpected } from './community.js';
+import { amplifiedSound, servesFood } from './conditions.js';
+import type { Condition, EventKind } from './types.js';
 
 /** A ready-made idea for one event kind. */
 export interface StandardIdeaDef {

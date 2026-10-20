@@ -11,10 +11,10 @@
 import { readFileSync } from 'node:fs';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { isoDate, type IsoDate } from '../../src/domain/dates';
-import { toIcs } from '../../src/domain/ics';
-import type { Schedule, ScheduledTask } from '../../src/domain/schedule';
-import { brief } from '../support/fixtures';
+import { isoDate, type IsoDate } from '../../src/domain/dates.js';
+import { toIcs } from '../../src/domain/ics.js';
+import type { Schedule, ScheduledTask } from '../../src/domain/schedule.js';
+import { brief } from '../support/fixtures.js';
 
 const SEED = 20_261_021;
 const STAMP = '20261021T120000Z';

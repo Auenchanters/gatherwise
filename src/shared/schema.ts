@@ -6,7 +6,7 @@
  * are enforced by the engine.
  */
 import { z } from 'zod';
-import { LIMITS } from './limits';
+import { LIMITS } from './limits.js';
 
 /** Event kinds a plan can be built for. */
 export const EVENT_KINDS = ['community', 'wedding', 'birthday'] as const;

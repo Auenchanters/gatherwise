@@ -10,11 +10,11 @@
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import type { Budget } from '../../src/domain/budget';
-import { isoDate } from '../../src/domain/dates';
-import { mergeSuggestions } from '../../src/domain/merge';
-import { toMinor } from '../../src/domain/money';
-import { buildPlan, type Plan } from '../../src/domain/plan';
+import type { Budget } from '../../src/domain/budget.js';
+import { isoDate } from '../../src/domain/dates.js';
+import { mergeSuggestions } from '../../src/domain/merge.js';
+import { toMinor } from '../../src/domain/money.js';
+import { buildPlan, type Plan } from '../../src/domain/plan.js';
 import {
   initialPlanState,
   planReducer,
@@ -23,9 +23,9 @@ import {
   type PlanAction,
   type PlanState,
   type ReadyState,
-} from '../../src/domain/reducer';
-import type { AiMeta, AiSuggestions, EventBrief } from '../../src/shared/schema';
-import { brief } from '../support/fixtures';
+} from '../../src/domain/reducer.js';
+import type { AiMeta, AiSuggestions, EventBrief } from '../../src/shared/schema.js';
+import { brief } from '../support/fixtures.js';
 
 const SEED = { seed: 20_261_024, numRuns: 100 };
 const today = isoDate('2026-10-21');

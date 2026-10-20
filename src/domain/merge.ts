@@ -8,14 +8,14 @@
  * budget total; throw on any `AiSuggestions`-shaped input (NaN, ±Infinity, 1e300, huge lists,
  * emoji or right-to-left text included).
  */
-import { LIMITS } from '../shared/limits';
-import type { AiSuggestions, Currency, EventBrief } from '../shared/schema';
-import type { WeightHint } from './budget';
-import type { Idea } from './ideas';
-import { formatMoney, isMinor, MINOR_PER_MAJOR, toMinor, type Minor } from './money';
-import { assemblePlan, type AiAddenda, type Plan } from './plan';
-import { templateFor } from './templates';
-import type { EventTemplate, TaskDef, TaskId } from './templates/types';
+import { LIMITS } from '../shared/limits.js';
+import type { AiSuggestions, Currency, EventBrief } from '../shared/schema.js';
+import type { WeightHint } from './budget.js';
+import type { Idea } from './ideas.js';
+import { formatMoney, isMinor, MINOR_PER_MAJOR, toMinor, type Minor } from './money.js';
+import { assemblePlan, type AiAddenda, type Plan } from './plan.js';
+import { templateFor } from './templates/index.js';
+import type { EventTemplate, TaskDef, TaskId } from './templates/types.js';
 
 /** One change the engine made to the model's response, shown to the user as is. */
 export interface Adjustment {

@@ -8,10 +8,10 @@
  * step and rejected here if they slipped through), use floats where an integer will do, cut a line
  * silently to make a total fit, or lose or invent a paisa.
  */
-import { LIMITS } from '../shared/limits';
-import type { AiSuggestions, Currency, EventBrief } from '../shared/schema';
-import { allocate, MINOR_PER_MAJOR, minor, toMinor, type Minor } from './money';
-import type { CategoryDef, EventTemplate } from './templates/types';
+import { LIMITS } from '../shared/limits.js';
+import type { AiSuggestions, Currency, EventBrief } from '../shared/schema.js';
+import { allocate, MINOR_PER_MAJOR, minor, toMinor, type Minor } from './money.js';
+import type { CategoryDef, EventTemplate } from './templates/types.js';
 
 /** Share of the total held back as contingency, in percent. The spec fixes it at 10. */
 export const CONTINGENCY_PERCENT = 10;

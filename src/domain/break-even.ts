@@ -6,9 +6,9 @@
  * Never does: use floats for money (everything is integer minor units, and the divisions are
  * exact), call a shortfall zero, or guess an attendance or price the organizer did not give.
  */
-import type { EventBrief } from '../shared/schema';
-import type { Budget } from './budget';
-import { minor, toMinor, type Minor } from './money';
+import type { EventBrief } from '../shared/schema.js';
+import type { Budget } from './budget.js';
+import { minor, toMinor, type Minor } from './money.js';
 
 /** Expected income in major units, as the brief states it (community events only). */
 export type Income = NonNullable<Extract<EventBrief, { kind: 'community' }>['income']>;

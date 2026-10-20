@@ -12,9 +12,15 @@ import {
   MUSIC_LISTS,
   QUOTE,
   SOUND_CUTOFF,
-} from './copy';
-import { always, amplifiedSound, hostedOutsideHome, servesAlcohol, servesFood } from './conditions';
-import type { CategoryDef, Condition, EventTemplate, TaskDef, VendorDef } from './types';
+} from './copy.js';
+import {
+  always,
+  amplifiedSound,
+  hostedOutsideHome,
+  servesAlcohol,
+  servesFood,
+} from './conditions.js';
+import type { CategoryDef, Condition, EventTemplate, TaskDef, VendorDef } from './types.js';
 
 /** Above this many guests a non-milestone birthday is also recommended a photographer. */
 export const BIRTHDAY_PHOTOGRAPHER_GUESTS = 50;

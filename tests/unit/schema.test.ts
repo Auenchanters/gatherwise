@@ -21,8 +21,8 @@ import {
   type AiSuggestions,
   type EventBrief,
   type TemplateIds,
-} from '../../src/shared/schema';
-import { LIMITS } from '../../src/shared/limits';
+} from '../../src/shared/schema.js';
+import { LIMITS } from '../../src/shared/limits.js';
 
 const income = {
   ticketPrice: 100,

@@ -7,8 +7,8 @@
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { EVENT_KINDS, eventBriefSchema } from '../../src/shared/schema';
-import { brief, briefArb } from '../support/fixtures';
+import { EVENT_KINDS, eventBriefSchema } from '../../src/shared/schema.js';
+import { brief, briefArb } from '../support/fixtures.js';
 
 describe('brief', () => {
   it.each(EVENT_KINDS)('builds a schema-valid %s brief', (kind) => {

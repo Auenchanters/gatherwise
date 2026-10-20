@@ -9,8 +9,8 @@
  * nothing about roles (templates list them) and works for any event kind; the UI decides where to
  * show it.
  */
-import type { EventBrief } from '../shared/schema';
-import { minutesOf } from './templates/conditions';
+import type { EventBrief } from '../shared/schema.js';
+import { minutesOf } from './templates/conditions.js';
 
 /** Length of a full shift in hours. */
 export const SHIFT_HOURS = 3;

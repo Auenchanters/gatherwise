@@ -8,12 +8,12 @@
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { buildBudget, rescaleGuests } from '../../src/domain/budget';
-import { breakEven, type Income } from '../../src/domain/break-even';
-import { isMinor, toMinor } from '../../src/domain/money';
-import { templateFor } from '../../src/domain/templates';
-import { communityTemplate } from '../../src/domain/templates/community';
-import { brief, briefArb } from '../support/fixtures';
+import { buildBudget, rescaleGuests } from '../../src/domain/budget.js';
+import { breakEven, type Income } from '../../src/domain/break-even.js';
+import { isMinor, toMinor } from '../../src/domain/money.js';
+import { templateFor } from '../../src/domain/templates/index.js';
+import { communityTemplate } from '../../src/domain/templates/community.js';
+import { brief, briefArb } from '../support/fixtures.js';
 
 const SEED = { seed: 20261020, numRuns: 300 };
 const zeros: Income = {

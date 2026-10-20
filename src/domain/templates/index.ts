@@ -3,11 +3,11 @@
  * Does: picks the template for an event kind and lists its ids for the AI response schema.
  * Never does: compute dates or money.
  */
-import type { TemplateIds } from '../../shared/schema';
-import { birthdayTemplate } from './birthday';
-import { communityTemplate } from './community';
-import type { EventKind, EventTemplate } from './types';
-import { weddingTemplate } from './wedding';
+import type { TemplateIds } from '../../shared/schema.js';
+import { birthdayTemplate } from './birthday.js';
+import { communityTemplate } from './community.js';
+import type { EventKind, EventTemplate } from './types.js';
+import { weddingTemplate } from './wedding.js';
 
 const TEMPLATES: Record<EventKind, EventTemplate> = {
   community: communityTemplate,

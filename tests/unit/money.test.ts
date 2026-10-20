@@ -15,8 +15,8 @@ import {
   minor,
   toMinor,
   type Minor,
-} from '../../src/domain/money';
-import { CURRENCIES } from '../../src/shared/schema';
+} from '../../src/domain/money.js';
+import { CURRENCIES } from '../../src/shared/schema.js';
 
 const m = minor;
 const sum = (values: readonly Minor[]): number => values.reduce((acc, v) => acc + v, 0);
@@ -251,7 +251,7 @@ describe('formatMoney', () => {
     vi.resetModules();
     const spy = vi.spyOn(Intl, 'NumberFormat');
     try {
-      const fresh = await import('../../src/domain/money');
+      const fresh = await import('../../src/domain/money.js');
       for (const amount of [1, 2, 3]) fresh.formatMoney(fresh.minor(amount), 'CAD');
       fresh.formatMoney(fresh.minor(1), 'USD');
       expect(spy).toHaveBeenCalledTimes(2);

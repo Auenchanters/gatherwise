@@ -5,7 +5,7 @@
  * because templates are shared singletons; a stray `.sort()` would corrupt every plan.
  * Never does: compute dates or money; templates only say what and when, the engine does the sums.
  */
-import type { EventBrief } from '../../shared/schema';
+import type { EventBrief } from '../../shared/schema.js';
 
 /** Which kind of event a template plans. */
 export type EventKind = EventBrief['kind'];

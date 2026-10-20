@@ -6,8 +6,8 @@
  * Never does: read the clock (the date is a fixed string) or produce anything the schema rejects.
  */
 import fc from 'fast-check';
-import type { EventKind, TaskDef } from '../../src/domain/templates/types';
-import { LIMITS } from '../../src/shared/limits';
+import type { EventKind, TaskDef } from '../../src/domain/templates/types.js';
+import { LIMITS } from '../../src/shared/limits.js';
 import {
   ACCESSIBILITY_OPTIONS,
   CURRENCIES,
@@ -15,7 +15,7 @@ import {
   SUBTYPES,
   VENUES,
   type EventBrief,
-} from '../../src/shared/schema';
+} from '../../src/shared/schema.js';
 
 /** The variant of `EventBrief` for one kind. */
 type BriefOf<K extends EventKind> = Extract<EventBrief, { kind: K }>;

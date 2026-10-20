@@ -10,11 +10,11 @@
  * cycle); compress a deadline to make a plan look feasible. An impossible task keeps its true
  * deadline and is marked `infeasible` or `overdue` so the user sees what cannot be done in time.
  */
-import { LIMITS } from '../shared/limits';
-import { err, ok, type Result } from '../shared/result';
-import type { EventBrief } from '../shared/schema';
-import { addDays, daysBetween, parseIsoDate, type IsoDate } from './dates';
-import type { TaskDef, TaskId } from './templates/types';
+import { LIMITS } from '../shared/limits.js';
+import { err, ok, type Result } from '../shared/result.js';
+import type { EventBrief } from '../shared/schema.js';
+import { addDays, daysBetween, parseIsoDate, type IsoDate } from './dates.js';
+import type { TaskDef, TaskId } from './templates/types.js';
 
 /** A task with slack up to this many days is `at_risk`: one slip and it becomes infeasible. */
 export const AT_RISK_SLACK_DAYS = 2;

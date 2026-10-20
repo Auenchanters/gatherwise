@@ -15,8 +15,8 @@ import {
   planShifts,
   SHIFT_HOURS,
   type Shift,
-} from '../../src/domain/volunteers';
-import { brief, briefArb } from '../support/fixtures';
+} from '../../src/domain/volunteers.js';
+import { brief, briefArb } from '../support/fixtures.js';
 
 const SEED = { seed: 20261022, numRuns: 500 };
 

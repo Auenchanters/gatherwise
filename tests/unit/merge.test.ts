@@ -9,22 +9,22 @@
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import type { Budget } from '../../src/domain/budget';
-import { addDays, isoDate } from '../../src/domain/dates';
+import type { Budget } from '../../src/domain/budget.js';
+import { addDays, isoDate } from '../../src/domain/dates.js';
 import {
   mergeSuggestions,
   normalizeSuggestions,
   type Adjustment,
   type MergeContext,
-} from '../../src/domain/merge';
-import { toMinor } from '../../src/domain/money';
-import { buildPlan, type Plan } from '../../src/domain/plan';
-import { templateFor } from '../../src/domain/templates';
-import { communityTemplate } from '../../src/domain/templates/community';
-import type { EventKind } from '../../src/domain/templates/types';
-import { LIMITS } from '../../src/shared/limits';
-import type { AiSuggestions, EventBrief } from '../../src/shared/schema';
-import { brief, briefArb } from '../support/fixtures';
+} from '../../src/domain/merge.js';
+import { toMinor } from '../../src/domain/money.js';
+import { buildPlan, type Plan } from '../../src/domain/plan.js';
+import { templateFor } from '../../src/domain/templates/index.js';
+import { communityTemplate } from '../../src/domain/templates/community.js';
+import type { EventKind } from '../../src/domain/templates/types.js';
+import { LIMITS } from '../../src/shared/limits.js';
+import type { AiSuggestions, EventBrief } from '../../src/shared/schema.js';
+import { brief, briefArb } from '../support/fixtures.js';
 
 const SEED = { seed: 20_261_023, numRuns: 150 };
 const today = isoDate('2026-10-21');

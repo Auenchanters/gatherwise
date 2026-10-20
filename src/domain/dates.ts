@@ -5,7 +5,7 @@
  * two `IsoDate` values compare correctly with plain `<` and `>`.
  * Never does: read the clock (callers pass `today` in) or use local-time Date methods.
  */
-import { err, ok, type Result } from '../shared/result';
+import { err, ok, type Result } from '../shared/result.js';
 
 /** A real calendar date written `YYYY-MM-DD`, years 0000 to 9999. Mint it with `parseIsoDate`. */
 export type IsoDate = string & { readonly __brand: 'IsoDate' };

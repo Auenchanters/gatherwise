@@ -9,7 +9,7 @@
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { addDays, daysBetween, isoDate, type IsoDate } from '../../src/domain/dates';
+import { addDays, daysBetween, isoDate, type IsoDate } from '../../src/domain/dates.js';
 import {
   AT_RISK_SLACK_DAYS,
   DUE_SOON_DAYS,
@@ -19,16 +19,16 @@ import {
   type ScheduledTask,
   type ScheduleError,
   type Status,
-} from '../../src/domain/schedule';
-import { templateFor } from '../../src/domain/templates';
-import { birthdayTemplate } from '../../src/domain/templates/birthday';
-import { communityTemplate } from '../../src/domain/templates/community';
-import type { EventTemplate, TaskDef, TaskId } from '../../src/domain/templates/types';
-import { weddingTemplate } from '../../src/domain/templates/wedding';
-import { LIMITS } from '../../src/shared/limits';
-import type { Result } from '../../src/shared/result';
-import type { EventBrief } from '../../src/shared/schema';
-import { brief, briefArb, dagArb } from '../support/fixtures';
+} from '../../src/domain/schedule.js';
+import { templateFor } from '../../src/domain/templates/index.js';
+import { birthdayTemplate } from '../../src/domain/templates/birthday.js';
+import { communityTemplate } from '../../src/domain/templates/community.js';
+import type { EventTemplate, TaskDef, TaskId } from '../../src/domain/templates/types.js';
+import { weddingTemplate } from '../../src/domain/templates/wedding.js';
+import { LIMITS } from '../../src/shared/limits.js';
+import type { Result } from '../../src/shared/result.js';
+import type { EventBrief } from '../../src/shared/schema.js';
+import { brief, briefArb, dagArb } from '../support/fixtures.js';
 
 const SEED = 20_261_021;
 const today = isoDate('2026-10-21');

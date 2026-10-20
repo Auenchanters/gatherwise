@@ -5,11 +5,11 @@
  * always fit.
  * Never does: change the budget, or pass template text off as AI text (`source` says which).
  */
-import type { EventBrief } from '../shared/schema';
-import type { Budget } from './budget';
-import { minor, type Minor } from './money';
-import { STANDARD_IDEAS } from './templates/standard-ideas';
-import type { EventTemplate } from './templates/types';
+import type { EventBrief } from '../shared/schema.js';
+import type { Budget } from './budget.js';
+import { minor, type Minor } from './money.js';
+import { STANDARD_IDEAS } from './templates/standard-ideas.js';
+import type { EventTemplate } from './templates/types.js';
 
 /** One suggestion for the event, filed under a budget category. */
 export interface Idea {

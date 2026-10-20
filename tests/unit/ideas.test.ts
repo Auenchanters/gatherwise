@@ -8,14 +8,14 @@
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { buildBudget, rescaleGuests, type Budget } from '../../src/domain/budget';
-import { ideaFit, standardIdeas, type Idea } from '../../src/domain/ideas';
-import { minor, toMinor, type Minor } from '../../src/domain/money';
-import { templateFor } from '../../src/domain/templates';
-import { STANDARD_IDEAS } from '../../src/domain/templates/standard-ideas';
-import { LIMITS } from '../../src/shared/limits';
-import { EVENT_KINDS, type EventBrief } from '../../src/shared/schema';
-import { brief, briefArb } from '../support/fixtures';
+import { buildBudget, rescaleGuests, type Budget } from '../../src/domain/budget.js';
+import { ideaFit, standardIdeas, type Idea } from '../../src/domain/ideas.js';
+import { minor, toMinor, type Minor } from '../../src/domain/money.js';
+import { templateFor } from '../../src/domain/templates/index.js';
+import { STANDARD_IDEAS } from '../../src/domain/templates/standard-ideas.js';
+import { LIMITS } from '../../src/shared/limits.js';
+import { EVENT_KINDS, type EventBrief } from '../../src/shared/schema.js';
+import { brief, briefArb } from '../support/fixtures.js';
 
 const SEED = { seed: 20_261_022, numRuns: 200 };
 

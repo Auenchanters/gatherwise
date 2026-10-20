@@ -61,12 +61,17 @@ function moduleReferences(source: string): { specifier: string; typeOnly: boolea
 
 const isInside = (dir: string, path: string): boolean => path === dir || path.startsWith(`${dir}/`);
 
-/** Imports in `file` (repo-relative) that leave src/domain, excluding type imports from src/shared and allowlisted modules. */
+/**
+ * Imports in `file` (repo-relative) that leave src/domain, excluding type imports from src/shared and allowlisted modules.
+ * A trailing `.js` is dropped first: Node ESM needs it on disk, but it names the same module.
+ */
 function boundaryViolations(file: string, source: string): string[] {
   return moduleReferences(source)
     .filter(({ specifier, typeOnly }) => {
       if (!specifier.startsWith('.')) return true;
-      const target = posix.normalize(posix.join(posix.dirname(file), specifier));
+      const target = posix
+        .normalize(posix.join(posix.dirname(file), specifier))
+        .replace(/\.js$/u, '');
       return !(
         isInside(DOMAIN_DIR, target) ||
         (typeOnly && isInside(SHARED_DIR, target)) ||
@@ -165,6 +170,28 @@ describe('boundary checker', () => {
     expect(
       boundaryViolations(domainFile, "import type { EventBrief } from '../shared/schema';"),
     ).toEqual([]);
+  });
+
+  it('treats explicit .js specifiers (Node ESM) exactly like extensionless ones', () => {
+    const domainFile = 'src/domain/plan.ts';
+    const allowed = [
+      "import { minor } from './money.js';",
+      "import { templateFor } from './templates/index.js';",
+      "import { LIMITS } from '../shared/limits.js';",
+      "import { ok } from '../shared/result.js';",
+      "import type { EventBrief } from '../shared/schema.js';",
+    ].join('\n');
+    expect(boundaryViolations(domainFile, allowed)).toEqual([]);
+    const flagged = [
+      "import { eventBriefSchema } from '../shared/schema.js';",
+      "import type { Handler } from '../../server/handler.js';",
+      "import { z } from 'zod';",
+    ].join('\n');
+    expect(boundaryViolations(domainFile, flagged)).toEqual([
+      '../shared/schema.js',
+      '../../server/handler.js',
+      'zod',
+    ]);
   });
 
   it.each(FORBIDDEN_TOKENS)('flags %s even inside a comment', (token) => {

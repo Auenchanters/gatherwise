@@ -7,25 +7,25 @@
  * Never does: read the clock; `today` is a fixed date.
  */
 import { describe, expect, it } from 'vitest';
-import { breakEven } from '../../src/domain/break-even';
-import { buildBudget, rescaleGuests, type Budget } from '../../src/domain/budget';
-import { addDays, isoDate } from '../../src/domain/dates';
-import { ideaFit, standardIdeas } from '../../src/domain/ideas';
-import { toMinor } from '../../src/domain/money';
+import { breakEven } from '../../src/domain/break-even.js';
+import { buildBudget, rescaleGuests, type Budget } from '../../src/domain/budget.js';
+import { addDays, isoDate } from '../../src/domain/dates.js';
+import { ideaFit, standardIdeas } from '../../src/domain/ideas.js';
+import { toMinor } from '../../src/domain/money.js';
 import {
   assemblePlan,
   buildPlan,
   type AiAddenda,
   type Plan,
   type PlanError,
-} from '../../src/domain/plan';
-import { templateFor } from '../../src/domain/templates';
-import { communityTemplate } from '../../src/domain/templates/community';
-import { requiredVendors } from '../../src/domain/vendors';
-import { planShifts } from '../../src/domain/volunteers';
-import type { Result } from '../../src/shared/result';
-import { EVENT_KINDS, type EventBrief } from '../../src/shared/schema';
-import { brief } from '../support/fixtures';
+} from '../../src/domain/plan.js';
+import { templateFor } from '../../src/domain/templates/index.js';
+import { communityTemplate } from '../../src/domain/templates/community.js';
+import { requiredVendors } from '../../src/domain/vendors.js';
+import { planShifts } from '../../src/domain/volunteers.js';
+import type { Result } from '../../src/shared/result.js';
+import { EVENT_KINDS, type EventBrief } from '../../src/shared/schema.js';
+import { brief } from '../support/fixtures.js';
 
 const today = isoDate('2026-10-21');
 
