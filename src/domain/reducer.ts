@@ -6,7 +6,7 @@
  * the `ai` value passes through untouched. A rejected edit keeps the plan and sets `error`; the next
  * good one clears it. Ticks for ids the plan has lost stay stored and return if the id does.
  * Never does: call the model; read the clock (`today` arrives in the action); mutate state or action.
- * Whether a response is still wanted is decided by its `generation`, never by timing.
+ * Whether a response is still wanted is decided by its `generation`, which never repeats, not by timing.
  */
 import { LIMITS } from '../shared/limits';
 import { err, ok, type Result } from '../shared/result';
@@ -48,7 +48,7 @@ export interface ReadyState {
   readonly today: IsoDate;
   /** The guest count the budget was planned for; `brief.guests` is the current count. */
   readonly plannedGuests: number;
-  /** Counts briefs submitted; an AI response applies only to the generation that asked for it. */
+  /** Counts briefs submitted, across resets; an AI response applies only to the generation that asked. */
   readonly generation: number;
   readonly progress: Progress;
   readonly ai: AiState;
@@ -58,8 +58,13 @@ export interface ReadyState {
   readonly error?: PlanStateError;
 }
 
-/** Either no plan yet, or a ready one. */
-export type PlanState = { readonly phase: 'empty'; readonly error?: PlanStateError } | ReadyState;
+/**
+ * Either no plan, or a ready one. Both carry `generation`: an empty state keeps the count of the
+ * last plan, so a response for a plan that was reset away can never match a later plan.
+ */
+export type PlanState =
+  | { readonly phase: 'empty'; readonly generation: number; readonly error?: PlanStateError }
+  | ReadyState;
 
 /** Everything the user or the AI call can do to a plan. */
 export type PlanAction =
@@ -81,8 +86,8 @@ export type PlanAction =
   | { readonly type: 'vendor/check'; readonly itemId: string }
   | { readonly type: 'plan/reset' };
 
-/** The state before any brief is submitted, and after a reset. */
-export const initialPlanState: PlanState = { phase: 'empty' };
+/** The state before any brief is submitted: no plan, and generation 0 so the first brief is 1. */
+export const initialPlanState: PlanState = { phase: 'empty', generation: 0 };
 
 const NO_PROGRESS: Progress = { doneTasks: [], vendorStatus: {}, checklistDone: [] };
 
@@ -149,7 +154,7 @@ function submit(state: PlanState, brief: EventBrief, today: IsoDate): PlanState 
     brief,
     today,
     plannedGuests: brief.guests,
-    generation: state.phase === 'ready' ? state.generation + 1 : 1,
+    generation: state.generation + 1,
     progress: NO_PROGRESS,
     ai: { status: 'idle' },
   });
@@ -158,6 +163,7 @@ function submit(state: PlanState, brief: EventBrief, today: IsoDate): PlanState 
 
 /**
  * Applies one action. Pure: the same state and action give the same result, and neither is changed.
+ * The generation only ever goes up: a submitted brief takes the next one, and `plan/reset` keeps it.
  *
  * Every edit re-derives the plan locally and leaves `ai` as it was, so only `ai/*` actions concern
  * the model (the zero-call guarantee). Guests change `brief.guests` but not `plannedGuests`, so the
@@ -168,7 +174,7 @@ function submit(state: PlanState, brief: EventBrief, today: IsoDate): PlanState 
  * a different task now.
  */
 export function planReducer(state: PlanState, action: PlanAction): PlanState {
-  if (action.type === 'plan/reset') return initialPlanState;
+  if (action.type === 'plan/reset') return { phase: 'empty', generation: state.generation };
   if (action.type === 'brief/submitted') return submit(state, action.brief, action.today);
   if (state.phase === 'empty') return state;
 

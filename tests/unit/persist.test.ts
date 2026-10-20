@@ -200,6 +200,29 @@ describe('loadPlan: round trips', () => {
     expect(back.brief.guests).toBe(320);
   });
 
+  it('continues the generation count after a restore, so an old response cannot apply', () => {
+    const third = ready(
+      run(
+        initialPlanState,
+        { type: 'brief/submitted', brief: brief('birthday'), today },
+        { type: 'plan/reset' },
+        { type: 'brief/submitted', brief: brief('wedding'), today },
+        { type: 'brief/submitted', brief: brief('community'), today },
+      ),
+    );
+    expect(third.generation).toBe(3);
+    const store = memoryStore();
+    savePlan(store, third);
+    const back = loaded(store);
+    expect(back.generation).toBe(3);
+    const next = ready(
+      planReducer(back, { type: 'brief/submitted', brief: brief('birthday'), today }),
+    );
+    expect(next.generation).toBe(4);
+    const late = { type: 'ai/applied', generation: 3, suggestions, meta } satisfies PlanAction;
+    expect(planReducer(next, late)).toBe(next);
+  });
+
   it('restores a plan that never had AI as idle', () => {
     const fresh = ready(
       planReducer(initialPlanState, { type: 'brief/submitted', brief: brief('wedding'), today }),

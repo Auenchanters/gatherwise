@@ -229,7 +229,11 @@ describe('brief/submitted', () => {
         brief: brief('birthday', { date: '2026-02-30' }),
         today,
       }),
-    ).toEqual({ phase: 'empty', error: { kind: 'invalid_date', reason: 'invalid' } });
+    ).toEqual({
+      phase: 'empty',
+      generation: 0,
+      error: { kind: 'invalid_date', reason: 'invalid' },
+    });
   });
 });
 
@@ -586,7 +590,7 @@ describe('rejected edits keep the plan and set an error; the next good edit clea
     for (const action of good) {
       expect(planReducer(failed, action), action.type).not.toHaveProperty('error');
     }
-    expect(planReducer(failed, { type: 'plan/reset' })).toBe(initialPlanState);
+    expect(planReducer(failed, { type: 'plan/reset' })).toEqual({ phase: 'empty', generation: 1 });
   });
 
   it('is cleared on an empty state by a good brief', () => {
@@ -603,10 +607,53 @@ describe('rejected edits keep the plan and set an error; the next good edit clea
 });
 
 describe('plan/reset and the empty state', () => {
-  it('returns to the initial state from anywhere', () => {
-    expect(initialPlanState).toEqual({ phase: 'empty' });
-    expect(planReducer(inProgress(), { type: 'plan/reset' })).toBe(initialPlanState);
-    expect(planReducer(initialPlanState, { type: 'plan/reset' })).toBe(initialPlanState);
+  it('starts at generation 0 and resets to an empty state from anywhere', () => {
+    expect(initialPlanState).toEqual({ phase: 'empty', generation: 0 });
+    expect(planReducer(inProgress(), { type: 'plan/reset' })).toMatchObject({ phase: 'empty' });
+    expect(planReducer(initialPlanState, { type: 'plan/reset' })).toEqual(initialPlanState);
+  });
+
+  it('keeps the generation counter across a reset', () => {
+    const twice = ready(run(inProgress(), { type: 'brief/submitted', brief: community, today }));
+    expect(twice.generation).toBe(2);
+    const reset = planReducer(twice, { type: 'plan/reset' });
+    expect(reset).toEqual({ phase: 'empty', generation: 2 });
+    expect(planReducer(reset, { type: 'plan/reset' })).toEqual(reset);
+  });
+
+  it('never reuses a generation: a response for the plan before a reset is ignored', () => {
+    const first = submitted();
+    expect(first.generation).toBe(1);
+    const second = ready(
+      run(
+        first,
+        { type: 'ai/requested', generation: 1 },
+        { type: 'plan/reset' },
+        { type: 'brief/submitted', brief: brief('birthday'), today },
+      ),
+    );
+    expect(second.generation).toBe(2);
+    expect(second.ai).toEqual({ status: 'idle' });
+    for (const action of [
+      { type: 'ai/applied', generation: 1, suggestions: clean, meta },
+      { type: 'ai/failed', generation: 1, error: 'late' },
+      { type: 'ai/requested', generation: 1 },
+    ] satisfies PlanAction[]) {
+      expect(planReducer(second, action), action.type).toBe(second);
+    }
+  });
+
+  it('counts on after a refused brief on an empty state', () => {
+    const reset = planReducer(inProgress(), { type: 'plan/reset' });
+    const refused = planReducer(reset, {
+      type: 'brief/submitted',
+      brief: brief('community', { date: '2020-01-01' }),
+      today,
+    });
+    expect(refused).toMatchObject({ phase: 'empty', generation: 1 });
+    expect(
+      ready(planReducer(refused, { type: 'brief/submitted', brief: community, today })).generation,
+    ).toBe(2);
   });
 
   it.each(everyAction.filter((a) => a.type !== 'brief/submitted' && a.type !== 'plan/reset'))(
