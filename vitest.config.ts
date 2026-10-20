@@ -1,5 +1,5 @@
 /** Coverage gates apply to all pure logic and server request paths. */
-import { defineConfig } from 'vitest/config';
+import { coverageConfigDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
@@ -8,7 +8,7 @@ export default defineConfig({
       provider: 'v8',
       include: ['src/domain/**', 'src/shared/**', 'server/**'],
       // Ambient declarations compile to nothing, so there is nothing to cover.
-      exclude: ['**/*.d.ts'],
+      exclude: [...coverageConfigDefaults.exclude, '**/*.d.ts'],
       reporter: ['text', 'json-summary', 'html'],
       thresholds: { lines: 95, statements: 95, functions: 95, branches: 90 },
     },

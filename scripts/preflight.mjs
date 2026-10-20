@@ -4,6 +4,9 @@ import { execFileSync, spawnSync } from 'node:child_process';
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8' });
 const split = (text, separator) => text.split(separator).filter(Boolean);
 
+// git commands are relative to the working directory, so cover the whole repo from anywhere.
+process.chdir(git('rev-parse', '--show-toplevel').trim());
+
 // Everything below inspects the git index (what would be committed), never the working tree,
 // so a file staged and then deleted or edited on disk cannot slip past a check. -z keeps
 // non-ASCII paths unquoted.
@@ -37,14 +40,19 @@ verify(
   ),
 );
 
-// POSIX ERE for `git grep`. -l prints file names only, so a leaked key is never echoed here.
+// POSIX ERE for `git grep`. -a scans binary blobs too (a key can hide in a .wasm or SQLite
+// file) and -l prints file names only, so a leaked key is never echoed here.
 // git grep exits 1 when nothing matches; any other status (a match, or git failing) fails.
-const secretPattern =
-  'AIza[0-9A-Za-z_-]{35}|AQ[.][A-Za-z0-9_-]{30,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----';
-const grepArgs = ['-c', 'core.quotepath=false', 'grep', '--cached', '-I', '-l', '-E', '-e'];
+const secretPattern = 'AIza[0-9A-Za-z_-]{35}|AQ[.][A-Za-z0-9_-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY';
+const grepArgs = ['-c', 'core.quotepath=false', 'grep', '--cached', '-a', '-l', '-E', '-e'];
 const secretScan = spawnSync('git', [...grepArgs, secretPattern], { encoding: 'utf8' });
 verify('No known credential signatures in tracked files', secretScan.status === 1);
-if (secretScan.status === 0) process.stdout.write(`  matched in: ${secretScan.stdout.trim()}\n`);
+if (secretScan.status === 0) {
+  process.stdout.write(`  matched in: ${secretScan.stdout.trim()}\n`);
+} else if (secretScan.status !== 1) {
+  const reason = secretScan.error?.message ?? secretScan.stderr?.trim();
+  process.stdout.write(`  git grep failed (status ${secretScan.status}): ${reason}\n`);
+}
 
 // Remote-tracking refs are what this clone knows about; run `git fetch --prune` first.
 // Full ref names are used because `--format=%(refname:short)` prints a bare remote name for
