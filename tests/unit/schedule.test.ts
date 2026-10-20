@@ -153,12 +153,15 @@ describe('schedule: invalid dates', () => {
 
 describe('schedule: statuses', () => {
   // One task, no dependencies, event 30 days out: it starts today, so slack equals its latest
-  // start and its deadline is `latestEnd` days from today.
+  // start and its deadline is `latestEnd` days from today. due_soon means a deadline within
+  // DUE_SOON_DAYS of today while there is still room (slack above AT_RISK_SLACK_DAYS).
   const rows: readonly { name: string; duration: number; latestEnd: number; status: Status }[] = [
     { name: 'far from its deadline', duration: 2, latestEnd: 20, status: 'on_track' },
-    { name: 'latest start 4 days out', duration: 2, latestEnd: 6, status: 'on_track' },
-    { name: 'latest start 3 days out, slack 3', duration: 2, latestEnd: 5, status: 'due_soon' },
-    { name: 'slack exactly 2', duration: 2, latestEnd: 4, status: 'at_risk' },
+    { name: 'deadline 8 days out', duration: 2, latestEnd: 8, status: 'on_track' },
+    { name: 'deadline exactly 7 days out', duration: 2, latestEnd: 7, status: 'due_soon' },
+    { name: 'deadline 6 days out, slack 4', duration: 2, latestEnd: 6, status: 'due_soon' },
+    { name: 'deadline 5 days out, slack 3', duration: 2, latestEnd: 5, status: 'due_soon' },
+    { name: 'slack exactly 2, deadline near', duration: 2, latestEnd: 4, status: 'at_risk' },
     { name: 'slack exactly 0', duration: 2, latestEnd: 2, status: 'at_risk' },
     {
       name: 'slack -1 with the deadline still ahead',
@@ -180,7 +183,23 @@ describe('schedule: statuses', () => {
 
   it('exposes the thresholds as named constants', () => {
     expect(AT_RISK_SLACK_DAYS).toBe(2);
-    expect(DUE_SOON_DAYS).toBe(3);
+    expect(DUE_SOON_DAYS).toBe(7);
+  });
+
+  it('reaches due_soon for a task pushed late by its dependency', () => {
+    // b's deadline is 5 days out, but it cannot start before a ends on day 1: slack 3.
+    const tasks = [
+      task('a', { durationDays: 1, leadDays: 26 }),
+      task('b', { durationDays: 1, leadDays: 25, dependsOn: ['a'] }),
+    ];
+    const result = schedule(tasks, eventIn(30), today, none);
+    expect(taskOf(result, 'b')).toMatchObject({
+      start: addDays(today, 1),
+      latestStart: addDays(today, 4),
+      latestEnd: addDays(today, 5),
+      slackDays: 3,
+      status: 'due_soon',
+    });
   });
 
   it('reports done ahead of every other status', () => {
@@ -474,6 +493,15 @@ describe('schedule: random DAGs', () => {
             if (['on_track', 'due_soon', 'at_risk'].includes(t.status)) {
               expect(t.slackDays).toBeGreaterThanOrEqual(0);
             }
+            const deadlineIn = daysBetween(today, t.latestEnd);
+            if (t.status === 'due_soon') {
+              expect(t.slackDays).toBeGreaterThan(AT_RISK_SLACK_DAYS);
+              expect(deadlineIn).toBeLessThanOrEqual(DUE_SOON_DAYS);
+            }
+            if (t.status === 'on_track') {
+              expect(t.slackDays).toBeGreaterThan(AT_RISK_SLACK_DAYS);
+              expect(deadlineIn).toBeGreaterThan(DUE_SOON_DAYS);
+            }
           }
           const starts = s.tasks.map((t) => t.latestStart);
           expect(starts).toEqual(starts.toSorted());
@@ -564,6 +592,31 @@ describe('schedule: the real templates', () => {
     'schedules %s without a cycle and with every dependency honoured',
     (_name, template, b) => {
       expectSound(template, b);
+    },
+  );
+
+  // With every task switched on, the whole graph is checked whatever conditions a sample brief
+  // happens to trigger, so acyclicity does not depend on the random briefs below.
+  it.each([communityTemplate, weddingTemplate, birthdayTemplate])(
+    'schedules every $kind task at once, with every dependency honoured',
+    (template) => {
+      const allOn = { ...template, tasks: template.tasks.map((t) => ({ ...t, when: () => true })) };
+      const b = brief(template.kind, { date });
+      expectSound(allOn, b);
+      expect(scheduled(schedule(allOn.tasks, b, today, none)).tasks).toHaveLength(
+        template.tasks.length,
+      );
+    },
+  );
+
+  it.each([communityTemplate, weddingTemplate, birthdayTemplate])(
+    'schedules nothing, without failing, when every $kind task is switched off',
+    (template) => {
+      const allOff = template.tasks.map((t) => ({ ...t, when: () => false }));
+      expect(schedule(allOff, brief(template.kind, { date }), today, none)).toEqual({
+        ok: true,
+        value: { tasks: [], infeasibleCount: 0, overdueCount: 0 },
+      });
     },
   );
 

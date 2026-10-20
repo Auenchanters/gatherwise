@@ -18,8 +18,11 @@ import type { TaskDef, TaskId } from './templates/types';
 
 /** A task with slack up to this many days is `at_risk`: one slip and it becomes infeasible. */
 export const AT_RISK_SLACK_DAYS = 2;
-/** A task whose latest start is within this many days from today is `due_soon`. */
-export const DUE_SOON_DAYS = 3;
+/**
+ * A task with room to spare (slack above `AT_RISK_SLACK_DAYS`) is `due_soon` when its deadline is
+ * within this many days of today.
+ */
+export const DUE_SOON_DAYS = 7;
 
 /** How a task stands against its deadline. `done` comes from the user, the rest from the dates. */
 export type Status = 'done' | 'on_track' | 'due_soon' | 'at_risk' | 'overdue' | 'infeasible';
@@ -107,12 +110,17 @@ function findCycle(nodes: readonly Node[]): TaskId[] {
   return [...walk.keys()].slice(from).map((n) => n.def.id);
 }
 
-function classify(isDone: boolean, slack: number, latestStart: number, latestEnd: number): Status {
+/**
+ * First match wins: done, overdue (deadline before today), infeasible (negative slack), at_risk
+ * (slack within `AT_RISK_SLACK_DAYS`), due_soon (deadline within `DUE_SOON_DAYS` of today), else
+ * on_track. `latestEnd` is in days from today.
+ */
+function classify(isDone: boolean, slack: number, latestEnd: number): Status {
   if (isDone) return 'done';
   if (latestEnd < 0) return 'overdue';
   if (slack < 0) return 'infeasible';
   if (slack <= AT_RISK_SLACK_DAYS) return 'at_risk';
-  return latestStart <= DUE_SOON_DAYS ? 'due_soon' : 'on_track';
+  return latestEnd <= DUE_SOON_DAYS ? 'due_soon' : 'on_track';
 }
 
 /**
@@ -200,7 +208,7 @@ export function schedule(
         latestStart: addDays(today, node.latestStart),
         latestEnd: addDays(today, node.latestEnd),
         slackDays: slack,
-        status: classify(done.has(def.id), slack, node.latestStart, node.latestEnd),
+        status: classify(done.has(def.id), slack, node.latestEnd),
         dependsOn: node.deps.map((dep) => dep.def.id),
         ...(def.note === undefined ? {} : { note: def.note }),
       };
