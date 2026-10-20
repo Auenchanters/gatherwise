@@ -17,6 +17,8 @@ export const SUBTYPES = {
 } as const satisfies Record<(typeof EVENT_KINDS)[number], readonly string[]>;
 /** Supported currencies. */
 export const CURRENCIES = ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD', 'AUD', 'CAD'] as const;
+/** One of the supported currency codes. */
+export type Currency = (typeof CURRENCIES)[number];
 /** Venue types. */
 export const VENUES = [
   'indoor_hall',
