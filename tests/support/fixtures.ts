@@ -2,10 +2,11 @@
  * Shared test fixtures: ready-made valid briefs and a fast-check generator of schema-valid briefs.
  * Does: gives every test file one place to get an `EventBrief` from, so contracts are not copied
  * into each test. tests/unit/fixtures.test.ts keeps both exports honest against `eventBriefSchema`.
+ * Also holds `dagArb`, random acyclic task lists for the scheduler tests.
  * Never does: read the clock (the date is a fixed string) or produce anything the schema rejects.
  */
 import fc from 'fast-check';
-import type { EventKind } from '../../src/domain/templates/types';
+import type { EventKind, TaskDef } from '../../src/domain/templates/types';
 import { LIMITS } from '../../src/shared/limits';
 import {
   ACCESSIBILITY_OPTIONS,
@@ -172,3 +173,30 @@ export const briefArb: fc.Arbitrary<EventBrief> = fc.oneof(
     subtype: fc.constantFrom(...SUBTYPES.birthday),
   }),
 );
+
+/**
+ * Random task lists (1 to 30 tasks) whose dependencies form a DAG, in shuffled input order so a
+ * dependency often comes after its dependent. Ids are `t0`, `t1`...; lead times run from 5 days
+ * after the event to 120 days before it; no task has a `when`.
+ */
+export const dagArb: fc.Arbitrary<readonly TaskDef[]> = fc
+  .array(
+    fc.record({
+      durationDays: fc.integer({ min: 1, max: 10 }),
+      leadDays: fc.integer({ min: -5, max: 120 }),
+      picks: fc.array(fc.nat(), { maxLength: 3 }),
+    }),
+    { minLength: 1, maxLength: 30 },
+  )
+  .map((rows) =>
+    rows.map((row, i): TaskDef => ({
+      id: `t${i}`,
+      title: `Task ${i}`,
+      categoryId: 'general',
+      durationDays: row.durationDays,
+      leadDays: row.leadDays,
+      // Depend on earlier tasks only, so the graph cannot contain a cycle.
+      dependsOn: [...new Set(i === 0 ? [] : row.picks.map((pick) => `t${pick % i}`))],
+    })),
+  )
+  .chain((tasks) => fc.shuffledSubarray(tasks, { minLength: tasks.length }));
