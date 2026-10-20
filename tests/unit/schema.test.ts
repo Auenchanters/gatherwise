@@ -3,6 +3,7 @@
  *
  * Does: pins the EventBrief trust boundary (strict, exact ranges, kind/subtype pairing) and the
  * AiSuggestions contract (strict shape and ids, deliberately lenient quantities, JSON-Schema-able).
+ * Also pins the AiMeta envelope the server returns beside the suggestions.
  * Never does: check calendar validity of dates or clamp model numbers; those belong to the domain.
  */
 import { describe, expect, it } from 'vitest';
@@ -14,6 +15,7 @@ import {
   EVENT_KINDS,
   SUBTYPES,
   VENUES,
+  aiMetaSchema,
   aiSuggestionsSchema,
   eventBriefSchema,
   type AiSuggestions,
@@ -375,5 +377,40 @@ describe('aiSuggestionsSchema', () => {
     expect(json).not.toContain('"maxItems"');
     expect(json).not.toContain('"maxLength"');
     expect(json).not.toContain('"maximum"');
+  });
+});
+
+describe('aiMetaSchema', () => {
+  const meta = {
+    model: 'gemini-3.5-flash-lite',
+    latencyMs: 812,
+    inputTokens: 640,
+    outputTokens: 410,
+    requestId: '3f2b8c1e-9d4a-4b6e-8a1c-5d7e9f0a1b2c',
+  };
+  const metaOk = (value: unknown): boolean => aiMetaSchema.safeParse(value).success;
+
+  it('accepts a real response envelope, zero counts included', () => {
+    expect(metaOk(meta)).toBe(true);
+    expect(metaOk({ ...meta, latencyMs: 0, inputTokens: 0, outputTokens: 0 })).toBe(true);
+  });
+
+  it('rejects unknown keys, missing keys and out-of-range values', () => {
+    expect(metaOk({ ...meta, extra: 1 })).toBe(false);
+    expect(metaOk(without(meta, 'requestId'))).toBe(false);
+    expect(metaOk({ ...meta, model: '' })).toBe(false);
+    expect(metaOk({ ...meta, model: 'm'.repeat(81) })).toBe(false);
+    expect(metaOk({ ...meta, model: 'm'.repeat(80) })).toBe(true);
+    for (const field of ['latencyMs', 'inputTokens', 'outputTokens']) {
+      expect(metaOk({ ...meta, [field]: -1 }), field).toBe(false);
+      expect(metaOk({ ...meta, [field]: 1.5 }), field).toBe(false);
+      expect(metaOk({ ...meta, [field]: Number.NaN }), field).toBe(false);
+      expect(metaOk({ ...meta, [field]: '5' }), field).toBe(false);
+    }
+  });
+
+  it('requires a UUID request id', () => {
+    expect(metaOk({ ...meta, requestId: 'not-a-uuid' })).toBe(false);
+    expect(metaOk({ ...meta, requestId: '<script>alert(1)</script>' })).toBe(false);
   });
 });

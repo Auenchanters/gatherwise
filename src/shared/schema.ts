@@ -1,6 +1,7 @@
 /**
  * The zod contracts shared by browser and server: the user's EventBrief (strict, validated at the
- * trust boundary) and the per-template AiSuggestions Gemini returns (strict on shape and ids only).
+ * trust boundary), the per-template AiSuggestions Gemini returns (strict on shape and ids only) and
+ * the AiMeta that travels beside them.
  * Never trusts model numbers: the LIMITS.ai bounds (limits.ts) are hints in the JSON Schema and
  * are enforced by the engine.
  */
@@ -187,3 +188,14 @@ export type AiSuggestions = z.infer<ReturnType<typeof buildAiSchema>>;
 /** Builds the response schema for one template, so the model cannot reference unknown ids. */
 export const aiSuggestionsSchema = (ids: TemplateIds): z.ZodType<AiSuggestions> =>
   buildAiSchema(ids);
+
+/** What the server reports about one model call, shown in the "AI at work" panel and kept with the plan. */
+export const aiMetaSchema = z.strictObject({
+  model: z.string().min(1).max(80),
+  latencyMs: z.int().min(0),
+  inputTokens: z.int().min(0),
+  outputTokens: z.int().min(0),
+  requestId: z.uuid(),
+});
+/** Metadata for one model call. */
+export type AiMeta = z.infer<typeof aiMetaSchema>;
