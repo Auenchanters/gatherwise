@@ -17,8 +17,8 @@ export type VendorStatus = 'to_contact' | 'quoted' | 'booked';
 /** How urgent a booking is on a given day; derived from the dates, never stored. */
 export type BookingStatus = 'booked' | 'ok' | 'due_soon' | 'overdue';
 
-/** One question or task to settle with a vendor. */
-export interface ChecklistItem {
+/** One question or task to settle with a vendor. Reach it through `VendorItem["checklist"]`. */
+interface ChecklistItem {
   /** `vendorId:index`, unique within a plan. */
   readonly id: string;
   readonly text: string;
