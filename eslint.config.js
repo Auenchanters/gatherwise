@@ -10,7 +10,14 @@ export default tseslint.config(
     linterOptions: { noInlineConfig: true, reportUnusedDisableDirectives: 'error' },
   },
   {
-    ignores: ['dist/**', 'coverage/**', '.vercel/**', 'playwright-report/**', 'test-results/**'],
+    ignores: [
+      'dist/**',
+      'coverage/**',
+      '.vercel/**',
+      'artifacts/**',
+      'playwright-report/**',
+      'test-results/**',
+    ],
   },
   {
     files: ['**/*.ts', '**/*.tsx'],
@@ -51,6 +58,6 @@ export default tseslint.config(
     // Plain Node scripts have no type information; only the baseline rules apply.
     files: ['scripts/**/*.mjs'],
     extends: [js.configs.recommended],
-    languageOptions: { globals: { process: 'readonly' } },
+    languageOptions: { globals: { process: 'readonly', Request: 'readonly' } },
   },
 );
