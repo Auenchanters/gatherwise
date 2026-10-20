@@ -2,8 +2,9 @@
  * Architecture boundary for the pure domain engine (src/domain).
  *
  * Does: asserts domain files import only from inside src/domain (plus `import type` from
- * src/shared) and never mention non-deterministic or I/O APIs. The checkers are pure functions
- * over (path, source) so they are themselves tested against synthetic bad input.
+ * src/shared, and runtime imports of the import-free modules on RUNTIME_SHARED_ALLOWLIST) and never
+ * mention non-deterministic or I/O APIs. The checkers are pure functions over (path, source) so
+ * they are themselves tested against synthetic bad input.
  * Never does: parse anything but imports and forbidden tokens; those rules live in ESLint/tsc.
  */
 import { readdirSync, readFileSync } from 'node:fs';
@@ -13,6 +14,8 @@ import { describe, expect, it } from 'vitest';
 
 const DOMAIN_DIR = 'src/domain';
 const SHARED_DIR = 'src/shared';
+/** Shared modules domain code may import at runtime; both must stay free of imports. */
+const RUNTIME_SHARED_ALLOWLIST = ['src/shared/limits', 'src/shared/result'];
 const FORBIDDEN_TOKENS = ['Date.now', 'Math.random', 'fetch(', 'localStorage'];
 
 /** Repo-relative POSIX paths of every .ts/.tsx file under `dir` (empty if it does not exist). */
@@ -58,13 +61,17 @@ function moduleReferences(source: string): { specifier: string; typeOnly: boolea
 
 const isInside = (dir: string, path: string): boolean => path === dir || path.startsWith(`${dir}/`);
 
-/** Imports in `file` (repo-relative) that leave src/domain, excluding `import type` from src/shared. */
+/** Imports in `file` (repo-relative) that leave src/domain, excluding type imports from src/shared and allowlisted modules. */
 function boundaryViolations(file: string, source: string): string[] {
   return moduleReferences(source)
     .filter(({ specifier, typeOnly }) => {
       if (!specifier.startsWith('.')) return true;
       const target = posix.normalize(posix.join(posix.dirname(file), specifier));
-      return !(isInside(DOMAIN_DIR, target) || (typeOnly && isInside(SHARED_DIR, target)));
+      return !(
+        isInside(DOMAIN_DIR, target) ||
+        (typeOnly && isInside(SHARED_DIR, target)) ||
+        RUNTIME_SHARED_ALLOWLIST.includes(target)
+      );
     })
     .map(({ specifier }) => specifier);
 }
@@ -87,6 +94,15 @@ describe('domain boundary', () => {
       expect(forbiddenTokens(readFileSync(file, 'utf8')), file).toEqual([]);
     }
   });
+});
+
+describe('runtime allowlist for src/shared', () => {
+  it.each(RUNTIME_SHARED_ALLOWLIST)(
+    '%s has no imports, so it cannot be a back door to zod',
+    (module) => {
+      expect(moduleReferences(readFileSync(`${module}.ts`, 'utf8')), module).toEqual([]);
+    },
+  );
 });
 
 describe('boundary checker', () => {
@@ -135,6 +151,20 @@ describe('boundary checker', () => {
     ],
   ])('flags %s', (_name, source, specifier) => {
     expect(boundaryViolations(file, source)).toEqual([specifier]);
+  });
+
+  it('allows runtime imports of the dependency-free shared modules, and flags the rest', () => {
+    const domainFile = 'src/domain/budget.ts';
+    expect(boundaryViolations(domainFile, "import { LIMITS } from '../shared/limits';")).toEqual(
+      [],
+    );
+    expect(boundaryViolations(domainFile, "import { ok } from '../shared/result';")).toEqual([]);
+    expect(
+      boundaryViolations(domainFile, "import { eventBriefSchema } from '../shared/schema';"),
+    ).toEqual(['../shared/schema']);
+    expect(
+      boundaryViolations(domainFile, "import type { EventBrief } from '../shared/schema';"),
+    ).toEqual([]);
   });
 
   it.each(FORBIDDEN_TOKENS)('flags %s even inside a comment', (token) => {

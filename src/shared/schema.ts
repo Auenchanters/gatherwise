@@ -1,9 +1,11 @@
 /**
  * The zod contracts shared by browser and server: the user's EventBrief (strict, validated at the
  * trust boundary) and the per-template AiSuggestions Gemini returns (strict on shape and ids only).
- * Never trusts model numbers: LIMITS.ai bounds are hints in the JSON Schema, enforced by the engine.
+ * Never trusts model numbers: the LIMITS.ai bounds (limits.ts) are hints in the JSON Schema and
+ * are enforced by the engine.
  */
 import { z } from 'zod';
+import { LIMITS } from './limits';
 
 /** Event kinds a plan can be built for. */
 export const EVENT_KINDS = ['community', 'wedding', 'birthday'] as const;
@@ -42,45 +44,6 @@ export const ACCESSIBILITY_OPTIONS = [
   'infants',
 ] as const;
 
-/** Every numeric cap in the data contracts. `brief` is enforced here; `ai` is enforced by the engine. */
-export const LIMITS = {
-  brief: {
-    nameMax: 80,
-    cityMax: 60,
-    vibeMax: 120,
-    notesMax: 500,
-    guestsMin: 1,
-    guestsMax: 5000,
-    budgetMin: 1,
-    budgetMax: 100_000_000,
-    durationHoursMin: 1,
-    durationHoursMax: 16,
-    volunteersMax: 500,
-    horizonDays: 730,
-    listMax: 6,
-  },
-  ai: {
-    ideasMax: 8,
-    ideaTitleMax: 80,
-    ideaDescriptionMax: 300,
-    personalizationMax: 160,
-    summaryMax: 400,
-    weightHintsMax: 10,
-    factorMin: 0.5,
-    factorMax: 2,
-    extraTasksMax: 5,
-    taskTitleMax: 80,
-    durationMin: 1,
-    durationMax: 60,
-    leadMin: -7,
-    leadMax: 365,
-    afterMax: 3,
-    vendorQuestionsMax: 8,
-    questionsPerVendorMax: 4,
-    questionMax: 140,
-  },
-} as const;
-
 const brief = LIMITS.brief;
 const wholeNumber = (min: number, max: number) => z.int().min(min).max(max);
 /** A list of known options, at most `listMax` long, with no repeats. */
@@ -105,11 +68,11 @@ const incomeSchema = z.strictObject({
 
 // `date` is checked for FORMAT only; calendar validity and today..today+730 need an injected `today`.
 const briefFields = {
-  name: z.string().min(1).max(brief.nameMax),
+  name: z.string().trim().min(1).max(brief.nameMax),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u),
   startTime: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/u),
   durationHours: wholeNumber(brief.durationHoursMin, brief.durationHoursMax),
-  city: z.string().max(brief.cityMax),
+  city: z.string().trim().max(brief.cityMax),
   venue: z.enum(VENUES),
   guests: wholeNumber(brief.guestsMin, brief.guestsMax),
   budget: wholeNumber(brief.budgetMin, brief.budgetMax),
@@ -120,8 +83,8 @@ const briefFields = {
   servesFood: z.boolean(),
   servesAlcohol: z.boolean(),
   volunteersAvailable: wholeNumber(0, brief.volunteersMax),
-  vibe: z.string().max(brief.vibeMax),
-  notes: z.string().max(brief.notesMax),
+  vibe: z.string().trim().max(brief.vibeMax),
+  notes: z.string().trim().max(brief.notesMax),
 };
 
 /** The user's event description. Strict everywhere; `income` exists only on community events. */

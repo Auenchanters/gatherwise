@@ -12,7 +12,6 @@ import {
   CURRENCIES,
   DIETARY_OPTIONS,
   EVENT_KINDS,
-  LIMITS,
   SUBTYPES,
   VENUES,
   aiSuggestionsSchema,
@@ -21,6 +20,7 @@ import {
   type EventBrief,
   type TemplateIds,
 } from '../../src/shared/schema';
+import { LIMITS } from '../../src/shared/limits';
 
 const income = {
   ticketPrice: 100,
@@ -202,6 +202,25 @@ describe('eventBriefSchema', () => {
     expect(accepts({ ...valid, volunteersAvailable: 501 })).toBe(false);
     expect(accepts({ ...valid, volunteersAvailable: 0.5 })).toBe(false);
     expect(accepts({ ...valid, volunteersAvailable: 0 })).toBe(true);
+  });
+
+  it('trims name, city, vibe and notes; a whitespace-only name is rejected', () => {
+    expect(accepts({ ...valid, name: '   ' })).toBe(false);
+    expect(accepts({ ...valid, name: '' })).toBe(false);
+    const parsed = eventBriefSchema.parse({
+      ...valid,
+      name: '  Mela  ',
+      city: ' Pune ',
+      vibe: '\tcosy\n',
+      notes: '  hi  ',
+    });
+    expect([parsed.name, parsed.city, parsed.vibe, parsed.notes]).toEqual([
+      'Mela',
+      'Pune',
+      'cosy',
+      'hi',
+    ]);
+    expect(accepts({ ...valid, name: `  ${'x'.repeat(80)}  ` })).toBe(true);
   });
 
   it('caps text lengths: name 1-80, city 60, vibe 120, notes 500', () => {
