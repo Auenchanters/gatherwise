@@ -11,11 +11,11 @@ const MESSAGES: Record<Exclude<ClientError['code'], 'rate_limited'>, string> = {
   network:
     "Can't reach the AI service — check your connection. Your plan is ready with standard suggestions; try “Refresh ideas” once you're back online.",
   timeout:
-    'Gemini took too long to answer — your plan is ready with standard suggestions. Try “Refresh ideas” in a moment.',
+    'The AI took too long to reply — your plan is ready with standard suggestions. You can try again.',
   unavailable:
     "AI ideas aren't available right now — the budget, timeline and vendors are fully usable.",
   invalid:
-    "We couldn't use the AI's reply, so you're seeing standard suggestions — the budget, timeline and vendors are fully usable. Try “Refresh ideas” again.",
+    "We couldn't get usable AI ideas for this plan — your budget, timeline and vendors are unaffected.",
 };
 
 /** "a minute" without a wait, otherwise whole minutes rounded up so nobody retries too early. */
@@ -28,5 +28,5 @@ function waitPhrase(seconds: number | undefined): string {
 /** The sentence to show for a failed AI request. `retryAfterSeconds` only matters when rate limited. */
 export function clientErrorMessage(error: ClientError): string {
   if (error.code !== 'rate_limited') return MESSAGES[error.code];
-  return `Gemini is busy right now — your plan is ready with standard suggestions. Try “Refresh ideas” in ${waitPhrase(error.retryAfterSeconds)}.`;
+  return `The AI service is busy right now — your plan is ready with standard suggestions. Try “Refresh ideas” in ${waitPhrase(error.retryAfterSeconds)}.`;
 }

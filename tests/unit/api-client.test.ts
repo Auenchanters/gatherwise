@@ -57,13 +57,11 @@ const hanging = () =>
   vi.fn<typeof fetch>(
     (_input, init) =>
       new Promise<Response>((_resolve, reject) => {
-        init?.signal?.addEventListener(
-          'abort',
-          () => {
-            reject(new DOMException('aborted', 'AbortError'));
-          },
-          { once: true },
-        );
+        const aborted = () => {
+          reject(new DOMException('aborted', 'AbortError'));
+        };
+        if (init?.signal?.aborted === true) aborted();
+        else init?.signal?.addEventListener('abort', aborted, { once: true });
       }),
   );
 
@@ -83,9 +81,19 @@ function succeeded(result: Result<SuggestResponse, ClientError>): SuggestRespons
   return result.value;
 }
 
+const nativeAny = Object.getOwnPropertyDescriptor(AbortSignal, 'any');
+/** Simulates a browser older than Chrome 116 / Safari 17.4, where `AbortSignal.any` is missing. */
+const withoutAbortSignalAny = () =>
+  Object.defineProperty(AbortSignal, 'any', {
+    value: undefined,
+    configurable: true,
+    writable: true,
+  });
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  if (nativeAny) Object.defineProperty(AbortSignal, 'any', nativeAny);
 });
 
 describe('the model-call budget', () => {
@@ -95,13 +103,51 @@ describe('the model-call budget', () => {
     expect(planner.calls()).toBe(0);
 
     const first = succeeded(await planner.suggest(community(), never));
-    expect(first).toEqual(GOOD);
+    expect(first).toEqual({ ...GOOD, cached: false });
     expect(planner.calls()).toBe(1);
 
     const again = succeeded(await planner.suggest(community(), never));
-    expect(again).toBe(first);
+    expect(again).toEqual({ ...GOOD, cached: true });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     expect(planner.calls()).toBe(1);
+  });
+
+  it('flags a reused answer without touching the stored entry or the original result', async () => {
+    const planner = client(serving());
+    const first = succeeded(await planner.suggest(community(), never));
+    const reused = succeeded(await planner.suggest(community(), never));
+    expect(first.cached).toBe(false);
+    expect(reused.cached).toBe(true);
+    // The data is the stored data, not a copy of it; only the flag differs.
+    expect(reused.suggestions).toBe(first.suggestions);
+    expect(reused.meta).toBe(first.meta);
+    expect(succeeded(await planner.suggest(community(), never)).cached).toBe(true);
+    // A refresh is a new request: fresh again, and the next reuse is flagged again.
+    expect(succeeded(await planner.suggest(community(), never, { refresh: true })).cached).toBe(
+      false,
+    );
+    expect(succeeded(await planner.suggest(community(), never)).cached).toBe(true);
+    expect(first.cached).toBe(false);
+  });
+
+  it('leaves the old entry intact when a refresh fails', async () => {
+    const fetchImpl = serving();
+    const planner = client(fetchImpl);
+    const first = succeeded(await planner.suggest(community(), never));
+
+    fetchImpl.mockImplementation(() => failure('AI_UNAVAILABLE', 502));
+    expect(failed(await planner.suggest(community(), never, { refresh: true })).code).toBe(
+      'unavailable',
+    );
+    fetchImpl.mockImplementation(() => Promise.reject(new TypeError('Failed to fetch')));
+    expect(failed(await planner.suggest(community(), never, { refresh: true })).code).toBe(
+      'network',
+    );
+    expect(planner.calls()).toBe(3);
+
+    const reused = succeeded(await planner.suggest(community(), never));
+    expect(reused).toEqual({ ...first, cached: true });
+    expect(planner.calls()).toBe(3);
   });
 
   it('costs another call when one field changes', async () => {
@@ -184,6 +230,27 @@ describe('the cache key', () => {
     await planner.suggest(a, never);
     await planner.suggest(b, never);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('keys on what the wire carries: an undefined key is absent, an undefined array item is null', async () => {
+    // Types forbid these shapes; a stray one must still not cost a second request, because
+    // JSON.stringify sends the same body for both.
+    const base = brief('community');
+    const loose = (value: object): EventBrief => value as EventBrief;
+    const fetchImpl = serving();
+    const planner = client(fetchImpl);
+
+    await planner.suggest(base, never);
+    await planner.suggest(loose({ ...base, income: undefined }), never);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+
+    await planner.suggest(loose({ ...base, dietary: [null] }), never);
+    await planner.suggest(loose({ ...base, dietary: [undefined] }), never);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    // Different from an empty list, and from a list with a real value.
+    await planner.suggest(loose({ ...base, dietary: [] }), never);
+    await planner.suggest(loose({ ...base, dietary: ['vegan'] }), never);
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
   });
 
   it('keeps array order significant', async () => {
@@ -337,6 +404,68 @@ describe('aborts and network failures', () => {
     });
     expect(fetchImpl).not.toHaveBeenCalled();
     expect(planner.calls()).toBe(0);
+  });
+
+  describe('building the request signal', () => {
+    it('resolves a bad timeoutMs as network, without a request, a count or a rejection', async () => {
+      for (const timeoutMs of [Number.NaN, -1]) {
+        const fetchImpl = serving();
+        const planner = createPlanClient({ fetchImpl, timeoutMs });
+        expect(failed(await planner.suggest(community(), never))).toStrictEqual({
+          code: 'network',
+        });
+        expect(fetchImpl).not.toHaveBeenCalled();
+        expect(planner.calls()).toBe(0);
+      }
+    });
+
+    it('resolves a throwing AbortSignal.any as network, without a request or a count', async () => {
+      vi.spyOn(AbortSignal, 'any').mockImplementation(() => {
+        throw new TypeError('boom');
+      });
+      const fetchImpl = serving();
+      const planner = client(fetchImpl);
+      expect(failed(await planner.suggest(community(), never))).toStrictEqual({ code: 'network' });
+      expect(fetchImpl).not.toHaveBeenCalled();
+      expect(planner.calls()).toBe(0);
+    });
+
+    it('still works where AbortSignal.any is missing', async () => {
+      withoutAbortSignalAny();
+      const fetchImpl = serving();
+      const planner = client(fetchImpl);
+      succeeded(await planner.suggest(community(), never));
+      expect(planner.calls()).toBe(1);
+      expect(fetchImpl.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+      // Cached as usual.
+      expect(succeeded(await planner.suggest(community(), never)).cached).toBe(true);
+    });
+
+    it('without AbortSignal.any, the caller aborting aborts the request: network', async () => {
+      withoutAbortSignalAny();
+      const fetchImpl = hanging();
+      const controller = new AbortController();
+      const pending = client(fetchImpl).suggest(community(), controller.signal);
+      await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalledOnce());
+      const sent = fetchImpl.mock.calls[0]?.[1]?.signal;
+      expect(sent?.aborted).toBe(false);
+      controller.abort();
+      expect(sent?.aborted).toBe(true);
+      expect(failed(await pending)).toStrictEqual({ code: 'network' });
+    });
+
+    it('without AbortSignal.any, our timeout aborts the request: timeout', async () => {
+      withoutAbortSignalAny();
+      const planner = createPlanClient({ fetchImpl: hanging(), timeoutMs: 15 });
+      expect(failed(await planner.suggest(community(), never))).toStrictEqual({ code: 'timeout' });
+    });
+
+    it('without AbortSignal.any, a timer that already fired aborts the request at once', async () => {
+      withoutAbortSignalAny();
+      vi.spyOn(AbortSignal, 'timeout').mockReturnValue(AbortSignal.abort());
+      const planner = client(hanging());
+      expect(failed(await planner.suggest(community(), never))).toStrictEqual({ code: 'timeout' });
+    });
   });
 
   it('returns timeout when its own timer fires, and stores nothing', async () => {
@@ -543,7 +672,10 @@ describe('the network is untrusted', () => {
 
   it('returns only the validated suggestions and meta, dropping unknown envelope keys', async () => {
     const planner = client(serving(() => json({ ...GOOD, debug: 'secret' })));
-    expect(succeeded(await planner.suggest(community(), never))).toStrictEqual(GOOD);
+    expect(succeeded(await planner.suggest(community(), never))).toStrictEqual({
+      ...GOOD,
+      cached: false,
+    });
   });
 
   it('does not let a good answer for one brief be served for another', async () => {

@@ -29,7 +29,10 @@ const MAX_RETRY_AFTER_SECONDS = 3600;
 /** A validated answer: the model's suggestions and the facts about the call. Treat as immutable. */
 export interface SuggestResponse {
   readonly suggestions: AiSuggestions;
+  /** About the call that produced `suggestions`; on a reused answer, about the ORIGINAL call. */
   readonly meta: AiMeta;
+  /** `true` when this answer was reused from the cache with no new request; `false` when fresh. */
+  readonly cached: boolean;
 }
 
 /** Why a request produced no suggestions; the plan itself is unaffected. */
@@ -109,16 +112,26 @@ function failureOf(status: number, body: unknown, retryAfter: string | null): Cl
   return seconds === undefined ? { code } : { code, retryAfterSeconds: seconds };
 }
 
-/** JSON with object keys sorted recursively and arrays in order, so equal briefs give equal text. */
+/**
+ * JSON with object keys sorted recursively and arrays in order, so equal briefs give equal text.
+ * Mirrors `JSON.stringify` on what the wire carries: an `undefined` key is skipped and an
+ * `undefined` array item is `null`, so two values that send the same body share a cache key.
+ */
 function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => canonicalJson(item === undefined ? null : item)).join(',')}]`;
+  }
   if (typeof value !== 'object' || value === null) return JSON.stringify(value);
   const fields = Object.keys(value)
     .sort()
-    .map((key) => `${JSON.stringify(key)}:${canonicalJson(Reflect.get(value, key))}`);
+    .flatMap((key) => {
+      const field: unknown = Reflect.get(value, key);
+      return field === undefined ? [] : [`${JSON.stringify(key)}:${canonicalJson(field)}`];
+    });
   return `{${fields.join(',')}}`;
 }
 
+/** The lowercase hex SHA-256 of `text` as UTF-8. Rejects where `crypto.subtle` is unavailable. */
 async function sha256Hex(text: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -131,6 +144,30 @@ function parseJson(text: string): unknown {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * `AbortSignal.any` where the browser has it (Chrome 116, Safari 17.4), otherwise a controller
+ * that aborts as soon as either signal does.
+ */
+function anySignal(signals: AbortSignal[]): AbortSignal {
+  if (typeof Reflect.get(AbortSignal, 'any') === 'function') return AbortSignal.any(signals);
+  const controller = new AbortController();
+  // ponytail: the listener stays on a long-lived caller signal until it aborts; the UI makes one
+  // signal per request, so remove it on completion if signals are ever shared.
+  for (const signal of signals) {
+    if (signal.aborted) controller.abort(signal.reason);
+    else {
+      signal.addEventListener(
+        'abort',
+        () => {
+          controller.abort(signal.reason);
+        },
+        { once: true },
+      );
+    }
+  }
+  return controller.signal;
 }
 
 /** A reply read in full: the status, the `Retry-After` header and the body text. */
@@ -149,7 +186,7 @@ function interpret(brief: EventBrief, reply: Reply): Result<SuggestResponse, Cli
     meta: aiMetaSchema,
   });
   const parsed = expected.safeParse(body);
-  return parsed.success ? ok(parsed.data) : err({ code: 'invalid' });
+  return parsed.success ? ok({ ...parsed.data, cached: false }) : err({ code: 'invalid' });
 }
 
 /**
@@ -166,6 +203,7 @@ export function createPlanClient(options: PlanClientOptions = {}): PlanClient {
   const cache = new Map<string, SuggestResponse>();
   let calls = 0;
 
+  /** Stores `value` as the newest entry (replacing any for `key`), then evicts the oldest while over `cacheSize`. */
   function remember(key: string, value: SuggestResponse): void {
     cache.delete(key);
     cache.set(key, value);
@@ -175,20 +213,26 @@ export function createPlanClient(options: PlanClientOptions = {}): PlanClient {
     }
   }
 
-  /** One request, from the count to the last byte of the body, under the caller's cancel and our timeout. */
+  /**
+   * One request, from the count to the last byte of the body, under the caller's cancel and our
+   * timeout. Everything that can fail before the request exists (a bad `timeoutMs`, a missing
+   * signal API) is built first, so it resolves as `network` without ticking the counter.
+   */
   async function exchange(
     brief: EventBrief,
     signal: AbortSignal,
   ): Promise<Result<Reply, ClientError>> {
-    const timeout = AbortSignal.timeout(timeoutMs);
+    let timeout: AbortSignal | undefined;
     try {
-      calls += 1;
-      const response = await fetchImpl(ENDPOINT, {
+      timeout = AbortSignal.timeout(timeoutMs);
+      const init = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ brief }),
-        signal: AbortSignal.any([signal, timeout]),
-      });
+        signal: anySignal([signal, timeout]),
+      };
+      calls += 1;
+      const response = await fetchImpl(ENDPOINT, init);
       return ok({
         status: response.status,
         retryAfter: response.headers.get('Retry-After'),
@@ -196,7 +240,7 @@ export function createPlanClient(options: PlanClientOptions = {}): PlanClient {
       });
     } catch {
       // The caller's own cancel is never reported as a timeout, even if both fired.
-      return err({ code: !signal.aborted && timeout.aborted ? 'timeout' : 'network' });
+      return err({ code: !signal.aborted && timeout?.aborted === true ? 'timeout' : 'network' });
     }
   }
 
@@ -208,7 +252,7 @@ export function createPlanClient(options: PlanClientOptions = {}): PlanClient {
       const hit = opts.refresh === true ? undefined : cache.get(key);
       if (hit) {
         remember(key, hit);
-        return ok(hit);
+        return ok({ ...hit, cached: true });
       }
       // After the cache and before the count: a request that was never sent is not a call.
       if (signal.aborted) return err({ code: 'network' });

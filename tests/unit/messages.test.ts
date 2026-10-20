@@ -24,7 +24,7 @@ describe('clientErrorMessage', () => {
 
   it('says what happened in plain words', () => {
     expect(clientErrorMessage({ code: 'rate_limited' })).toBe(
-      'Gemini is busy right now \u2014 your plan is ready with standard suggestions. Try \u201CRefresh ideas\u201D in a minute.',
+      'The AI service is busy right now \u2014 your plan is ready with standard suggestions. Try \u201CRefresh ideas\u201D in a minute.',
     );
     expect(clientErrorMessage({ code: 'unavailable' })).toBe(
       "AI ideas aren't available right now \u2014 the budget, timeline and vendors are fully usable.",
@@ -45,9 +45,14 @@ describe('clientErrorMessage', () => {
     expect(message).not.toContain('in a minute');
   });
 
-  it('mentions 2 minutes for a 120 second wait', () => {
-    expect(clientErrorMessage({ code: 'rate_limited', retryAfterSeconds: 120 })).toContain(
-      '2 minutes',
+  it('words the timeout and the unusable reply neutrally, and never tells the user to retry the latter', () => {
+    const invalid = clientErrorMessage({ code: 'invalid' });
+    expect(invalid).toBe(
+      "We couldn't get usable AI ideas for this plan \u2014 your budget, timeline and vendors are unaffected.",
+    );
+    expect(invalid).not.toMatch(/try|again|refresh|retry/iu);
+    expect(clientErrorMessage({ code: 'timeout' })).toBe(
+      'The AI took too long to reply \u2014 your plan is ready with standard suggestions. You can try again.',
     );
   });
 
