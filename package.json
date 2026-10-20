@@ -9,7 +9,7 @@
     "node": "24.x"
   },
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
+    "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "lint": "eslint . --max-warnings=0",
