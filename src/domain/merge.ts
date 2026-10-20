@@ -38,6 +38,9 @@ export interface MergeContext {
 
 const ai = LIMITS.ai;
 
+/** Extra tasks are named this prefix plus N, counting from 1 in response order (`ai-task-1`). */
+export const AI_TASK_PREFIX = 'ai-task-';
+
 const clamp = (n: number, min: number, max: number): number => Math.min(max, Math.max(min, n));
 
 /** Text trimmed and cut to a cap; `from` and `to` are its length in code points before and after. */
@@ -248,7 +251,7 @@ function normalizeTasks(tasks: AiSuggestions['extraTasks'], p: Pass): TaskDef[] 
         `Lead time of '${name}' in days`,
       );
       out.push({
-        id: `ai-task-${out.length + 1}`,
+        id: `${AI_TASK_PREFIX}${out.length + 1}`,
         title: name,
         categoryId: raw.categoryId,
         durationDays,
