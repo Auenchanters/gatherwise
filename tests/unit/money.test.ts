@@ -21,6 +21,8 @@ import { CURRENCIES } from '../../src/shared/schema';
 const m = minor;
 const sum = (values: readonly Minor[]): number => values.reduce((acc, v) => acc + v, 0);
 const SEED = { seed: 20261020 };
+/** Weights are compared at 1e-6 resolution (see allocate), so smaller positive ones count as zero. */
+const quantize = (weight: number): number => Math.round(weight * 1_000_000);
 
 describe('minor', () => {
   it('accepts safe integers, negatives included', () => {
@@ -58,6 +60,15 @@ describe('toMinor', () => {
     expect(toMinor(150000, 'INR')).toBe(15_000_000);
     expect(toMinor(19.99, 'USD')).toBe(1999);
     expect(toMinor(0, 'EUR')).toBe(0);
+  });
+
+  it('absorbs binary float noise in half-cent ties', () => {
+    // 1.005 * 100 is 100.49999999999999 and 19.99 * 100 is 1998.9999999999998 in binary floats.
+    expect(toMinor(1.005, 'USD')).toBe(101);
+    expect(toMinor(-1.005, 'USD')).toBe(-101);
+    expect(toMinor(19.99, 'USD')).toBe(1999);
+    expect(toMinor(2.675, 'GBP')).toBe(268);
+    expect(toMinor(1.004, 'USD')).toBe(100);
   });
 
   it('rounds half away from zero', () => {
@@ -118,6 +129,19 @@ describe('allocate', () => {
     expect(allocate(m(123), [9])).toEqual([123]);
   });
 
+  it('breaks exact ties by lower index even when the float shares differ in the last bit', () => {
+    // 4/9 and 1/9 of 3 are all remainder 1/3; as floats 4/3 and 1/3 leave different fractions.
+    expect(allocate(m(3), [4, 1, 4])).toEqual([2, 0, 1]);
+    // 0.3 : 0.1 is exactly 3 : 1, so 1.5 and 0.5 tie and the lower index wins.
+    expect(allocate(m(2), [0.3, 0.1])).toEqual([2, 0]);
+    expect(allocate(m(2), [0.1, 0.3])).toEqual([1, 1]);
+  });
+
+  it('treats weights as 1e-6 steps: smaller differences vanish, smaller weights count as zero', () => {
+    expect(allocate(m(10), [1, 1.0000001])).toEqual([5, 5]);
+    expect(allocate(m(10), [1, 4e-7])).toEqual([10, 0]);
+  });
+
   it('keeps float noise in the weights from losing or inventing money', () => {
     expect(allocate(m(6), [0.1, 0.2, 0.3])).toEqual([1, 2, 3]);
   });
@@ -126,6 +150,7 @@ describe('allocate', () => {
     ['a negative total', m(-1), [1]],
     ['no weights', m(10), []],
     ['all-zero weights', m(10), [0, 0]],
+    ['weights that all round to zero at 1e-6', m(10), [4e-7, 1e-30]],
     ['a negative weight', m(10), [1, -1]],
     ['a NaN weight', m(10), [1, Number.NaN]],
     ['an infinite weight', m(10), [1, Number.POSITIVE_INFINITY]],
@@ -140,7 +165,7 @@ describe('allocate', () => {
         fc.integer({ min: 0, max: 1e12 }),
         fc.array(fc.float({ min: 0, max: 100, noNaN: true }), { minLength: 1, maxLength: 20 }),
         (t, w) =>
-          w.some((x) => x > 0)
+          w.some((x) => quantize(x) > 0)
             ? sum(allocate(m(t), w)) === t && allocate(m(t), w).every((x) => x >= 0)
             : true,
       ),
@@ -155,16 +180,36 @@ describe('allocate', () => {
         fc.array(fc.float({ min: 0, max: 100, noNaN: true }), { minLength: 1, maxLength: 20 }),
         fc.integer({ min: 0, max: 19 }),
         (t, w, zeroAt) => {
-          const weights = w.map((x, i) => (i === zeroAt ? 0 : x));
-          fc.pre(weights.some((x) => x > 0));
-          const total = weights.reduce((acc, x) => acc + x, 0);
-          const out = allocate(m(t), weights);
-          expect(out).toHaveLength(weights.length);
-          weights.forEach((x, i) => {
+          const quanta = w.map((x, i) => (i === zeroAt ? 0 : quantize(x)));
+          fc.pre(quanta.some((q) => q > 0));
+          const total = quanta.reduce((acc, q) => acc + q, 0);
+          const out = allocate(
+            m(t),
+            w.map((x, i) => (i === zeroAt ? 0 : x)),
+          );
+          expect(out).toHaveLength(quanta.length);
+          quanta.forEach((q, i) => {
             const share = out[i] ?? Number.NaN;
-            expect(Math.abs(share - (t * x) / total)).toBeLessThan(1.001);
-            if (x === 0) expect(share).toBe(0);
+            expect(Math.abs(share - (t * q) / total)).toBeLessThan(1.001);
+            if (q === 0) expect(share).toBe(0);
           });
+        },
+      ),
+      SEED,
+    );
+  });
+
+  it('is exact at the top of the safe-integer range (property)', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: Number.MAX_SAFE_INTEGER - 1e6, max: Number.MAX_SAFE_INTEGER }),
+        fc.array(fc.float({ min: 0, max: 100, noNaN: true }), { minLength: 1, maxLength: 20 }),
+        (t, w) => {
+          fc.pre(w.some((x) => quantize(x) > 0));
+          const out = allocate(m(t), w);
+          // Sum as BigInt: a float sum this large could hide a lost or invented unit.
+          expect(out.reduce((acc, v) => acc + BigInt(v), 0n)).toBe(BigInt(t));
+          expect(out.every((v) => v >= 0)).toBe(true);
         },
       ),
       SEED,

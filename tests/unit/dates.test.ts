@@ -122,10 +122,23 @@ describe('daysBetween', () => {
     expect(daysBetween(d('2027-12-31'), d('2028-12-31'))).toBe(366);
   });
 
+  it('runs in a time zone with daylight saving, so local-time code could not hide', () => {
+    // vitest.config.ts pins TZ to America/New_York; without it these offsets would be equal.
+    const winter = new Date(2026, 0, 15, 12).getTimezoneOffset();
+    const summer = new Date(2026, 6, 15, 12).getTimezoneOffset();
+    expect(winter).not.toBe(summer);
+  });
+
   it('is not shifted by daylight-saving transitions', () => {
-    // 2026-03-29 is a spring-forward day in Europe and 2026-11-01 a fall-back day in the US.
-    expect(daysBetween(d('2026-03-28'), d('2026-03-30'))).toBe(2);
+    // New York: 2026-03-08 has 23 local hours (clocks spring forward), 2026-11-01 has 25 (fall back).
+    expect(daysBetween(d('2026-03-07'), d('2026-03-09'))).toBe(2);
+    expect(daysBetween(d('2026-03-08'), d('2026-03-09'))).toBe(1);
     expect(daysBetween(d('2026-10-31'), d('2026-11-02'))).toBe(2);
+    expect(daysBetween(d('2026-11-01'), d('2026-11-02'))).toBe(1);
+    expect(addDays(d('2026-03-07'), 2)).toBe('2026-03-09');
+    expect(addDays(d('2026-03-08'), 1)).toBe('2026-03-09');
+    expect(addDays(d('2026-10-31'), 2)).toBe('2026-11-02');
+    expect(addDays(d('2026-11-02'), -1)).toBe('2026-11-01');
   });
 
   it('inverts addDays (property)', () => {

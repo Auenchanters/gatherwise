@@ -38,45 +38,63 @@ export const MINOR_PER_MAJOR: Readonly<Record<Currency, number>> = {
 };
 
 /**
- * Converts major units to minor, rounding half away from zero. Inputs should be whole or
- * two-decimal amounts: a binary float such as 1.005 is not exactly a half, so it rounds by its
- * true stored value.
+ * Converts major units to minor, rounding half away from zero. The scaled amount is first
+ * rounded to 15 significant digits, which absorbs binary float noise: 1.005 gives 101 and 19.99
+ * gives 1999. Amounts above about 1e13 major units are beyond float precision for cents anyway.
  * @throws RangeError if the amount is not finite or exceeds the safe-integer range.
  */
 export function toMinor(major: number, currency: Currency): Minor {
-  const scaled = Math.abs(major) * MINOR_PER_MAJOR[currency];
+  const scaled = Number((Math.abs(major) * MINOR_PER_MAJOR[currency]).toPrecision(15));
   return minor(Math.sign(major) * Math.round(scaled));
+}
+
+/** Weights are compared in steps of 1e-6, so the split is exact integer math. */
+const WEIGHT_STEPS_PER_UNIT = 1_000_000;
+
+/** Orders slots by larger remainder first, then by lower index, which is the tie rule. */
+function byRemainderThenIndex(
+  a: { index: number; remainder: bigint },
+  b: { index: number; remainder: bigint },
+): number {
+  if (a.remainder !== b.remainder) return a.remainder > b.remainder ? -1 : 1;
+  return a.index - b.index;
 }
 
 /**
  * Splits `total` across `weights` by largest remainder: each slot gets its floored share, then
- * the units left over go one each to the biggest fractional shares, lowest index first on ties.
+ * the units left over go one each to the biggest remainders, lowest index first on ties.
  * The result has one entry per weight, sums to `total` and is 0 wherever the weight is 0.
+ *
+ * Each weight is first rounded to a whole number of 1e-6 steps, and the shares are then computed
+ * in BigInt. So equal ratios are exact ties on every platform (3 : 1 is the same as 0.3 : 0.1),
+ * with no epsilon; the price is that weights closer than 1e-6 are equal, and a weight under
+ * 5e-7 counts as zero.
  * @throws RangeError if `total` is negative, any weight is negative or not finite, or no weight
- * is positive. These are programming errors, not user errors.
+ * reaches 1e-6 after rounding. These are programming errors, not user errors.
  */
 export function allocate(total: Minor, weights: readonly number[]): Minor[] {
-  const weightSum = weights.reduce((acc, w) => acc + w, 0);
+  const steps = weights.map((w) => Math.round(w * WEIGHT_STEPS_PER_UNIT));
   const valid =
-    total >= 0 && weights.every((w) => w >= 0) && weightSum > 0 && Number.isFinite(weightSum);
+    total >= 0 &&
+    weights.every((w) => w >= 0 && Number.isFinite(w * WEIGHT_STEPS_PER_UNIT)) &&
+    steps.some((n) => n > 0);
   if (!valid) throw new RangeError('allocate needs total >= 0 and finite, non-negative weights');
 
-  let remaining: number = total;
-  const slots = weights.map((weight, index) => {
-    const share = (total * weight) / weightSum;
-    // Capping at what is left keeps float error from ever handing out more than `total`.
-    const whole = Math.min(Math.floor(share), remaining);
-    remaining -= whole;
-    return { index, weight, whole, fraction: share - whole };
+  const stepSum = steps.reduce((acc, n) => acc + BigInt(n), 0n);
+  const slots = steps.map((n, index) => {
+    const scaled = BigInt(total) * BigInt(n);
+    return { index, whole: scaled / stepSum, remainder: scaled % stepSum };
   });
+  // Every remainder is below stepSum and they add up to leftover * stepSum, so the leftover units
+  // go only to slots with a non-zero remainder, never to a zero weight.
+  const leftover = Number(BigInt(total) - slots.reduce((acc, slot) => acc + slot.whole, 0n));
   const bonus = new Set(
-    slots
-      .filter((slot) => slot.weight > 0)
-      .sort((a, b) => b.fraction - a.fraction || a.index - b.index)
-      .slice(0, remaining)
+    [...slots]
+      .sort(byRemainderThenIndex)
+      .slice(0, leftover)
       .map((slot) => slot.index),
   );
-  return slots.map((slot) => minor(slot.whole + (bonus.has(slot.index) ? 1 : 0)));
+  return slots.map((slot) => minor(Number(slot.whole) + (bonus.has(slot.index) ? 1 : 0)));
 }
 
 /** The locale each currency is shown in, so the same amount always reads the same. */
