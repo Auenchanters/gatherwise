@@ -3,9 +3,10 @@
  * Outlook calendars import.
  * Does: writes one all-day event for the event itself, then one for each task that is not done, on
  * the task's latest start. Every text value is escaped (backslash, semicolon, comma, line breaks as
- * `\n`) and every other control character is dropped, so no title, note or name can end its line
- * and start a property or an event of its own. Lines over 75 octets are folded between code points,
- * so a UTF-8 sequence or a surrogate pair is never cut in half.
+ * `\n`) and every other control character, line separator and lone surrogate is dropped, so no
+ * title, note or name can end its line and start a property or an event of its own. Lines over 75
+ * octets are folded between code points, so a UTF-8 sequence or a surrogate pair is never cut in
+ * half. Task events are marked free (`TRANSP:TRANSPARENT`) so reminders do not block the user's days.
  * Never does: read the clock (the `DTSTAMP` is a parameter); emit unescaped user or model text;
  * modify its inputs.
  */
@@ -26,17 +27,19 @@ const octets = (s: string): number => encoder.encode(s).length;
 type TextProperty = readonly [name: string, value: string];
 
 /**
- * Escapes a TEXT value (RFC 5545 section 3.3.11) in one pass: `\`, `;` and `,` get a backslash and
- * CRLF, LF or CR become `\n`. Then every C0 control character and DEL still in the text is dropped.
- * The escape runs once, so nothing is escaped twice.
+ * Escapes a TEXT value (RFC 5545 section 3.3.11): `\`, `;` and `,` get a backslash and CRLF, LF or
+ * CR become `\n`, all in one pass, so nothing is escaped twice. Then a tab becomes a space and
+ * everything that is not text is dropped: C0 and C1 controls (NEL included), DEL, lone surrogates
+ * and the line and paragraph separators U+2028 and U+2029. A lone surrogate would otherwise reach
+ * the file as U+FFFD, and the separators end a line in some parsers.
  */
 function escapeText(raw: string): string {
-  const escaped = raw.replace(/\r\n|[\\;,\r\n]/gu, (match) =>
-    match === '\\' || match === ';' || match === ',' ? `\\${match}` : '\\n',
-  );
-  return Array.from(escaped)
-    .filter((ch) => ch >= ' ' && ch !== '\u007F')
-    .join('');
+  return raw
+    .replace(/\r\n|[\\;,\r\n]/gu, (match) =>
+      match === '\\' || match === ';' || match === ',' ? `\\${match}` : '\\n',
+    )
+    .replaceAll('\t', ' ')
+    .replace(/[\p{Cc}\p{Cs}\u0085\u2028\u2029]/gu, '');
 }
 
 /**
@@ -48,7 +51,7 @@ function fold(line: string): string {
   const physical: string[] = [];
   let current = '';
   let used = 0;
-  for (const ch of Array.from(line)) {
+  for (const ch of line) {
     const size = octets(ch);
     if (used + size > MAX_OCTETS) {
       physical.push(current);
@@ -91,7 +94,8 @@ function allDayEvent(
  *
  * @param stamp The `DTSTAMP` of every event as UTC basic format (`YYYYMMDDTHHMMSSZ`). The caller
  * reads the clock; this module never does.
- * @throws RangeError if `stamp` is not in that format, which is a programming error.
+ * @throws RangeError if `stamp` is not in that format, which is a programming error, or if a date
+ * is 9999-12-31, whose next day (`DTEND`) is outside the years 0000 to 9999 (`addDays`).
  */
 export function toIcs(
   schedule: Schedule,
@@ -119,6 +123,8 @@ export function toIcs(
       .filter((task) => task.status !== 'done')
       .flatMap((task) =>
         allDayEvent(`${task.id}-${eventDate}`, stamp, task.latestStart, [
+          // A reminder, not an appointment. The event's own day stays busy (the default, OPAQUE).
+          ['TRANSP', 'TRANSPARENT'],
           ['SUMMARY', task.title],
           [
             'DESCRIPTION',

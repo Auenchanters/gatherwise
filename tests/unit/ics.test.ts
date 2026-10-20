@@ -2,9 +2,10 @@
  * Tests for src/domain/ics.ts, the RFC 5545 calendar export.
  *
  * Does: pins the brief's assertions (golden file, CRLF-injection title, 75-octet property, no
- * U+FFFD), then an injection corpus run against every text field at once, an unfold-and-unescape
- * round-trip property, fold boundaries on ASCII, two-byte and four-byte text, the date arithmetic of
- * `DTEND`, UID uniqueness, stamp validation and input purity (deep-frozen arguments).
+ * U+FFFD via a strict UTF-8 round trip), then an injection corpus run against every text field at
+ * once, an unfold-and-unescape round-trip property, fold boundaries on ASCII, two-byte and
+ * four-byte text, the date arithmetic of `DTEND`, free and busy marking, UID uniqueness, stamp
+ * validation and input purity (deep-frozen arguments).
  * Never does: read the clock (`STAMP` is injected) or run an unseeded property.
  */
 import { readFileSync } from 'node:fs';
@@ -19,7 +20,8 @@ const SEED = 20_261_021;
 const STAMP = '20261021T120000Z';
 const EVENT = isoDate('2026-12-12');
 const CRLF = '\r\n';
-const GOLDEN = 'tests/fixtures/plan.ics';
+/** Next to this file, whatever directory the tests run from. */
+const GOLDEN = new URL('../fixtures/plan.ics', import.meta.url);
 
 const encoder = new TextEncoder();
 const utf8Len = (s: string): number => encoder.encode(s).length;
@@ -124,14 +126,40 @@ const taskBlock = (ics: string, index = 0): string[] =>
 const unescapeText = (v: string): string =>
   v.replace(/\\([\s\S])/gu, (_m, c: string) => (c === 'n' ? '\n' : c));
 
-/** What escaping must keep of a string: every line break as one LF, no other control character. */
+/**
+ * What escaping must keep of a string: every line break as one LF, a tab as a space, and nothing
+ * that is not text (C0 and C1 controls, DEL, lone surrogates, U+2028 and U+2029). Judged by code
+ * point range, not by the regex the implementation uses.
+ */
 const sanitized = (s: string): string =>
-  Array.from(s.replace(/\r\n|\r/gu, '\n'))
-    .filter((ch) => ch === '\n' || (ch >= ' ' && ch !== '\u007F'))
+  Array.from(s.replace(/\r\n|\r/gu, '\n').replaceAll('\t', ' '))
+    .filter((ch) => {
+      const code = ch.codePointAt(0) ?? 0;
+      const notText =
+        code < 0x20 ||
+        (code >= 0x7f && code <= 0x9f) ||
+        (code >= 0xd800 && code <= 0xdfff) ||
+        code === 0x2028 ||
+        code === 0x2029;
+      return ch === '\n' || !notText;
+    })
     .join('');
+
+/**
+ * Fails unless the output survives a strict UTF-8 round trip unchanged. `TextEncoder` writes a lone
+ * surrogate as U+FFFD, so any malformed text makes the decoded copy differ.
+ */
+const roundTripsAsUtf8 = (ics: string): boolean =>
+  new TextDecoder('utf-8', { fatal: true }).decode(new TextEncoder().encode(ics)) === ics;
 
 /** Fails when any CR or LF is left outside a CRLF pair. */
 const hasBareBreak = (ics: string): boolean => /[\r\n]/u.test(ics.replaceAll(CRLF, ''));
+
+/** Hindi (left to right, three octets a letter) and Arabic (right to left, two), each with emoji. */
+const NON_LATIN: [script: string, text: string][] = [
+  ['Hindi', 'दिवाली मेला 🎉'.repeat(10)],
+  ['Arabic', 'حفلة الحي 🎉'.repeat(8)],
+];
 
 function deepFreeze<T>(value: T): T {
   if (typeof value === 'object' && value !== null && !Object.isFrozen(value)) {
@@ -170,12 +198,12 @@ describe('toIcs: the brief assertions', () => {
     );
   });
 
-  it('produces no U+FFFD from Hindi and emoji text', () => {
-    const title = 'दिवाली मेला 🎉'.repeat(10);
-    const out = render(scheduleOf(task('a', { title })), { name: title });
+  it.each(NON_LATIN)('produces no U+FFFD from %s text and emoji', (_script, title) => {
+    const out = render(scheduleOf(task('a', { title, note: title })), { name: title, city: title });
     expect(out).not.toContain(String.fromCodePoint(0xfffd));
-    // With the u flag only a lone surrogate matches, so a pair cut in half would show up here.
-    expect(out).not.toMatch(/[\uD800-\uDFFF]/u);
+    // A pair cut in half would leave a lone surrogate, which TextEncoder turns into U+FFFD.
+    expect(roundTripsAsUtf8(out)).toBe(true);
+    expect(out.split(CRLF).every((line) => utf8Len(line) <= 75)).toBe(true);
   });
 });
 
@@ -211,6 +239,14 @@ describe('toIcs: calendar and event structure', () => {
     ]);
   });
 
+  it('marks task reminders free and leaves the event itself busy', () => {
+    const [event, ...tasks] = eventsOf(render(fixtureSchedule));
+    expect(tasks).toHaveLength(4);
+    for (const block of tasks) expect(valueOf(block, 'TRANSP')).toBe('TRANSPARENT');
+    // No TRANSP means OPAQUE, the RFC 5545 default: the event's day is genuinely busy.
+    expect(event?.some((line) => line.startsWith('TRANSP'))).toBe(false);
+  });
+
   it('leaves the city out when there is none, and says "1 hour" for one hour', () => {
     const block = eventBlock(render(scheduleOf(), { city: '', durationHours: 1 }));
     expect(valueOf(block, 'DESCRIPTION')).toBe('Starts 16:00 · 1 hour');
@@ -229,6 +265,7 @@ describe('toIcs: calendar and event structure', () => {
       `DTSTAMP:${STAMP}`,
       'DTSTART;VALUE=DATE:20261031',
       'DTEND;VALUE=DATE:20261101',
+      'TRANSP:TRANSPARENT',
       String.raw`SUMMARY:Book venue\, stage\; lights`,
       'DESCRIPTION:Start by 2026-10-31. Finish by 2026-11-06.',
       'CATEGORIES:venue',
@@ -353,7 +390,24 @@ const corpus: [label: string, payload: string, escaped: string][] = [
   ['a BEL', 'a\u0007b', 'ab'],
   ['an ESC', 'a\u001Bb', 'ab'],
   ['a DEL', 'a\u007Fb', 'ab'],
-  ['a tab', 'a\tb', 'ab'],
+  ['a tab, which becomes a space', 'a\tb', 'a b'],
+  ['a lone high surrogate', `a${String.fromCharCode(0xd83c)}b`, 'ab'],
+  ['a lone low surrogate', `a${String.fromCharCode(0xdf89)}b`, 'ab'],
+  ['an emoji, a valid pair, kept', 'a🎉b', 'a🎉b'],
+  [
+    'a pair broken by a NUL, which must not re-join',
+    `a${String.fromCharCode(0xd83c)}\u0000${String.fromCharCode(0xdf89)}b`,
+    'ab',
+  ],
+  ['a C1 control (CSI, U+009B)', `a${String.fromCodePoint(0x9b)}b`, 'ab'],
+  ['NEL (U+0085)', `a${String.fromCodePoint(0x85)}b`, 'ab'],
+  ['a line separator (U+2028)', `a${String.fromCodePoint(0x2028)}b`, 'ab'],
+  ['a paragraph separator (U+2029)', `a${String.fromCodePoint(0x2029)}b`, 'ab'],
+  [
+    'an ATTENDEE smuggled by U+2028',
+    `Mela${String.fromCodePoint(0x2028)}ATTENDEE:mailto:x@y`,
+    'MelaATTENDEE:mailto:x@y',
+  ],
   ['nothing but controls', '\u0000\u0007\u007F', ''],
   ['a NUL between CR and LF', 'a\r\u0000\nb', String.raw`a\n\nb`],
   [
@@ -381,7 +435,7 @@ const corpus: [label: string, payload: string, escaped: string][] = [
 
 describe('toIcs: injection corpus', () => {
   const ALLOWED =
-    /^(?:BEGIN|END|VERSION|PRODID|CALSCALE|METHOD|X-WR-CALNAME|UID|DTSTAMP|DTSTART|DTEND|SUMMARY|DESCRIPTION|CATEGORIES)[:;]/u;
+    /^(?:BEGIN|END|VERSION|PRODID|CALSCALE|METHOD|X-WR-CALNAME|UID|DTSTAMP|DTSTART|DTEND|TRANSP|SUMMARY|DESCRIPTION|CATEGORIES)[:;]/u;
   const nameOf = (line: string): string => line.split(/[:;]/u, 1)[0] ?? '';
 
   /** The payload in every text field at once: title, note, category, event name and city. */
@@ -460,6 +514,17 @@ describe('toIcs: folding', () => {
     expect(joined(lines)).toBe(`SUMMARY:${'🎉'.repeat(40)}`);
   });
 
+  it.each(NON_LATIN)(
+    'folds %s text on code point boundaries and unfolds to the original',
+    (_s, title) => {
+      const lines = summaryLines(title);
+      expect(lines.length).toBeGreaterThan(1);
+      expect(lines.every((l) => utf8Len(l) <= 75)).toBe(true);
+      expect(lines.every(roundTripsAsUtf8)).toBe(true);
+      expect(joined(lines)).toBe(`SUMMARY:${title}`);
+    },
+  );
+
   it('folds long property lines of every kind, not just SUMMARY', () => {
     const long = 'word '.repeat(60);
     const out = render(scheduleOf(task('a', { title: long, note: long, categoryId: long })), {
@@ -490,6 +555,7 @@ describe('toIcs: unfolding and unescaping give back the sanitized input (propert
           return (
             out.split(CRLF).every((l) => utf8Len(l) <= 75) &&
             !hasBareBreak(out) &&
+            roundTripsAsUtf8(out) &&
             lines.length === BASE_LINES.length &&
             unescapeText(must(valueOf(first, 'SUMMARY'), 'SUMMARY')) === sanitized(title) &&
             unescapeText(must(valueOf(first, 'CATEGORIES'), 'CATEGORIES')) ===
