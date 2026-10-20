@@ -1,0 +1,13 @@
+version: 2
+updates:
+  # Event rule: keep exactly one branch; alerts remain enabled without bot PRs.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0

@@ -1,0 +1,11 @@
+title = "Gatherwise repository and history secret detection"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "google-aq-api-key"
+description = "Google API credential using the AQ prefix"
+regex = '''(AQ\.[A-Za-z0-9_-]{30,})'''
+secretGroup = 1
+keywords = ["AQ."]
