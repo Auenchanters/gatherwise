@@ -1,0 +1,133 @@
+/**
+ * The calendar export: turns a schedule into an iCalendar file (RFC 5545) that Google, Apple and
+ * Outlook calendars import.
+ * Does: writes one all-day event for the event itself, then one for each task that is not done, on
+ * the task's latest start. Every text value is escaped (backslash, semicolon, comma, line breaks as
+ * `\n`) and every other control character is dropped, so no title, note or name can end its line
+ * and start a property or an event of its own. Lines over 75 octets are folded between code points,
+ * so a UTF-8 sequence or a surrogate pair is never cut in half.
+ * Never does: read the clock (the `DTSTAMP` is a parameter); emit unescaped user or model text;
+ * modify its inputs.
+ */
+import type { EventBrief } from '../shared/schema';
+import { addDays, type IsoDate } from './dates';
+import type { Schedule } from './schedule';
+
+const CRLF = '\r\n';
+const MAX_OCTETS = 75;
+/** UTC basic format, `YYYYMMDDTHHMMSSZ`, with month, day, hour, minute and second in range. */
+const STAMP_SHAPE =
+  /^\d{4}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3])[0-5]\d[0-5]\dZ$/u;
+
+const encoder = new TextEncoder();
+const octets = (s: string): number => encoder.encode(s).length;
+
+/** A text property: its name and its raw, not yet escaped, value. */
+type TextProperty = readonly [name: string, value: string];
+
+/**
+ * Escapes a TEXT value (RFC 5545 section 3.3.11) in one pass: `\`, `;` and `,` get a backslash and
+ * CRLF, LF or CR become `\n`. Then every C0 control character and DEL still in the text is dropped.
+ * The escape runs once, so nothing is escaped twice.
+ */
+function escapeText(raw: string): string {
+  const escaped = raw.replace(/\r\n|[\\;,\r\n]/gu, (match) =>
+    match === '\\' || match === ';' || match === ',' ? `\\${match}` : '\\n',
+  );
+  return Array.from(escaped)
+    .filter((ch) => ch >= ' ' && ch !== '\u007F')
+    .join('');
+}
+
+/**
+ * Folds a content line (RFC 5545 section 3.1): every physical line is at most 75 octets, and each
+ * continuation starts with one space that counts toward its 75. Breaks fall between code points.
+ */
+function fold(line: string): string {
+  if (octets(line) <= MAX_OCTETS) return line;
+  const physical: string[] = [];
+  let current = '';
+  let used = 0;
+  for (const ch of Array.from(line)) {
+    const size = octets(ch);
+    if (used + size > MAX_OCTETS) {
+      physical.push(current);
+      current = ' ';
+      used = 1;
+    }
+    current += ch;
+    used += size;
+  }
+  physical.push(current);
+  return physical.join(CRLF);
+}
+
+const compact = (date: IsoDate): string => date.replaceAll('-', '');
+
+/** One all-day VEVENT on `day`. The UID is `uidStem` (escaped) plus `@gatherwise`. */
+function allDayEvent(
+  uidStem: string,
+  stamp: string,
+  day: IsoDate,
+  properties: readonly TextProperty[],
+): string[] {
+  return [
+    'BEGIN:VEVENT',
+    `UID:${escapeText(uidStem)}@gatherwise`,
+    `DTSTAMP:${stamp}`,
+    `DTSTART;VALUE=DATE:${compact(day)}`,
+    `DTEND;VALUE=DATE:${compact(addDays(day, 1))}`,
+    ...properties.map(([name, value]) => `${name}:${escapeText(value)}`),
+    'END:VEVENT',
+  ];
+}
+
+/**
+ * Renders `schedule` as an iCalendar file, every line ended with CRLF.
+ *
+ * The event itself comes first, on `eventDate`, followed by one all-day event per task that is not
+ * `done`, in schedule order, on its `latestStart`. UIDs end in `-<eventDate>@gatherwise`, so
+ * importing two plans never overwrites events. `schedule` and `brief` are not modified.
+ *
+ * @param stamp The `DTSTAMP` of every event as UTC basic format (`YYYYMMDDTHHMMSSZ`). The caller
+ * reads the clock; this module never does.
+ * @throws RangeError if `stamp` is not in that format, which is a programming error.
+ */
+export function toIcs(
+  schedule: Schedule,
+  brief: EventBrief,
+  eventDate: IsoDate,
+  stamp: string,
+): string {
+  if (!STAMP_SHAPE.test(stamp)) {
+    throw new RangeError(`DTSTAMP must be YYYYMMDDTHHMMSSZ in UTC: ${JSON.stringify(stamp)}`);
+  }
+  const hours = brief.durationHours === 1 ? 'hour' : 'hours';
+  const where = brief.city === '' ? '' : ` · ${brief.city}`;
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Gatherwise//Event Planner//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    `X-WR-CALNAME:${escapeText(brief.name)}`,
+    ...allDayEvent(`event-${eventDate}`, stamp, eventDate, [
+      ['SUMMARY', brief.name],
+      ['DESCRIPTION', `Starts ${brief.startTime} · ${brief.durationHours} ${hours}${where}`],
+    ]),
+    ...schedule.tasks
+      .filter((task) => task.status !== 'done')
+      .flatMap((task) =>
+        allDayEvent(`${task.id}-${eventDate}`, stamp, task.latestStart, [
+          ['SUMMARY', task.title],
+          [
+            'DESCRIPTION',
+            `Start by ${task.latestStart}. Finish by ${task.latestEnd}.${task.note ? ` ${task.note}` : ''}`,
+          ],
+          ['CATEGORIES', task.categoryId],
+        ]),
+      ),
+    'END:VCALENDAR',
+  ];
+  return lines.map((line) => fold(line) + CRLF).join('');
+}
