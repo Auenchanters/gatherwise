@@ -88,11 +88,12 @@ describe('workspace: opening a plan', () => {
     expect(facts).toContain('₹1,50,000.00 budget');
   });
 
-  it('labels the AI summary and counts one AI call', async () => {
+  it('labels the AI summary, announces its arrival and counts one AI call', async () => {
     await setup();
     const summary = screen.getByText(aiSuggestions.summary);
     expect(summary.getAttribute('dir')).toBe('auto');
     expect(summary.parentElement?.textContent).toContain('AI · personalized');
+    expect(statusRegion().textContent).toBe('Gemini has personalized your plan.');
     const tile = screen.getByText('AI calls this session', { selector: 'dt.tile__label' });
     expect(tile.nextElementSibling?.textContent).toBe('1');
   });
@@ -281,6 +282,7 @@ describe('workspace: AI at work', () => {
     );
     await setup({ client });
     expect(screen.getByText('Reused from this session — no new AI call.')).toBeTruthy();
+    expect(statusRegion().textContent).toBe('Reused the AI ideas for this brief — no new AI call.');
   });
 });
 

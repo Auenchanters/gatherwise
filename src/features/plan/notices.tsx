@@ -39,16 +39,25 @@ export interface NoticesProps {
 
 /** Progress and notices (polite) and refused edits (assertive). */
 export function Notices({ snapshot, onDismiss }: NoticesProps): ReactElement {
-  const { plan, notices } = snapshot;
-  const pending = plan.phase === 'ready' && plan.ai.status === 'pending';
+  const { plan, notices, aiView } = snapshot;
+  const status = plan.phase === 'ready' ? plan.ai.status : 'idle';
+  // An answer that arrived this session is announced; the AI panel already shows it on screen.
+  const landed = status === 'applied' && aiView.sentBrief !== undefined;
   return (
     <div className="notices">
       <div className="notices__region" role="status">
-        {pending && (
+        {status === 'pending' && (
           <p className="notice notice--info">
             <span className="spinner" aria-hidden="true" />
             <span className="notice__text">Gemini is personalizing your plan…</span>
           </p>
+        )}
+        {landed && (
+          <span className="visually-hidden">
+            {aiView.cached
+              ? 'Reused the AI ideas for this brief — no new AI call.'
+              : 'Gemini has personalized your plan.'}
+          </span>
         )}
         {notices.map((notice) => (
           <p className={`notice notice--${notice.tone}`} key={notice.id}>

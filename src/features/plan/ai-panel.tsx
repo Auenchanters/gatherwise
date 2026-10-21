@@ -107,8 +107,9 @@ function Adjustments({ items }: { readonly items: readonly Adjustment[] }): Reac
   }
   return (
     <ul className="adjustments">
-      {items.map((item) => (
-        <li className="adjustments__item" key={`${item.target}:${item.kind}`}>
+      {/* The list is rebuilt whole from each answer and never reordered, so the index is a stable key. */}
+      {items.map((item, index) => (
+        <li className="adjustments__item" key={index}>
           <span className={`badge badge--${item.kind}`}>{ADJUSTMENT_LABELS[item.kind]}</span>
           <span dir="auto">{item.detail}</span>
         </li>
