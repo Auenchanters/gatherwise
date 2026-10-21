@@ -3,7 +3,7 @@
  *
  * Does: checks the landmarks and single h1, that the skip link comes first, axe at WCAG 2.1 AA on
  * the empty page, the sample-filled form and the error summary, and a clean console under the CSP.
- * Never does: call the planning API; the form's submit is still local in this build.
+ * Never does: generate a plan; tests/e2e/planner.spec.ts covers that, with the API mocked.
  */
 import { readFileSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
@@ -73,11 +73,6 @@ test.describe('brief form', () => {
       page.getByRole('status').filter({ hasText: 'Filled in the sample community event' }),
     ).toBeVisible();
     expect(await axeViolations(page)).toEqual([]);
-
-    await page.getByRole('button', { name: 'Generate my plan' }).click();
-    await expect(
-      page.getByRole('status').filter({ hasText: 'Plan ready to generate' }),
-    ).toBeVisible();
   });
 
   test('an empty submit focuses an error summary that has no axe violations', async ({ page }) => {

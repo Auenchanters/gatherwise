@@ -409,3 +409,9 @@
     align-items: center;
   }
 }
+
+/* Shown while a saved plan loads, before the planner takes over. */
+.welcome {
+  max-width: 48rem;
+  margin: 2rem auto;
+}
