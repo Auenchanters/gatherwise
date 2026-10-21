@@ -2,17 +2,29 @@
  * The Budget tab: guests, budget and date controls that re-plan on every change, the reconciled
  * budget table with a native `<meter>` per line, the over-budget callout and, for community events,
  * the break-even ledger.
- * Does: announce each recompute politely, with the session's AI-call count to show it cost none.
- * Never does: compute money (every figure is the engine's), call the AI, or snap an input back
- * while the user is typing (a refused value stays in the field and the alert says why).
+ * Does: announce each recompute politely, with the session's AI-call count to show it cost none;
+ * mark a refused value at its field (`aria-invalid`, an inline message, the brief form's `Field`)
+ * as well as in the alert.
+ * Never does: compute money (every figure is the engine's), call the AI, snap an input back while
+ * the user is typing, or send a blank or unreadable draft before the user leaves the field.
  */
-import { useId, useState, type ReactElement } from 'react';
+import {
+  useId,
+  useState,
+  type ChangeEvent,
+  type FocusEvent,
+  type KeyboardEvent,
+  type ReactElement,
+} from 'react';
 import { addDays } from '../../domain/dates.js';
 import { formatMoney, minor, toMinor, type Minor } from '../../domain/money.js';
-import type { ReadyState } from '../../domain/reducer.js';
+import type { PlanStateError, ReadyState } from '../../domain/reducer.js';
 import { LIMITS } from '../../shared/limits.js';
+import { Field } from '../brief/fields.js';
 import { currencySymbol } from '../brief/labels.js';
-import { countOf, showDate } from './format.js';
+import type { FieldKey } from '../brief/validate.js';
+import { callCount, countOf, showDate } from './format.js';
+import { errorText } from './notices.js';
 import type { PlannerStore } from './planner-store.js';
 
 const shareFormat = new Intl.NumberFormat('en-IN', { style: 'percent' });
@@ -23,19 +35,37 @@ export interface BudgetProps {
   readonly store: PlannerStore;
 }
 
+/** The Budget field each refused value belongs to. */
+const FIELD_OF = {
+  invalid_guests: 'guests',
+  invalid_budget: 'budget',
+  invalid_date: 'date',
+} as const satisfies Record<PlanStateError['kind'], FieldKey>;
+
+type ControlKey = (typeof FIELD_OF)[PlanStateError['kind']];
+
+/** Whether the browser can read a draft: a number, or a complete date. */
+const readable = (input: HTMLInputElement): boolean =>
+  input.type === 'date' ? input.value !== '' : !Number.isNaN(input.valueAsNumber);
+
 /** The three inputs that re-plan the budget, and the live region that reports each recompute. */
 function Controls({ state, store }: BudgetProps): ReactElement {
-  const ids = useId();
-  const { brief, today } = state;
+  const { brief, today, error } = state;
   // Drafts, so a half-typed or refused value stays in the field instead of snapping back.
-  const [guests, setGuests] = useState(String(brief.guests));
-  const [budget, setBudget] = useState(String(brief.budget));
-  const [date, setDate] = useState(brief.date);
+  const [drafts, setDrafts] = useState<Record<ControlKey, string>>({
+    guests: String(brief.guests),
+    budget: String(brief.budget),
+    date: brief.date,
+  });
   const [message, setMessage] = useState('');
+
+  /** The refused-value copy for the field the plan's error is about, beside that field. */
+  const errorFor = (key: ControlKey): string | undefined =>
+    error && FIELD_OF[error.kind] === key ? errorText(error, true) : undefined;
 
   /**
    * Reports the recompute that just happened, worded by `what` from the new state, or nothing if
-   * the edit was refused (the alert says why).
+   * the edit was refused (the field and the alert say why).
    */
   const announce = (what: (next: ReadyState) => string): void => {
     const { plan, calls } = store.getState();
@@ -46,87 +76,101 @@ function Controls({ state, store }: BudgetProps): ReactElement {
     const { overBy } = plan.plan.budget;
     const over =
       overBy === undefined ? '' : ` — over budget by ${formatMoney(overBy, plan.brief.currency)}`;
-    setMessage(`${what(plan)}${over}. No AI call used (AI calls this session: ${calls}).`);
+    const count = callCount(calls, plan.ai.status === 'pending');
+    setMessage(`${what(plan)}${over}. No AI call used (AI calls this session: ${count}).`);
   };
+
+  /** Sends one field's value to the plan and reports the result. */
+  const apply: Record<ControlKey, (input: HTMLInputElement) => void> = {
+    guests: (input) => {
+      store.changeGuests(input.valueAsNumber);
+      announce((next) => `Budget updated for ${countOf(next.brief.guests, 'guest', 'guests')}`);
+    },
+    budget: (input) => {
+      store.changeBudget(input.valueAsNumber);
+      announce(
+        (next) => `Budget updated to ${formatMoney(next.plan.budget.total, next.brief.currency)}`,
+      );
+    },
+    date: (input) => {
+      store.changeDate(input.value);
+      announce((next) => `Plan updated for ${showDate(next.plan.eventDate)}`);
+    },
+  };
+
+  /**
+   * The draft follows every keystroke, but only a readable value reaches the plan while typing.
+   * A blank or unreadable one is sent on blur or Enter, so the error appears only then.
+   */
+  const bind = (key: ControlKey) => ({
+    value: drafts[key],
+    onChange: (event: ChangeEvent<HTMLInputElement>) => {
+      const input = event.currentTarget;
+      const { value } = input;
+      setDrafts((current) => ({ ...current, [key]: value }));
+      if (readable(input)) apply[key](input);
+    },
+    onBlur: (event: FocusEvent<HTMLInputElement>) => {
+      if (!readable(event.currentTarget)) apply[key](event.currentTarget);
+    },
+    onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === 'Enter' && !readable(event.currentTarget)) apply[key](event.currentTarget);
+    },
+  });
 
   return (
     <div className="controls">
       <div className="controls__fields">
-        <div className="field">
-          <label className="field__label" htmlFor={`${ids}-guests`}>
-            Guests attending
-          </label>
-          <input
-            className="field__input field__input--number"
-            id={`${ids}-guests`}
-            type="number"
-            inputMode="numeric"
-            min={LIMITS.brief.guestsMin}
-            max={LIMITS.brief.guestsMax}
-            step={1}
-            value={guests}
-            onChange={(event) => {
-              const { value, valueAsNumber } = event.currentTarget;
-              setGuests(value);
-              store.changeGuests(valueAsNumber);
-              announce(
-                (next) => `Budget updated for ${countOf(next.brief.guests, 'guest', 'guests')}`,
-              );
-            }}
-          />
-        </div>
-        <div className="field">
-          <label className="field__label" htmlFor={`${ids}-budget`}>
-            Total budget
-          </label>
-          <div className="field__prefixed">
-            <span className="field__prefix" aria-hidden="true">
-              {currencySymbol(brief.currency)}
-            </span>
+        <Field field="guests" label="Guests attending" error={errorFor('guests')}>
+          {(control) => (
             <input
+              {...control}
+              {...bind('guests')}
               className="field__input field__input--number"
-              id={`${ids}-budget`}
               type="number"
               inputMode="numeric"
-              min={LIMITS.brief.budgetMin}
-              max={LIMITS.brief.budgetMax}
+              min={LIMITS.brief.guestsMin}
+              max={LIMITS.brief.guestsMax}
               step={1}
-              value={budget}
-              aria-describedby={`${ids}-currency`}
-              onChange={(event) => {
-                const { value, valueAsNumber } = event.currentTarget;
-                setBudget(value);
-                store.changeBudget(valueAsNumber);
-                announce(
-                  (next) =>
-                    `Budget updated to ${formatMoney(next.plan.budget.total, next.brief.currency)}`,
-                );
-              }}
             />
-          </div>
-          <p className="field__hint" id={`${ids}-currency`}>
-            In {brief.currency}, whole units.
-          </p>
-        </div>
-        <div className="field">
-          <label className="field__label" htmlFor={`${ids}-date`}>
-            Event date
-          </label>
-          <input
-            className="field__input"
-            id={`${ids}-date`}
-            type="date"
-            min={today}
-            max={addDays(today, LIMITS.brief.horizonDays)}
-            value={date}
-            onChange={(event) => {
-              const { value } = event.currentTarget;
-              setDate(value);
-              store.changeDate(value);
-              announce((next) => `Plan updated for ${showDate(next.plan.eventDate)}`);
-            }}
-          />
-        </div>
+          )}
+        </Field>
+        <Field
+          field="budget"
+          label="Total budget"
+          hint={`In ${brief.currency}, whole units.`}
+          error={errorFor('budget')}
+        >
+          {(control) => (
+            <div className="field__prefixed">
+              <span className="field__prefix" aria-hidden="true">
+                {currencySymbol(brief.currency)}
+              </span>
+              <input
+                {...control}
+                {...bind('budget')}
+                className="field__input field__input--number"
+                type="number"
+                inputMode="numeric"
+                min={LIMITS.brief.budgetMin}
+                max={LIMITS.brief.budgetMax}
+                step={1}
+              />
+            </div>
+          )}
+        </Field>
+        <Field field="date" label="Event date" error={errorFor('date')}>
+          {(control) => (
+            <input
+              {...control}
+              {...bind('date')}
+              className="field__input"
+              type="date"
+              min={today}
+              max={addDays(today, LIMITS.brief.horizonDays)}
+            />
+          )}
+        </Field>
       </div>
       <p className="controls__status" role="status">
         {message}

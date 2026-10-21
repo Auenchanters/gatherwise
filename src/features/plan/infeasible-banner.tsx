@@ -1,11 +1,12 @@
 /**
  * The banner for deadlines that cannot be met: shown whenever the timeline has infeasible or
- * overdue tasks, naming up to five of them with their status, and linking to the timeline.
+ * overdue tasks, naming up to five of them with their status (tasks Gemini added carry the AI
+ * label), and linking to the timeline.
  * Never does: soften a deadline or hide that a task cannot be done in time (Review Focus 1).
  */
 import { useId, type MouseEvent, type ReactElement } from 'react';
 import type { Schedule } from '../../domain/schedule.js';
-import { STATUS_UI } from './status-ui.js';
+import { isAiTask, STATUS_UI } from './status-ui.js';
 
 /** How many blocked tasks the banner names before summing up the rest. */
 const SHOWN = 5;
@@ -47,7 +48,10 @@ export function InfeasibleBanner({
           const ui = STATUS_UI.task[task.status];
           return (
             <li className="banner__item" key={task.id}>
-              <span dir="auto">{task.title}</span>
+              <span className="banner__task">
+                <span dir="auto">{task.title}</span>
+                {isAiTask(task.id) && <span className="badge badge--ai">AI · personalized</span>}
+              </span>
               <span className={`status ${ui.className}`}>
                 <span aria-hidden="true">{ui.icon}</span> {ui.label}
               </span>

@@ -14,7 +14,7 @@ import { buildPlan } from '../../domain/plan.js';
 import type { ReadyState } from '../../domain/reducer.js';
 import { buildPrompt } from '../../shared/prompt.js';
 import type { EventBrief } from '../../shared/schema.js';
-import { countOf, formatCount } from './format.js';
+import { callCount, formatCount } from './format.js';
 import type { AiView } from './planner-store.js';
 
 const ADJUSTMENT_LABELS: Record<Adjustment['kind'], string> = {
@@ -123,10 +123,9 @@ export function AiPanel({ state, aiView, calls, onPersonalize }: AiPanelProps): 
   const ids = useId();
   const { suggestions, meta } = state.ai;
   const sent = aiView.sentBrief;
-  const prompt = useMemo(
-    () => promptText(sent ?? state.brief, state.today),
-    [sent, state.brief, state.today],
-  );
+  // Keyed on the brief the prompt is for: once one was sent, edits do not rebuild it.
+  const source = sent ?? state.brief;
+  const prompt = useMemo(() => promptText(source, state.today), [source, state.today]);
   return (
     <details className="ai-panel" open>
       <summary className="ai-panel__summary">AI at work</summary>
@@ -153,12 +152,13 @@ export function AiPanel({ state, aiView, calls, onPersonalize }: AiPanelProps): 
           )}
           <div className="ai-panel__calls">
             <dt>AI calls this session</dt>
-            <dd>{calls}</dd>
+            <dd>{callCount(calls, state.ai.status === 'pending')}</dd>
           </div>
         </dl>
 
+        {/* Each receipt is a named, focusable region, so keyboard users can find and scroll it. */}
         {prompt !== undefined && (
-          <section className="ai-panel__section" aria-labelledby={`${ids}-prompt`}>
+          <section className="ai-panel__section">
             <h3 className="ai-panel__heading" id={`${ids}-prompt`}>
               {sent ? 'What we sent to Gemini' : 'What we would send to Gemini'}
             </h3>
@@ -166,7 +166,13 @@ export function AiPanel({ state, aiView, calls, onPersonalize }: AiPanelProps): 
               Rebuilt in your browser by the same code the server runs. Your notes travel as data in
               a separate message, and the plan&apos;s totals are never sent.
             </p>
-            <pre className="receipt" tabIndex={0} aria-labelledby={`${ids}-prompt`} dir="auto">
+            <pre
+              className="receipt"
+              role="region"
+              tabIndex={0}
+              aria-labelledby={`${ids}-prompt`}
+              dir="auto"
+            >
               {prompt}
             </pre>
           </section>
@@ -174,14 +180,20 @@ export function AiPanel({ state, aiView, calls, onPersonalize }: AiPanelProps): 
 
         {suggestions && (
           <>
-            <section className="ai-panel__section" aria-labelledby={`${ids}-answer`}>
+            <section className="ai-panel__section">
               <h3 className="ai-panel__heading" id={`${ids}-answer`}>
                 What came back (validated)
               </h3>
               <p className="ai-panel__hint">
                 Checked against this plan&apos;s response schema before the engine used it.
               </p>
-              <pre className="receipt" tabIndex={0} aria-labelledby={`${ids}-answer`} dir="auto">
+              <pre
+                className="receipt"
+                role="region"
+                tabIndex={0}
+                aria-labelledby={`${ids}-answer`}
+                dir="auto"
+              >
                 {JSON.stringify(suggestions, null, 2)}
               </pre>
             </section>
@@ -197,10 +209,6 @@ export function AiPanel({ state, aiView, calls, onPersonalize }: AiPanelProps): 
             </section>
           </>
         )}
-        <p className="ai-panel__footnote">
-          {countOf(calls, 'AI call', 'AI calls')} this session. Editing guests, budget or dates
-          never calls the AI.
-        </p>
       </div>
     </details>
   );

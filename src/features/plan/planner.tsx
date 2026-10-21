@@ -3,11 +3,12 @@
  * reducer, persistence, the API client, zod or the workspace (R66/R67/R69).
  * Does: create a planner store (with the real client unless a test passes one) and either start a
  * plan from a brief or restore the saved one; render the notices and either the workspace or, with
- * no plan, whatever the app shell passes as children (the landing and the form).
+ * no plan, whatever the app shell passes as children (the landing and the form); abort the
+ * store's request in flight when the planner unmounts.
  * Never does: call the AI except through `startPlan` (one call) and the store's commands; read the
  * clock except through `todayIso`.
  */
-import { useEffect, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactElement, type ReactNode } from 'react';
 import type { EventBrief } from '../../shared/schema.js';
 import { createPlanClient, type PlanClient } from '../client/api-client.js';
 import { Notices } from './notices.js';
@@ -29,11 +30,17 @@ function createStore({ storage, client = createPlanClient() }: PlannerSetup): Pl
   return createPlannerStore({ client, storage, today: () => todayIso() });
 }
 
-/** A new store for `brief`: the plan is built at once and its one AI call starts. */
-export function startPlan(brief: EventBrief, setup: PlannerSetup): PlannerStore {
+/**
+ * A new store for `brief`: the plan is built at once and its one AI call starts. `accepted` is
+ * false when the brief cannot be planned (its date passed since the form checked it); the store
+ * then holds no plan and its `error` says why.
+ */
+export function startPlan(
+  brief: EventBrief,
+  setup: PlannerSetup,
+): { readonly store: PlannerStore; readonly accepted: boolean } {
   const store = createStore(setup);
-  void store.submit(brief);
-  return store;
+  return { store, accepted: store.submit(brief).accepted };
 }
 
 /** A new store holding the saved plan, if it could be restored. Never calls the AI. */
@@ -53,6 +60,20 @@ export interface PlannerProps {
 /** Notices, then the workspace for a ready plan or `children` without one. */
 export function Planner({ store, children }: PlannerProps): ReactElement {
   const snapshot = usePlanner(store);
+  const mounted = useRef<PlannerStore>(undefined);
+
+  // A request still in flight when the planner goes away is aborted. StrictMode unmounts and
+  // remounts at once in development; disposing then would abort the plan's first call, so the
+  // store is disposed only if no mount of it came back by the next microtask.
+  useEffect(() => {
+    mounted.current = store;
+    return () => {
+      mounted.current = undefined;
+      queueMicrotask(() => {
+        if (mounted.current !== store) store.dispose();
+      });
+    };
+  }, [store]);
 
   // Coming back to the tab on another day re-plans against the new date (no AI call).
   useEffect(() => {

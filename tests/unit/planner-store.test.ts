@@ -69,11 +69,12 @@ const texts = (snapshot: PlannerSnapshot): string[] => snapshot.notices.map((n) 
 describe('submit', () => {
   it('builds the plan at once, then makes exactly one AI call and applies it', async () => {
     const { store, client } = setup();
-    const done = store.submit(festival);
+    const submission = store.submit(festival);
+    expect(submission.accepted).toBe(true);
     const pending = ready(store.getState());
     expect(pending.brief).toBe(festival);
     expect(pending.ai.status).toBe('pending');
-    await done;
+    await submission.settled;
     const state = store.getState();
     expect(client.suggest).toHaveBeenCalledTimes(1);
     expect(client.suggest.mock.calls[0]?.[0]).toBe(festival);
@@ -85,7 +86,7 @@ describe('submit', () => {
 
   it('keeps calls at one through every kind of edit', async () => {
     const { store, client } = setup();
-    await store.submit(festival);
+    await store.submit(festival).settled;
     const { plan } = ready(store.getState());
     const task = plan.schedule.tasks[0]?.id ?? '';
     const vendor = plan.vendors[0];
@@ -109,7 +110,7 @@ describe('submit', () => {
     const { store } = setup({
       client: fakeClient(() => Promise.resolve(reused), { counting: false }),
     });
-    await store.submit(festival);
+    await store.submit(festival).settled;
     expect(store.getState().aiView.cached).toBe(true);
     expect(store.getState().calls).toBe(0);
   });
@@ -117,7 +118,7 @@ describe('submit', () => {
   it('shows a failure as a notice and keeps the deterministic plan', async () => {
     const failure: ClientError = { code: 'rate_limited', retryAfterSeconds: 120 };
     const { store } = setup({ client: fakeClient(() => Promise.resolve(err(failure))) });
-    await store.submit(festival);
+    await store.submit(festival).settled;
     const state = store.getState();
     expect(ready(state).ai).toEqual({ status: 'failed', error: 'rate_limited' });
     expect(ready(state).plan.budget.lines.length).toBeGreaterThan(0);
@@ -130,7 +131,7 @@ describe('submit', () => {
   it('a later success clears the failure notice', async () => {
     let answer: Answer = err({ code: 'timeout' });
     const { store } = setup({ client: fakeClient(() => Promise.resolve(answer)) });
-    await store.submit(festival);
+    await store.submit(festival).settled;
     expect(texts(store.getState())).toHaveLength(1);
     answer = fresh;
     await store.personalize();
@@ -143,11 +144,11 @@ describe('submit', () => {
     const { store, client } = setup({
       client: fakeClient((b) => (b === festival ? first.promise : Promise.resolve(fresh))),
     });
-    void store.submit(festival);
+    store.submit(festival);
     const signal = client.suggest.mock.calls[0]?.[1];
     expect(signal?.aborted).toBe(false);
     const other = brief('community', { date: addDays(today, 30), name: 'Second plan' });
-    const second = store.submit(other);
+    const second = store.submit(other).settled;
     expect(signal?.aborted).toBe(true);
     first.resolve(err({ code: 'network' }));
     await second;
@@ -165,9 +166,9 @@ describe('submit', () => {
       // This fake ignores the abort signal and answers anyway; the answer must still be dropped.
       client: fakeClient((b) => (b === festival ? slow.promise : otherAnswer.promise)),
     });
-    const stale = store.submit(festival);
+    const stale = store.submit(festival).settled;
     store.reset();
-    const current = store.submit(other);
+    const current = store.submit(other).settled;
     slow.resolve(fresh);
     await stale;
     expect(ready(store.getState()).ai.status).toBe('pending');
@@ -178,9 +179,11 @@ describe('submit', () => {
     expect(ready(store.getState()).ai.suggestions).toBe(answer);
   });
 
-  it('does not ask the AI when the brief cannot be planned', async () => {
+  it('reports a brief that cannot be planned as refused, and does not ask the AI', async () => {
     const { store, client } = setup();
-    await store.submit(brief('community', { date: addDays(today, -1) }));
+    const submission = store.submit(brief('community', { date: addDays(today, -1) }));
+    expect(submission.accepted).toBe(false);
+    await submission.settled;
     expect(store.getState().plan).toEqual({
       ...initialPlanState,
       error: { kind: 'invalid_date', reason: 'past' },
@@ -188,14 +191,38 @@ describe('submit', () => {
     expect(client.suggest).not.toHaveBeenCalled();
   });
 
+  it('a refused brief keeps the open plan and its request', async () => {
+    const answer = deferred<Answer>();
+    const { store, client } = setup({ client: fakeClient(() => answer.promise) });
+    const first = store.submit(festival).settled;
+    const refused = store.submit(brief('community', { date: addDays(today, -1) }));
+    expect(refused.accepted).toBe(false);
+    expect(client.suggest.mock.calls[0]?.[1].aborted).toBe(false);
+    answer.resolve(fresh);
+    await first;
+    expect(ready(store.getState()).brief).toBe(festival);
+    expect(ready(store.getState()).ai.status).toBe('applied');
+  });
+
+  it('counts a request once it has settled, so edits while it is pending do not jump ahead', async () => {
+    const answer = deferred<Answer>();
+    const { store } = setup({ client: fakeClient(() => answer.promise) });
+    const request = store.submit(festival).settled;
+    store.changeGuests(300);
+    expect(store.getState().calls).toBe(0);
+    answer.resolve(fresh);
+    await request;
+    expect(store.getState().calls).toBe(1);
+  });
+
   it('clears notices from the previous plan, except the storage warning', async () => {
     const { store } = setup({
       client: fakeClient(() => Promise.resolve(err({ code: 'network' }))),
       storage: memoryStorage(undefined, { refuseWrites: true }),
     });
-    await store.submit(festival);
+    await store.submit(festival).settled;
     expect(store.getState().notices.map((n) => n.id)).toEqual(['storage', 'ai']);
-    void store.submit(festival);
+    store.submit(festival);
     expect(store.getState().notices.map((n) => n.id)).toEqual(['storage']);
   });
 });
@@ -218,7 +245,7 @@ describe('personalize and refreshIdeas', () => {
     const { store, client } = setup({
       client: fakeClient(() => answers.shift() ?? refresh.promise),
     });
-    await store.submit(festival);
+    await store.submit(festival).settled;
     const first = store.refreshIdeas();
     const second = store.refreshIdeas();
     void store.personalize();
@@ -302,7 +329,7 @@ describe('saving', () => {
   it('saves after every change, so a reload restores the edits', async () => {
     const storage = memoryStorage();
     const { store } = setup({ storage });
-    await store.submit(festival);
+    await store.submit(festival).settled;
     store.changeGuests(320);
     const reloaded = setup({ storage }).store;
     reloaded.hydrate();
@@ -312,7 +339,7 @@ describe('saving', () => {
 
   it('warns exactly once when the browser refuses to save', async () => {
     const { store } = setup({ storage: memoryStorage(undefined, { refuseWrites: true }) });
-    await store.submit(festival);
+    await store.submit(festival).settled;
     store.changeGuests(300);
     store.changeGuests(310);
     expect(store.getState().notices).toEqual([
@@ -326,7 +353,7 @@ describe('saving', () => {
 
   it('warns once when there is no storage at all', async () => {
     const { store } = setup({ storage: null });
-    await store.submit(festival);
+    await store.submit(festival).settled;
     store.changeGuests(300);
     expect(store.getState().notices.map((n) => n.id)).toEqual(['storage']);
   });
@@ -336,7 +363,7 @@ describe('reset and clearData', () => {
   it('reset aborts the request in flight, empties the plan and drops the late answer', async () => {
     const late = deferred<Answer>();
     const { store, client } = setup({ client: fakeClient(() => late.promise) });
-    const request = store.submit(festival);
+    const request = store.submit(festival).settled;
     store.reset();
     expect(client.suggest.mock.calls[0]?.[1].aborted).toBe(true);
     const after = store.getState();
@@ -348,10 +375,25 @@ describe('reset and clearData', () => {
     expect(store.getState()).toBe(after);
   });
 
+  it('dispose aborts the request in flight and drops its late answer', async () => {
+    const late = deferred<Answer>();
+    const { store, client } = setup({ client: fakeClient(() => late.promise) });
+    const request = store.submit(festival).settled;
+    store.dispose();
+    expect(client.suggest.mock.calls[0]?.[1].aborted).toBe(true);
+    const { plan } = store.getState();
+    late.resolve(fresh);
+    await request;
+    // The answer is dropped; the request was sent, so it still counts.
+    expect(store.getState().plan).toBe(plan);
+    expect(store.getState().calls).toBe(1);
+    store.dispose();
+  });
+
   it('clearData empties the plan, removes the saved copy and says so', async () => {
     const storage = memoryStorage();
     const { store } = setup({ storage });
-    await store.submit(festival);
+    await store.submit(festival).settled;
     store.clearData();
     expect(store.getState().plan.phase).toBe('empty');
     expect(storage.getItem(STORAGE_KEY)).toBeNull();
@@ -362,7 +404,7 @@ describe('reset and clearData', () => {
   it('clearData copes with storage that throws or is missing', async () => {
     for (const storage of [memoryStorage(undefined, { refuseWrites: true }), null]) {
       const { store } = setup({ storage });
-      await store.submit(festival);
+      await store.submit(festival).settled;
       if (storage) {
         storage.removeItem = () => {
           throw new DOMException('denied', 'SecurityError');
@@ -381,7 +423,7 @@ describe('notices and subscriptions', () => {
       client: fakeClient(() => Promise.resolve(err({ code: 'invalid' }))),
       storage: null,
     });
-    await store.submit(festival);
+    await store.submit(festival).settled;
     store.dismissNotice('storage');
     expect(store.getState().notices.map((n) => n.id)).toEqual(['ai']);
     const before = store.getState();
@@ -393,7 +435,7 @@ describe('notices and subscriptions', () => {
     const { store } = setup();
     const listener = vi.fn();
     const unsubscribe = store.subscribe(listener);
-    await store.submit(festival);
+    await store.submit(festival).settled;
     const seen = listener.mock.calls.length;
     expect(seen).toBeGreaterThanOrEqual(2);
     unsubscribe();
@@ -403,7 +445,7 @@ describe('notices and subscriptions', () => {
 
   it('keeps the same snapshot when an action changes nothing', async () => {
     const { store } = setup();
-    await store.submit(festival);
+    await store.submit(festival).settled;
     const before = store.getState();
     store.toggleTask('no-such-task');
     expect(store.getState()).toBe(before);
@@ -414,7 +456,7 @@ describe('syncToday', () => {
   it('moves the plan to the new day only when the date has changed', async () => {
     let now = today;
     const { store } = setup({ day: () => now });
-    await store.submit(festival);
+    await store.submit(festival).settled;
     const before = store.getState();
     store.syncToday();
     expect(store.getState()).toBe(before);

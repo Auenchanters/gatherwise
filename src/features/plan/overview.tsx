@@ -108,7 +108,11 @@ export function Overview({ state, snapshot, onPersonalize }: OverviewProps): Rea
         <Tile
           label="AI calls this session"
           value={formatCount(snapshot.calls)}
-          note="Edits recompute instantly with no AI call"
+          note={
+            state.ai.status === 'pending'
+              ? '1 call in progress'
+              : 'Edits recompute instantly with no AI call'
+          }
           tone="accent"
         />
       </dl>

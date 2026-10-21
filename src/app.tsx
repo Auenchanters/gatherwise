@@ -8,14 +8,14 @@
  * break the first-page budget, R66); start an AI call (only planner commands do); read the clock
  * outside `todayIso`; or render more than one `<main>` or `<h1>`.
  */
-import { Suspense, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { BriefForm } from './features/brief/brief-form.js';
 import { Landing } from './features/brief/landing.js';
 import { sampleBrief, type SampleKind } from './features/brief/samples.js';
 import type { PlanClient } from './features/client/api-client.js';
 import type { PlannerStorage, PlannerStore } from './features/plan/planner-store.js';
-import { STORAGE_KEY } from './features/plan/storage-key.js';
+import { PLAN_ERROR_ID, STORAGE_KEY } from './features/plan/storage-key.js';
 import { todayIso } from './features/plan/today.js';
 import type { EventBrief } from './shared/schema.js';
 
@@ -120,11 +120,21 @@ export function App({ client, storage: given }: AppProps): ReactElement {
     setSeed((current) => ({ key: current.key + 1, initial: undefined }));
   };
 
-  /** The form's submit: start the plan, loading the planner first if this is the first one. */
+  /** Moves focus to the planner's message saying why a brief was refused. */
+  const focusPlanError = (): void => {
+    document.getElementById(PLAN_ERROR_ID)?.focus();
+  };
+
+  /**
+   * The form's submit: start the plan, loading the planner first if this is the first one. Each
+   * update is rendered at once (`flushSync`), so a refusal's message exists to take focus, and a
+   * refused brief stays in the form.
+   */
   const submit = (brief: EventBrief): void => {
     if (session) {
-      void session.store.submit(brief);
-      blankForm();
+      const { accepted } = flushSync(() => session.store.submit(brief));
+      if (accepted) blankForm();
+      else focusPlanError();
       return;
     }
     if (opening.current) return;
@@ -133,12 +143,14 @@ export function App({ client, storage: given }: AppProps): ReactElement {
     void loadPlanner()
       .then(
         (planner) => {
-          setSession({
-            Planner: planner.Planner,
-            store: planner.startPlan(brief, { storage, client }),
+          const { store, accepted } = planner.startPlan(brief, { storage, client });
+          flushSync(() => {
+            setSession({ Planner: planner.Planner, store });
+            setStatus('');
+            // The form remounts inside the planner; a refused brief comes back filled in.
+            setSeed((current) => ({ key: current.key + 1, initial: accepted ? undefined : brief }));
           });
-          setStatus('');
-          blankForm();
+          if (!accepted) focusPlanError();
         },
         () => {
           setStatus(OPEN_FAILED);
@@ -176,17 +188,9 @@ export function App({ client, storage: given }: AppProps): ReactElement {
       </section>
     );
   } else if (session) {
-    content = (
-      <Suspense
-        fallback={
-          <p className="app-status" role="status">
-            Opening your plan…
-          </p>
-        }
-      >
-        <session.Planner store={session.store}>{start}</session.Planner>
-      </Suspense>
-    );
+    // The planner module has already loaded (the status said "Opening your plan…" meanwhile), so
+    // there is nothing left to suspend on.
+    content = <session.Planner store={session.store}>{start}</session.Planner>;
   }
 
   return (

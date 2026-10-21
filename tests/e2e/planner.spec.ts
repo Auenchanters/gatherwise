@@ -79,7 +79,7 @@ test('the community sample becomes a plan with one AI call, and edits and reload
   ]);
 
   // Overview: the AI panel shows the prompt that was sent, and the counter says 1.
-  const prompt = page.getByRole('region', { name: 'What we sent to Gemini' }).locator('pre');
+  const prompt = page.getByRole('region', { name: 'What we sent to Gemini' });
   await expect(prompt).toContainText('You are Gatherwise');
   await expect(prompt).toContainText('"name": "Green Park Diwali Mela"');
   await expect(page.getByRole('region', { name: 'Engine adjustments' })).toContainText(

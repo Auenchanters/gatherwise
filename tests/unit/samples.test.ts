@@ -8,6 +8,7 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { addDays, isoDate } from '../../src/domain/dates.js';
+import { buildPlan } from '../../src/domain/plan.js';
 import { eventDateOf } from '../../src/domain/schedule.js';
 import { sampleBrief } from '../../src/features/brief/samples.js';
 import { eventBriefSchema } from '../../src/shared/schema.js';
@@ -30,12 +31,18 @@ describe('sampleBrief', () => {
     },
   );
 
+  it('the community sample leaves time for every task, so the first plan opens calm (R71)', () => {
+    const plan = buildPlan(sampleBrief('community', today), today);
+    if (!plan.ok) throw new Error('the sample must plan');
+    expect(plan.value.schedule.infeasibleCount + plan.value.schedule.overdueCount).toBe(0);
+  });
+
   it('the community sample is a lantern-lit Diwali mela with stalls and sponsors', () => {
     expect(sampleBrief('community', today)).toEqual({
       kind: 'community',
       subtype: 'festival',
       name: 'Green Park Diwali Mela',
-      date: '2026-11-30',
+      date: '2027-01-04',
       startTime: '18:00',
       durationHours: 5,
       city: 'New Delhi',

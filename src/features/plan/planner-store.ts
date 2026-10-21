@@ -64,6 +64,14 @@ export interface PlannerDeps {
   readonly today: () => IsoDate;
 }
 
+/** What `submit` did with a brief. */
+interface Submission {
+  /** False when the brief cannot be planned (its date); the state's `error` says why. */
+  readonly accepted: boolean;
+  /** Settles once the brief's AI request has (or, when refused, at once). Never rejects. */
+  readonly settled: Promise<void>;
+}
+
 /** The planner's state and commands. Members are plain functions, safe to pass around unbound. */
 export interface PlannerStore {
   readonly getState: () => PlannerSnapshot;
@@ -71,8 +79,8 @@ export interface PlannerStore {
   readonly subscribe: (listener: () => void) => () => void;
   /** Restores the saved plan, if any. Never calls the AI. */
   readonly hydrate: () => void;
-  /** Starts a plan for `brief`, then asks the AI once. Resolves when the answer is applied. */
-  readonly submit: (brief: EventBrief) => Promise<void>;
+  /** Starts a plan for `brief`, then asks the AI once. A refused brief changes nothing else. */
+  readonly submit: (brief: EventBrief) => Submission;
   /** Asks the AI for the current brief (answered from the cache if it was asked before). */
   readonly personalize: () => Promise<void>;
   /** Asks the AI again for fresh ideas: always one call. Ignored while a request is pending. */
@@ -90,6 +98,8 @@ export interface PlannerStore {
   /** Moves the plan to the new day if the date has changed since it was built. */
   readonly syncToday: () => void;
   readonly dismissNotice: (id: string) => void;
+  /** Aborts any request in flight; its answer is dropped. For when the planner goes away. */
+  readonly dispose: () => void;
 }
 
 const UNREADABLE: Notice = {
@@ -144,11 +154,21 @@ export function createPlannerStore({ client, storage, today }: PlannerDeps): Pla
   };
   const listeners = new Set<() => void>();
   let inFlight: AbortController | undefined;
+  /** The client's count when the request in flight started; the UI shows that one as "in progress". */
+  let callsBefore = client.calls();
   let storageWarned = false;
 
+  /** Settled calls: the one in flight counts once it settles, whenever the client ticks. */
+  const settledCalls = (): number => (inFlight ? callsBefore : client.calls());
+
   function set(patch: Partial<Omit<PlannerSnapshot, 'calls'>>): void {
-    snapshot = { ...snapshot, ...patch, calls: client.calls() };
+    snapshot = { ...snapshot, ...patch, calls: settledCalls() };
     for (const listener of listeners) listener();
+  }
+
+  function abort(): void {
+    inFlight?.abort();
+    inFlight = undefined;
   }
 
   /** Moves to `plan` with `patch`, saves it, and adds the storage notice the first time saving fails. */
@@ -174,8 +194,9 @@ export function createPlannerStore({ client, storage, today }: PlannerDeps): Pla
   async function ask(opts?: { readonly refresh: true }): Promise<void> {
     const state = snapshot.plan;
     if (state.phase !== 'ready') return;
-    inFlight?.abort();
+    abort();
     const controller = new AbortController();
+    callsBefore = client.calls();
     inFlight = controller;
     const { brief, generation } = state;
     const sent = { sentBrief: brief };
@@ -186,8 +207,8 @@ export function createPlannerStore({ client, storage, today }: PlannerDeps): Pla
     const result = await client.suggest(brief, controller.signal, opts);
     if (inFlight === controller) inFlight = undefined;
     if (controller.signal.aborted) {
-      // A newer submit or a reset took over; only the call count may have moved.
-      if (client.calls() !== snapshot.calls) set({});
+      // A newer submit, a reset or dispose took over; only the call count may have moved.
+      if (settledCalls() !== snapshot.calls) set({});
       return;
     }
     if (result.ok) {
@@ -211,8 +232,7 @@ export function createPlannerStore({ client, storage, today }: PlannerDeps): Pla
   const idle = (): Promise<void> => Promise.resolve();
 
   function reset(): void {
-    inFlight?.abort();
-    inFlight = undefined;
+    abort();
     dispatch({ type: 'plan/reset' }, { aiView: NO_AI, notices: withoutAiNotice() });
   }
 
@@ -241,11 +261,11 @@ export function createPlannerStore({ client, storage, today }: PlannerDeps): Pla
       if (!accepted) {
         // The old plan (and any request for it) stays; the reducer has set why.
         commit(next);
-        return idle();
+        return { accepted, settled: idle() };
       }
       const kept = snapshot.notices.filter((n) => n.id === 'storage');
       commit(next, { aiView: NO_AI, notices: kept });
-      return ask();
+      return { accepted, settled: ask() };
     },
     personalize: () => (inFlight ? idle() : ask()),
     refreshIdeas: () => (inFlight ? idle() : ask({ refresh: true })),
@@ -284,5 +304,6 @@ export function createPlannerStore({ client, storage, today }: PlannerDeps): Pla
         set({ notices: snapshot.notices.filter((n) => n.id !== id) });
       }
     },
+    dispose: abort,
   };
 }

@@ -10,6 +10,7 @@
  */
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { StrictMode } from 'react';
 import { describe, expect, it } from 'vitest';
 import { addDays, isoDate } from '../../src/domain/dates.js';
 import { formatMoney } from '../../src/domain/money.js';
@@ -19,7 +20,7 @@ import { clientErrorMessage } from '../../src/features/client/messages.js';
 import { savePlan } from '../../src/features/plan/persist.js';
 import { Planner } from '../../src/features/plan/planner.js';
 import { createPlannerStore } from '../../src/features/plan/planner-store.js';
-import { STORAGE_KEY } from '../../src/features/plan/storage-key.js';
+import { PLAN_ERROR_ID, STORAGE_KEY } from '../../src/features/plan/storage-key.js';
 import { SYSTEM_INSTRUCTION } from '../../src/shared/prompt.js';
 import { err, ok } from '../../src/shared/result.js';
 import type { EventBrief } from '../../src/shared/schema.js';
@@ -48,7 +49,7 @@ async function setup({
   const user = userEvent.setup();
   const store = createPlannerStore({ client, storage, today: () => today });
   // Not awaited: a fake that never answers leaves the plan pending, as a slow model would.
-  if (start) void store.submit(start);
+  if (start) store.submit(start);
   render(
     <main tabIndex={-1}>
       <Planner store={store}>
@@ -69,6 +70,12 @@ function statusRegion(): HTMLElement {
   return region;
 }
 
+/** The text of every element an input's aria-describedby points at. */
+function descriptionOf(element: HTMLElement): string {
+  const ids = element.getAttribute('aria-describedby')?.split(' ') ?? [];
+  return ids.map((id) => document.getElementById(id)?.textContent ?? '').join(' ');
+}
+
 /** The Allocated cell of a budget row, by category label. */
 const allocated = (label: string): string =>
   within(screen.getByRole('row', { name: new RegExp(`^${label}`, 'u') })).getAllByRole('cell')[0]
@@ -83,7 +90,7 @@ describe('workspace: opening a plan', () => {
     expect(document.activeElement).toBe(heading);
     const facts = screen.getByRole('list', { name: 'Event facts' }).textContent;
     expect(facts).toContain('Community event · Festival or fair');
-    expect(facts).toContain('40 days to go');
+    expect(facts).toContain('75 days to go');
     expect(facts).toContain('250 guests');
     expect(facts).toContain('₹1,50,000.00 budget');
   });
@@ -141,11 +148,45 @@ describe('workspace: zero-call edits', () => {
     await user.clear(guests);
     await user.type(guests, '0');
     expect(guests).toHaveProperty('value', '0');
-    expect(screen.getByRole('alert').textContent).toContain(
-      'Guests must be a whole number from 1 to 5,000',
-    );
+    const copy =
+      'Guests must be a whole number from 1 to 5,000 — the plan still uses the last valid number.';
+    expect(screen.getByRole('alert').textContent).toContain(copy);
+    // WCAG 3.3.1: the refused field itself is marked and described.
+    expect(guests.getAttribute('aria-invalid')).toBe('true');
+    expect(descriptionOf(guests)).toBe(`Error: ${copy}`);
+    expect(
+      screen.getByRole('spinbutton', { name: 'Total budget' }).getAttribute('aria-invalid'),
+    ).toBeNull();
     const state = store.getState().plan;
     expect(state.phase === 'ready' && state.brief.guests).toBe(250);
+    await user.type(guests, '5');
+    expect(guests.getAttribute('aria-invalid')).toBeNull();
+    expect(screen.getByRole('alert').textContent).toBe('');
+  });
+
+  it('a blank field waits until the user leaves it before it is refused', async () => {
+    const { user } = await setup();
+    await user.click(screen.getByRole('tab', { name: 'Budget' }));
+    const budget = screen.getByRole('spinbutton', { name: 'Total budget' });
+    await user.clear(budget);
+    expect(screen.getByRole('alert').textContent).toBe('');
+    expect(budget.getAttribute('aria-invalid')).toBeNull();
+    await user.keyboard('{Enter}');
+    expect(budget.getAttribute('aria-invalid')).toBe('true');
+    expect(descriptionOf(budget)).toContain('The budget must be a whole number from 1');
+
+    const guests = screen.getByRole('spinbutton', { name: 'Guests attending' });
+    await user.clear(guests);
+    expect(guests.getAttribute('aria-invalid')).toBeNull();
+    await user.tab();
+    expect(guests.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByRole('alert').textContent).toContain('Guests must be a whole number');
+
+    const date = screen.getByLabelText('Event date');
+    await user.clear(date);
+    await user.tab();
+    expect(date.getAttribute('aria-invalid')).toBe('true');
+    expect(descriptionOf(date)).toContain('Enter the event date as a real calendar date');
   });
 
   it('a new budget and date re-plan and are announced', async () => {
@@ -206,7 +247,7 @@ describe('workspace: AI failure', () => {
     const { user } = await setup({
       client: fakeClient(() => Promise.resolve(err({ code: 'network' }))),
     });
-    await user.click(screen.getByRole('button', { name: 'Dismiss this notice' }));
+    await user.click(screen.getByRole('button', { name: /^Dismiss: Can't reach the AI service/u }));
     expect(statusRegion().textContent).toBe('');
   });
 });
@@ -227,8 +268,56 @@ describe('workspace: infeasible deadlines', () => {
   });
 
   it('is absent when every deadline can be met', async () => {
-    await setup({ start: { ...festival, date: addDays(today, 200) } });
+    await setup();
     expect(screen.queryByRole('region', { name: "Some deadlines can't be met" })).toBeNull();
+  });
+
+  it('labels a task Gemini added as AI text', async () => {
+    // Due a year before an event 200 days away, so the AI task is the only one overdue.
+    const lateTask = {
+      title: 'Book the lantern makers',
+      categoryId: 'decor',
+      durationDays: 5,
+      leadDays: 365,
+      after: [],
+    };
+    const suggestions = { ...aiSuggestions, extraTasks: [lateTask] };
+    const client = fakeClient(() =>
+      Promise.resolve(ok({ suggestions, meta: aiMeta, cached: false })),
+    );
+    await setup({ client, start: { ...festival, date: addDays(today, 200) } });
+    const banner = screen.getByRole('region', { name: "Some deadlines can't be met" });
+    const [item, ...rest] = within(banner).getAllByRole('listitem');
+    expect(rest).toHaveLength(0);
+    expect(item?.textContent).toContain('Book the lantern makers');
+    expect(item?.textContent).toContain('AI · personalized');
+    expect(item?.textContent).toContain('Overdue');
+  });
+});
+
+describe('workspace: lifecycle', () => {
+  it('aborts the request in flight when the planner unmounts', async () => {
+    const client = fakeClient(() => new Promise<Answer>(() => undefined));
+    const store = createPlannerStore({ client, storage: null, today: () => today });
+    store.submit(festival);
+    const { unmount } = render(<Planner store={store}>{null}</Planner>);
+    const signal = client.suggest.mock.calls[0]?.[1];
+    unmount();
+    await Promise.resolve();
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it('keeps the request under StrictMode, which unmounts and remounts once', async () => {
+    const client = fakeClient(() => new Promise<Answer>(() => undefined));
+    const store = createPlannerStore({ client, storage: null, today: () => today });
+    store.submit(festival);
+    render(
+      <StrictMode>
+        <Planner store={store}>{null}</Planner>
+      </StrictMode>,
+    );
+    await settle();
+    expect(client.suggest.mock.calls[0]?.[1].aborted).toBe(false);
   });
 });
 
@@ -238,12 +327,15 @@ describe('workspace: AI at work', () => {
     const panel = screen.getByText('AI at work').closest('details');
     if (!panel) throw new Error('no AI panel');
     expect(panel.open).toBe(true);
-    const prompt = within(panel).getByRole('region', { name: 'What we sent to Gemini' });
-    const sent = within(prompt).getByText(/System instruction/u, { selector: 'pre' });
+    // Each receipt is itself a named, focusable region.
+    const sent = within(panel).getByRole('region', { name: 'What we sent to Gemini' });
+    expect(sent.tagName).toBe('PRE');
     expect(sent.tabIndex).toBe(0);
     expect(sent.textContent).toContain(SYSTEM_INSTRUCTION);
     expect(sent.textContent).toContain('"name": "Green Park Diwali Mela"');
     const answer = within(panel).getByRole('region', { name: 'What came back (validated)' });
+    expect(answer.tagName).toBe('PRE');
+    expect(answer.tabIndex).toBe(0);
     expect(answer.textContent).toContain('"title": "Diya-lined walkways"');
     const adjustments = within(panel).getByRole('region', { name: 'Engine adjustments' });
     expect(adjustments.textContent).toContain('Clamped');
@@ -252,6 +344,15 @@ describe('workspace: AI at work', () => {
     expect(meta).toContain('gemini-3.5-flash-lite');
     expect(meta).toContain('1.8 s');
     expect(meta).toContain('1,075 / 1,018');
+    // The count appears once in the panel (its meta) and once on the Overview tile.
+    expect(screen.getAllByText('AI calls this session')).toHaveLength(2);
+  });
+
+  it('counts the request in flight as in progress until it settles', async () => {
+    await setup({ client: fakeClient(() => new Promise<Answer>(() => undefined)) });
+    const meta = document.querySelector('.ai-panel__calls dd');
+    expect(meta?.textContent).toBe('0 (1 in progress)');
+    expect(screen.getByText('1 call in progress')).toBeTruthy();
   });
 
   it('keeps showing the brief that was sent after the guests change', async () => {
@@ -400,6 +501,41 @@ describe('workspace: header actions', () => {
     expect(client.suggest).toHaveBeenCalledTimes(2);
   });
 
+  it('a refused edit keeps the form and what was typed, and focuses the reason', async () => {
+    let now = today;
+    const client = fakeClient();
+    const store = createPlannerStore({ client, storage: null, today: () => now });
+    await act(() => store.submit(festival).settled);
+    const user = userEvent.setup();
+    render(
+      <main tabIndex={-1}>
+        <Planner store={store}>{null}</Planner>
+      </main>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Edit details' }));
+    const name = screen.getByRole('textbox', { name: 'Event name' });
+    await user.clear(name);
+    await user.type(name, 'Kept name');
+    const date = screen.getByLabelText('Date');
+    await user.clear(date);
+    await user.type(date, today);
+    // The day turns while the form is open: the form accepts today, the plan no longer can.
+    now = addDays(today, 1);
+    await user.click(screen.getByRole('button', { name: 'Generate my plan' }));
+    await waitFor(() => {
+      expect(document.activeElement).toBe(document.getElementById(PLAN_ERROR_ID));
+    });
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Choose a date from today onwards — the plan still uses the last valid date.',
+    );
+    expect(screen.getByRole('textbox', { name: 'Event name' })).toHaveProperty(
+      'value',
+      'Kept name',
+    );
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Green Park Diwali Mela');
+    expect(client.suggest).toHaveBeenCalledTimes(1);
+  });
+
   it('New plan closes the workspace and moves focus to main', async () => {
     const { user } = await setup();
     await user.click(screen.getByRole('button', { name: 'New plan' }));
@@ -423,7 +559,7 @@ describe('workspace: header actions', () => {
       storage: null,
       today: () => now,
     });
-    await act(() => moved.submit(festival));
+    await act(() => moved.submit(festival).settled);
     render(<Planner store={moved}>{null}</Planner>);
     now = addDays(today, 1);
     act(() => {

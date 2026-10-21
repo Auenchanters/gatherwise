@@ -1,6 +1,6 @@
 /**
  * Number and date wording shared by the workspace views, in the product's default locale.
- * Never does: compute a figure; every number shown comes from the engine.
+ * Never does: compute a figure; every number shown comes from the engine or the client's counter.
  */
 import { formatDate, type IsoDate } from '../../domain/dates.js';
 
@@ -17,3 +17,7 @@ export const countOf = (n: number, one: string, many: string): string =>
 
 /** A date such as `30 Nov 2026`. */
 export const showDate = (d: IsoDate): string => formatDate(d, LOCALE);
+
+/** The session's settled AI calls, plus the one in flight while a request is pending. */
+export const callCount = (calls: number, pending: boolean): string =>
+  pending ? `${formatCount(calls)} (1 in progress)` : formatCount(calls);

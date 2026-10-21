@@ -16,6 +16,7 @@ import { Header } from './header.js';
 import { InfeasibleBanner } from './infeasible-banner.js';
 import { Overview } from './overview.js';
 import type { PlannerSnapshot, PlannerStore } from './planner-store.js';
+import { PLAN_ERROR_ID } from './storage-key.js';
 import { panelId, tabId, Tabs, type TabSpec } from './tabs.js';
 
 type TabId = 'overview' | 'budget' | 'timeline' | 'vendors' | 'ideas' | 'volunteers';
@@ -105,8 +106,11 @@ export function Workspace({ state, snapshot, store }: WorkspaceProps): ReactElem
             today={state.today}
             headingRef={formHeadingRef}
             onSubmit={(brief) => {
-              setEditing(false);
-              void store.submit(brief);
+              // Rendered at once, so a refusal's message exists to take focus.
+              const { accepted } = flushSync(() => store.submit(brief));
+              // A refused brief keeps the form, with everything typed, and says why.
+              if (accepted) setEditing(false);
+              else document.getElementById(PLAN_ERROR_ID)?.focus();
             }}
           />
           <button

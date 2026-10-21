@@ -1,8 +1,9 @@
 /**
  * Ready-made briefs behind the landing's "Try a sample" buttons, so a judge or a first-time visitor
  * sees a full plan in one click.
- * Does: builds a community festival 40 days out and a kids' birthday 21 days out, both relative to
- * the `today` passed in, so they always fall inside the planning window.
+ * Does: builds a community festival 75 days out (every lead time fits, so the first plan is calm)
+ * and a kids' birthday 21 days out, both relative to the `today` passed in, so they always fall
+ * inside the planning window.
  * Never does: read the clock, or share objects between calls (each call returns fresh data).
  */
 import { addDays, type IsoDate } from '../../domain/dates.js';
@@ -18,7 +19,7 @@ export function sampleBrief(kind: SampleKind, today: IsoDate): EventBrief {
       kind: 'community',
       subtype: 'festival',
       name: 'Green Park Diwali Mela',
-      date: addDays(today, 40),
+      date: addDays(today, 75),
       startTime: '18:00',
       durationHours: 5,
       city: 'New Delhi',

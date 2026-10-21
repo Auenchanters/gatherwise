@@ -17,7 +17,7 @@ import { isoDate } from '../../src/domain/dates.js';
 import { initialPlanState, planReducer } from '../../src/domain/reducer.js';
 import { sampleBrief } from '../../src/features/brief/samples.js';
 import { savePlan } from '../../src/features/plan/persist.js';
-import { STORAGE_KEY } from '../../src/features/plan/storage-key.js';
+import { PLAN_ERROR_ID, STORAGE_KEY } from '../../src/features/plan/storage-key.js';
 import { fakeClient, memoryStorage, type MemoryStorage } from '../support/fakes.js';
 
 const PLANNER = '../../src/features/plan/planner.js';
@@ -164,6 +164,36 @@ describe('App planner', () => {
       'Plan a celebration that adds up',
     );
     expect(storage.removed).toEqual([STORAGE_KEY]);
+  });
+
+  it('a brief the planner refuses stays in the form, and its reason takes focus', async () => {
+    const { user, client } = setup();
+    await user.click(screen.getByRole('button', { name: 'Try a sample community event' }));
+    const date = screen.getByLabelText('Date');
+    await user.clear(date);
+    await user.type(date, today);
+    // The day turns after the page loaded: the form still accepts today, the planner cannot.
+    vi.setSystemTime(new Date(2026, 9, 22, 12));
+    const expectRefused = async () => {
+      await waitFor(() => {
+        expect(document.activeElement).toBe(document.getElementById(PLAN_ERROR_ID));
+      });
+      expect(screen.getByRole('alert').textContent).toContain('Choose a date from today onwards.');
+      expect(screen.getByRole('textbox', { name: 'Event name' })).toHaveProperty(
+        'value',
+        'Green Park Diwali Mela',
+      );
+      expect(screen.getByLabelText('Date')).toHaveProperty('value', today);
+      expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
+        'Plan a celebration that adds up',
+      );
+    };
+    // First through the planner chunk loading, then through the loaded planner.
+    await user.click(screen.getByRole('button', { name: 'Generate my plan' }));
+    await expectRefused();
+    await user.click(screen.getByRole('button', { name: 'Generate my plan' }));
+    await expectRefused();
+    expect(client.suggest).not.toHaveBeenCalled();
   });
 
   it('keeps the landing usable when the planner cannot load', async () => {

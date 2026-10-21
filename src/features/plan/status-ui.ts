@@ -3,8 +3,13 @@
  * banners always show a status as the same text, icon and colour together.
  * Never does: decide a status (schedule.ts and vendors.ts do), or rely on colour alone.
  */
+import { AI_TASK_PREFIX } from '../../domain/merge.js';
 import type { Status } from '../../domain/schedule.js';
+import type { TaskId } from '../../domain/templates/types.js';
 import type { BookingStatus } from '../../domain/vendors.js';
+
+/** Whether a task came from Gemini rather than the template, so it must carry the AI label. */
+export const isAiTask = (id: TaskId): boolean => id.startsWith(AI_TASK_PREFIX);
 
 /** The look of one status. The icon is decorative (render it `aria-hidden`); the label carries it. */
 interface StatusUi {
