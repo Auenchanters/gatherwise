@@ -57,8 +57,9 @@ export function Notices({ snapshot, onDismiss }: NoticesProps): ReactElement {
   const landed = status === 'applied' && aiView.sentBrief !== undefined;
   return (
     <div className="notices">
-      {/* Not atomic: a new notice is read on its own, not with every notice already showing. */}
-      <div role="status" aria-atomic="false">
+      {/* Named, so it is told apart from the page's other status regions. Not atomic: a new notice
+          is read on its own, not with every notice already showing. */}
+      <div role="status" aria-label="Notices" aria-atomic="false">
         {status === 'pending' && (
           <p className="notice notice--info">
             <span className="spinner" aria-hidden="true" />

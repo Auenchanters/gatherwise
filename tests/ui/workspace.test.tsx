@@ -15,9 +15,11 @@ import { describe, expect, it } from 'vitest';
 import { addDays } from '../../src/domain/dates.js';
 import { formatMoney } from '../../src/domain/money.js';
 import { initialPlanState, planReducer } from '../../src/domain/reducer.js';
+import type { ScheduledTask, Status } from '../../src/domain/schedule.js';
 import { sampleBrief } from '../../src/features/brief/samples.js';
 import { clientErrorMessage } from '../../src/features/client/messages.js';
 import { savePlan } from '../../src/features/plan/persist.js';
+import { InfeasibleBanner } from '../../src/features/plan/infeasible-banner.js';
 import { Planner } from '../../src/features/plan/planner.js';
 import { createPlannerStore } from '../../src/features/plan/planner-store.js';
 import { PLAN_ERROR_ID, STORAGE_KEY } from '../../src/features/plan/storage-key.js';
@@ -27,12 +29,8 @@ import { fakeClient, memoryStorage, type Answer } from '../support/fakes.js';
 import { aiMeta, aiSuggestions } from '../support/fixtures.js';
 import { festival, settle, setup, today } from '../support/planner-ui.js';
 
-/** The planner's polite region: the first in the page (the tabs have polite regions of their own). */
-function statusRegion(): HTMLElement {
-  const [region] = screen.getAllByRole('status');
-  if (!region) throw new Error('no notices region');
-  return region;
-}
+/** The planner's polite region, by its name (the tabs have status regions of their own). */
+const statusRegion = (): HTMLElement => screen.getByRole('status', { name: 'Notices' });
 
 /** The text of every element an input's aria-describedby points at. */
 function descriptionOf(element: HTMLElement): string {
@@ -231,6 +229,42 @@ describe('workspace: infeasible deadlines', () => {
     const tab = screen.getByRole('tab', { name: 'Timeline' });
     expect(tab.getAttribute('aria-selected')).toBe('true');
     expect(document.activeElement).toBe(tab);
+  });
+
+  it('lists tasks that cannot be done in time before overdue ones, each group in schedule order', () => {
+    const task = (title: string, status: Status): ScheduledTask => ({
+      id: title,
+      title,
+      categoryId: 'general',
+      start: today,
+      end: today,
+      latestStart: today,
+      latestEnd: today,
+      slackDays: 0,
+      status,
+      dependsOn: [],
+    });
+    const tasks = [
+      task('Late A', 'overdue'),
+      task('Tight B', 'infeasible'),
+      task('Late C', 'overdue'),
+      task('Tight D', 'infeasible'),
+    ];
+    render(
+      <InfeasibleBanner
+        schedule={{ tasks, infeasibleCount: 2, overdueCount: 2 }}
+        timelineId="timeline"
+        onSeeTimeline={() => undefined}
+      />,
+    );
+    const items = within(screen.getByRole('region')).getAllByRole('listitem');
+    expect(items.map((item) => within(item).getByText(/^(Late|Tight) /u).textContent)).toEqual([
+      'Tight B',
+      'Tight D',
+      'Late A',
+      'Late C',
+    ]);
+    expect(items[0]?.textContent).toContain("Can't be done in time");
   });
 
   it('is absent when every deadline can be met', async () => {

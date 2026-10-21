@@ -1,7 +1,8 @@
 /**
  * The banner for deadlines that cannot be met: shown whenever the timeline has infeasible or
  * overdue tasks, naming up to five of them with their status (tasks Gemini added carry the AI
- * label), and linking to the timeline.
+ * label), and linking to the timeline. Tasks that cannot be done in time come first, then overdue
+ * ones, each group in schedule order.
  * Never does: soften a deadline or hide that a task cannot be done in time (Review Focus 1).
  */
 import { useId, type MouseEvent, type ReactElement } from 'react';
@@ -31,7 +32,10 @@ export function InfeasibleBanner({
   const titleId = useId();
   const total = schedule.infeasibleCount + schedule.overdueCount;
   if (total === 0) return null;
-  const blocked = schedule.tasks.filter((t) => t.status === 'infeasible' || t.status === 'overdue');
+  const blocked = [
+    ...schedule.tasks.filter((t) => t.status === 'infeasible'),
+    ...schedule.tasks.filter((t) => t.status === 'overdue'),
+  ];
   return (
     <section className="banner" aria-labelledby={titleId}>
       <h2 className="banner__title" id={titleId}>
