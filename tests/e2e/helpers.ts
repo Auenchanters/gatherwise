@@ -1,7 +1,8 @@
 /**
  * Shared pieces of the plan workspace's browser journeys.
  * Does: serve every response under the production CSP, answer `/api/plan` with the fixed answer
- * (shaped like the real API) while recording each request body and console error, run axe at WCAG
+ * (shaped like the real API) or, when a test passes one, a failure, while recording each request
+ * body and console error, run axe at WCAG
  * 2.1 A and AA, check for sideways page scroll, and open the community sample's plan.
  * Never does: reach a real model.
  */
@@ -23,11 +24,23 @@ export const CSP = /"Content-Security-Policy",\s*"value":\s*"([^"]+)"/u.exec(
   readFileSync('vercel.json', 'utf8'),
 )?.[1];
 
+/** What the mocked `/api/plan` answers with: a status and a JSON body. */
+export interface PlanReply {
+  readonly status: number;
+  readonly body: unknown;
+}
+
+/** The fixed good answer, shaped as the real API returns it. */
+const GOOD_REPLY: PlanReply = { status: 200, body: { suggestions: aiSuggestions, meta: aiMeta } };
+
 /**
- * Serves every response with the production CSP, answers `/api/plan` with the fixed answer, and
- * records each plan request body and each console error.
+ * Serves every response with the production CSP, answers `/api/plan` with `reply` (the fixed good
+ * answer unless a test says otherwise), and records each plan request body and each console error.
  */
-export async function prepare(page: Page): Promise<{ requests: unknown[]; errors: string[] }> {
+export async function prepare(
+  page: Page,
+  reply: PlanReply = GOOD_REPLY,
+): Promise<{ requests: unknown[]; errors: string[] }> {
   const requests: unknown[] = [];
   const errors: string[] = [];
   page.on('console', (message) => {
@@ -43,7 +56,7 @@ export async function prepare(page: Page): Promise<{ requests: unknown[]; errors
   // Registered last, so it handles /api/plan before the catch-all above.
   await page.route('**/api/plan', async (route) => {
     requests.push(route.request().postDataJSON());
-    await route.fulfill({ json: { suggestions: aiSuggestions, meta: aiMeta } });
+    await route.fulfill({ status: reply.status, json: reply.body });
   });
   return { requests, errors };
 }
