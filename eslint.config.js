@@ -43,6 +43,15 @@ export default tseslint.config(
     },
   },
   {
+    // The strict preset allows no exceptions here. The WAI-ARIA tabs pattern makes each tabpanel
+    // focusable (jsx-a11y's recommended preset allows that role too), and a scrollable <pre>
+    // must be focusable so keyboard users can scroll it (axe: scrollable-region-focusable).
+    files: ['src/**/*.tsx'],
+    rules: {
+      'jsx-a11y/no-noninteractive-tabindex': ['error', { tags: ['pre'], roles: ['tabpanel'] }],
+    },
+  },
+  {
     // Shipped code may not cast; `as const` stays allowed by this rule.
     files: ['src/**/*.{ts,tsx}', 'server/**/*.ts'],
     rules: {

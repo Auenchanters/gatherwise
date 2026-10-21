@@ -10,69 +10,25 @@
 import { describe, expect, it, vi } from 'vitest';
 import { addDays, isoDate, type IsoDate } from '../../src/domain/dates.js';
 import { initialPlanState, planReducer, type ReadyState } from '../../src/domain/reducer.js';
-import type {
-  ClientError,
-  PlanClient,
-  SuggestResponse,
-} from '../../src/features/client/api-client.js';
+import type { ClientError } from '../../src/features/client/api-client.js';
 import { clientErrorMessage } from '../../src/features/client/messages.js';
 import { savePlan } from '../../src/features/plan/persist.js';
 import { createPlannerStore, type PlannerSnapshot } from '../../src/features/plan/planner-store.js';
 import { STORAGE_KEY } from '../../src/features/plan/storage-key.js';
-import { err, ok, type Result } from '../../src/shared/result.js';
+import { err, ok } from '../../src/shared/result.js';
 import type { EventBrief } from '../../src/shared/schema.js';
+import {
+  deferred,
+  fakeClient,
+  freshAnswer as fresh,
+  memoryStorage,
+  type Answer,
+  type MemoryStorage,
+} from '../support/fakes.js';
 import { aiMeta, aiSuggestions, brief } from '../support/fixtures.js';
 
 const today = isoDate('2026-10-21');
 const festival = brief('community', { date: addDays(today, 40) });
-type Answer = Result<SuggestResponse, ClientError>;
-const fresh: Answer = ok({ suggestions: aiSuggestions, meta: aiMeta, cached: false });
-
-/** A promise the test settles by hand. */
-function deferred<T>() {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-}
-
-/**
- * A client whose `calls()` counts `suggest` calls as they start, like the real one's network
- * requests; `counting: false` stands for answers served from its cache. `answer` decides each
- * reply; by default a fresh success.
- */
-function fakeClient(
-  answer: (brief: EventBrief) => Promise<Answer> = () => Promise.resolve(fresh),
-  { counting = true } = {},
-) {
-  let calls = 0;
-  const suggest = vi.fn<PlanClient['suggest']>((b) => {
-    if (counting) calls += 1;
-    return answer(b);
-  });
-  return { suggest, calls: () => calls };
-}
-
-/** An in-memory store that records removals; `refuseWrites` makes `setItem` throw. */
-function memoryStorage(initial?: string, { refuseWrites = false } = {}) {
-  const data = new Map<string, string>(initial === undefined ? [] : [[STORAGE_KEY, initial]]);
-  const removed: string[] = [];
-  return {
-    removed,
-    getItem: (key: string): string | null => data.get(key) ?? null,
-    setItem: (key: string, value: string): void => {
-      if (refuseWrites) throw new DOMException('Quota exceeded', 'QuotaExceededError');
-      data.set(key, value);
-    },
-    removeItem: (key: string): void => {
-      removed.push(key);
-      data.delete(key);
-    },
-  };
-}
-
-type MemoryStorage = ReturnType<typeof memoryStorage>;
 
 function setup({
   client = fakeClient(),

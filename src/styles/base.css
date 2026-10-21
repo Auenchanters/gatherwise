@@ -23,6 +23,18 @@
   --status-risk: #92400e;
   --status-bad: #b91c1c;
   --status-done: #4a5662;
+  /* Chip backgrounds: each status colour on its soft tint is >= 5.6:1. */
+  --status-ok-soft: #e7f3eb;
+  --status-soon-soft: #e8eefc;
+  --status-risk-soft: #fbefe3;
+  --status-bad-soft: #fcebea;
+  --status-done-soft: #eef0f2;
+  /* AI labels: 7.7:1 on their tint. The receipt background keeps body text at 13:1. */
+  --color-ai: #5b21b6;
+  --color-ai-soft: #f1ebfd;
+  --color-surface-sunken: #f6f3ea;
+  --color-track: #e7e2d6;
+  --font-mono: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', Menlo, Consolas, monospace;
   --radius: 0.75rem;
   --radius-sm: 0.5rem;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.06);
