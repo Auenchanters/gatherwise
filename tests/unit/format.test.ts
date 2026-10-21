@@ -5,8 +5,18 @@
  * Never does: read the clock.
  */
 import { describe, expect, it } from 'vitest';
+import { buildBudget } from '../../src/domain/budget.js';
 import { isoDate } from '../../src/domain/dates.js';
-import { callCount, countOf, formatCount, showDate } from '../../src/features/plan/format.js';
+import { templateFor } from '../../src/domain/templates/index.js';
+import {
+  callCount,
+  categoryLabel,
+  countOf,
+  formatCount,
+  showDate,
+  showMonth,
+} from '../../src/features/plan/format.js';
+import { brief } from '../support/fixtures.js';
 
 describe('workspace wording', () => {
   it('groups counts the Indian way and picks the noun by number', () => {
@@ -17,6 +27,17 @@ describe('workspace wording', () => {
 
   it('shows dates as day, short month and year', () => {
     expect(showDate(isoDate('2026-12-05'))).toBe('5 Dec 2026');
+  });
+
+  it('names a month and year for the timeline groups, whatever the day', () => {
+    expect(showMonth(isoDate('2026-11-30'))).toBe('November 2026');
+    expect(showMonth(isoDate('2027-01-01'))).toBe('January 2027');
+  });
+
+  it('names a budget category by id, and shows an unknown id as it is', () => {
+    const budget = buildBudget(brief('community'), templateFor('community'), []);
+    expect(categoryLabel(budget, 'decor')).toBe('Décor');
+    expect(categoryLabel(budget, 'nope')).toBe('nope');
   });
 
   it('adds the request in flight to the settled count only while one is pending', () => {

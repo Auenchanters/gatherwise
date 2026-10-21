@@ -12,7 +12,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StrictMode } from 'react';
 import { describe, expect, it } from 'vitest';
-import { addDays, isoDate } from '../../src/domain/dates.js';
+import { addDays } from '../../src/domain/dates.js';
 import { formatMoney } from '../../src/domain/money.js';
 import { initialPlanState, planReducer } from '../../src/domain/reducer.js';
 import { sampleBrief } from '../../src/features/brief/samples.js';
@@ -23,43 +23,9 @@ import { createPlannerStore } from '../../src/features/plan/planner-store.js';
 import { PLAN_ERROR_ID, STORAGE_KEY } from '../../src/features/plan/storage-key.js';
 import { SYSTEM_INSTRUCTION } from '../../src/shared/prompt.js';
 import { err, ok } from '../../src/shared/result.js';
-import type { EventBrief } from '../../src/shared/schema.js';
-import { fakeClient, memoryStorage, type Answer, type MemoryStorage } from '../support/fakes.js';
+import { fakeClient, memoryStorage, type Answer } from '../support/fakes.js';
 import { aiMeta, aiSuggestions } from '../support/fixtures.js';
-
-const today = isoDate('2026-10-21');
-const festival = sampleBrief('community', today);
-
-/** Lets every answer the fake has already given land, and React render it. */
-const settle = () =>
-  act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-
-/** Renders the planner around a store with a fake client; `start` opens a plan. */
-async function setup({
-  client = fakeClient(),
-  storage = memoryStorage(),
-  start = festival,
-}: {
-  client?: ReturnType<typeof fakeClient>;
-  storage?: MemoryStorage;
-  start?: EventBrief | null;
-} = {}) {
-  const user = userEvent.setup();
-  const store = createPlannerStore({ client, storage, today: () => today });
-  // Not awaited: a fake that never answers leaves the plan pending, as a slow model would.
-  if (start) store.submit(start);
-  render(
-    <main tabIndex={-1}>
-      <Planner store={store}>
-        <p>Landing and form</p>
-      </Planner>
-    </main>,
-  );
-  await settle();
-  return { user, store, client, storage };
-}
+import { festival, settle, setup, today } from '../support/planner-ui.js';
 
 /** The planner's polite region (the Budget tab has a polite region of its own). */
 function statusRegion(): HTMLElement {
@@ -467,7 +433,7 @@ describe('workspace: tabs', () => {
     const birthday = sampleBrief('birthday', today);
     await setup({ start: birthday });
     expect(screen.queryByRole('tab', { name: 'Volunteers' })).toBeNull();
-    expect(screen.getAllByText('Coming in the next step.')).toHaveLength(3);
+    expect(screen.getAllByText('Coming in the next step.')).toHaveLength(2);
   });
 });
 
