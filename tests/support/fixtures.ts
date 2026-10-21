@@ -2,7 +2,8 @@
  * Shared test fixtures: ready-made valid briefs and a fast-check generator of schema-valid briefs.
  * Does: gives every test file one place to get an `EventBrief` from, so contracts are not copied
  * into each test. tests/unit/fixtures.test.ts keeps both exports honest against `eventBriefSchema`.
- * Also holds `dagArb`, random acyclic task lists for the scheduler tests.
+ * Also holds `dagArb`, random acyclic task lists for the scheduler tests, and `aiSuggestions` /
+ * `aiMeta`, one community answer shaped as `/api/plan` returns it (unit, UI and E2E tests share it).
  * Never does: read the clock (the date is a fixed string) or produce anything the schema rejects.
  */
 import fc from 'fast-check';
@@ -14,6 +15,8 @@ import {
   DIETARY_OPTIONS,
   SUBTYPES,
   VENUES,
+  type AiMeta,
+  type AiSuggestions,
   type EventBrief,
 } from '../../src/shared/schema.js';
 
@@ -200,3 +203,48 @@ export const dagArb: fc.Arbitrary<readonly TaskDef[]> = fc
     })),
   )
   .chain((tasks) => fc.shuffledSubarray(tasks, { minLength: tasks.length }));
+
+/**
+ * A schema-valid Gemini answer for the community template, shaped as `/api/plan` returns it. One
+ * idea costs 10^12 rupees, so the engine must clamp it and list the change under "Engine
+ * adjustments".
+ */
+export const aiSuggestions: AiSuggestions = {
+  summary: 'A lantern-lit, family-friendly mela that keeps food vegetarian and paths step-free.',
+  ideas: [
+    {
+      title: 'Diya-lined walkways',
+      description: 'Line the step-free paths with clay diyas from local potters.',
+      categoryId: 'decor',
+      estimatedCost: 6000,
+      personalization: 'vibe: lantern-lit; accessibility: wheelchair',
+    },
+    {
+      title: 'Fireworks finale',
+      description: 'A grand fireworks show over the grounds.',
+      categoryId: 'activities_entertainment',
+      estimatedCost: 1_000_000_000_000,
+      personalization: 'subtype: festival',
+    },
+  ],
+  weightHints: [{ categoryId: 'decor', factor: 1.2 }],
+  extraTasks: [
+    {
+      title: 'Order clay diyas',
+      categoryId: 'decor',
+      durationDays: 5,
+      leadDays: 10,
+      after: ['book_venue'],
+    },
+  ],
+  vendorQuestions: [{ vendorId: 'tent_shamiana', questions: ['Is the tent rain-proof?'] }],
+};
+
+/** The meta `/api/plan` returns beside `aiSuggestions`. */
+export const aiMeta: AiMeta = {
+  model: 'gemini-3.5-flash-lite',
+  latencyMs: 1840,
+  inputTokens: 1075,
+  outputTokens: 1018,
+  requestId: '3f2b8c1e-9d4a-4b6e-8a1c-5d7e9f0a1b2c',
+};

@@ -26,9 +26,10 @@ import {
   eventBriefSchema,
   type EventBrief,
 } from '../../shared/schema.js';
+import { STORAGE_KEY } from './storage-key.js';
 
-/** The storage key; the version in it changes with the stored shape. */
-export const STORAGE_KEY = 'gatherwise.plan.v1';
+// The key lives in an import-free module so the first page can check for a saved plan cheaply.
+export { STORAGE_KEY };
 
 /** The longest stored value, in characters, that `loadPlan` will parse. */
 export const MAX_STORED_CHARS = 200_000;
