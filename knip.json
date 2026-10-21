@@ -3,7 +3,7 @@
   "entry": [
     "api/*.ts",
     "scripts/*.ts",
-    "tests/**/*.{test,spec}.ts",
+    "tests/**/*.{test,spec}.{ts,tsx}",
     "scripts/*.mjs",
     "*.config.{ts,js}"
   ],
@@ -11,7 +11,7 @@
     "src/**/*.{ts,tsx}",
     "server/**/*.ts",
     "api/**/*.ts",
-    "tests/**/*.ts",
+    "tests/**/*.{ts,tsx}",
     "scripts/**/*.{ts,mjs}",
     "*.config.{ts,js}"
   ]

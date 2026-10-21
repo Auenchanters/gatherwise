@@ -1,10 +1,30 @@
-/* Colour pairs below all meet WCAG AA (>= 4.5:1) on --color-bg. */
+/*
+ * Design tokens and page-wide rules. Every text colour below meets WCAG AA (>= 4.5:1) on both
+ * --color-bg and --color-surface; --color-field-border meets the 3:1 non-text minimum for input
+ * edges. --color-border is decorative only (card edges), never the sole boundary of a control.
+ */
 :root {
   --color-bg: #fbf9f4;
+  --color-surface: #ffffff;
+  --color-border: #d9d4c7;
+  --color-field-border: #767060;
   --color-text: #1f2933;
   --color-muted: #4a5662;
   --color-accent: #0b5d56;
+  --color-accent-strong: #084a44;
+  --color-accent-soft: #e7f1ef;
   --color-on-accent: #ffffff;
+  --color-celebrate: #b45309;
+  --color-celebrate-soft: #fdf1e3;
+  --status-ok: #166534;
+  --status-soon: #1d4ed8;
+  --status-risk: #92400e;
+  --status-bad: #b91c1c;
+  --status-done: #4a5662;
+  --radius: 0.75rem;
+  --radius-sm: 0.5rem;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.06);
+  --tap: 2.75rem;
   --font-sans:
     system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
   color-scheme: light;
@@ -24,22 +44,40 @@ body {
   line-height: 1.6;
 }
 
+a {
+  color: var(--color-accent);
+}
+
 .site-header {
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--color-muted);
+  padding: 1rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
 
 .brand {
-  margin: 0;
-  font-size: 1.125rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  max-width: 72rem;
+  margin: 0 auto;
+}
+
+.brand__name {
+  font-size: 1.25rem;
   font-weight: 700;
   color: var(--color-accent);
 }
 
+.brand__tagline {
+  font-size: 0.9375rem;
+  color: var(--color-muted);
+}
+
 main {
-  max-width: 44rem;
+  max-width: 72rem;
   margin: 0 auto;
-  padding: 3rem 1.5rem;
+  padding: 1.5rem 1rem 4rem;
 }
 
 h1 {
@@ -48,22 +86,53 @@ h1 {
   line-height: 1.1;
 }
 
-.tagline {
-  margin: 0.5rem 0 1.5rem;
-  font-size: 1.375rem;
-  font-weight: 600;
-  color: var(--color-accent);
-}
-
-.lede {
-  margin: 0;
-  font-size: 1.125rem;
-  color: var(--color-muted);
-}
-
 :focus-visible {
   outline: 3px solid var(--color-accent);
   outline-offset: 2px;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap);
+  padding: 0.625rem 1.25rem;
+  border: 2px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button--primary {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.button--primary:hover {
+  background: var(--color-accent-strong);
+  border-color: var(--color-accent-strong);
+}
+
+.button--secondary {
+  background: var(--color-surface);
+  color: var(--color-accent);
+}
+
+.button--secondary:hover {
+  background: var(--color-accent-soft);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .skip-link {
@@ -80,6 +149,16 @@ h1 {
 .skip-link:focus {
   transform: translateY(0);
   outline-color: var(--color-text);
+}
+
+@media (min-width: 40rem) {
+  .site-header {
+    padding: 1rem 1.5rem;
+  }
+
+  main {
+    padding: 2.5rem 1.5rem 5rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
