@@ -14,13 +14,16 @@
 import { act, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { addDays } from '../../src/domain/dates.js';
-import { type ReadyState } from '../../src/domain/reducer.js';
+import { formatMoney } from '../../src/domain/money.js';
+import { initialPlanState, planReducer, type ReadyState } from '../../src/domain/reducer.js';
 import { sampleBrief } from '../../src/features/brief/samples.js';
+import { savePlan } from '../../src/features/plan/persist.js';
 import type { PlannerStore } from '../../src/features/plan/planner-store.js';
-import { ok } from '../../src/shared/result.js';
-import { fakeClient, type Answer } from '../support/fakes.js';
+import { STORAGE_KEY } from '../../src/features/plan/storage-key.js';
+import { err, ok } from '../../src/shared/result.js';
+import { deferred, fakeClient, freshAnswer, memoryStorage, type Answer } from '../support/fakes.js';
 import { aiMeta, aiSuggestions } from '../support/fixtures.js';
-import { festival, setup, today } from '../support/planner-ui.js';
+import { festival, settle, setup, today } from '../support/planner-ui.js';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -92,11 +95,12 @@ function captureDownloads() {
 }
 
 const DOWNLOAD = { name: 'Download calendar (.ics)' };
+const REFRESH = { name: 'Refresh ideas (1 AI call)' };
 
 describe('every new tab', () => {
   it('each starts at h2 and never skips a heading level', async () => {
     await setup();
-    for (const tab of ['Timeline', 'Vendors']) {
+    for (const tab of ['Timeline', 'Vendors', 'Ideas', 'Volunteers']) {
       const found = levels(tab);
       expect(found[0], tab).toBe(2);
       found.forEach((level, i) => {
@@ -424,5 +428,206 @@ describe('vendors', () => {
     const client = fakeClient(() => new Promise<Answer>(() => undefined));
     await setup({ client });
     expect(panel('Vendors').queryByRole('heading', { level: 4 })).toBeNull();
+  });
+});
+
+describe('ideas', () => {
+  it('shows each AI idea with category, cost, fit, source and why', async () => {
+    const { store } = await setup();
+    const { ideas } = ready(store).plan;
+    expect(ideas.every((idea) => idea.source === 'ai')).toBe(true);
+    const card = itemOf(
+      panel('Ideas').getByRole('heading', { level: 3, name: 'Diya-lined walkways' }),
+    );
+    const description = within(card).getByText(
+      'Line the step-free paths with clay diyas from local potters.',
+    );
+    expect(description.getAttribute('dir')).toBe('auto');
+    expect(card.textContent).toContain('Décor');
+    const cost = formatMoney(must(ideas[0]).estimatedCost, 'INR');
+    expect(card.textContent).toContain(cost);
+    expect(within(card).getByText('Fits Décor budget')).toBeTruthy();
+    expect(within(card).getByText('AI · personalized')).toBeTruthy();
+    const why = within(card).getByText('vibe: lantern-lit; accessibility: wheelchair');
+    expect(why.getAttribute('dir')).toBe('auto');
+    expect(card.textContent).toContain('Why: vibe: lantern-lit');
+  });
+
+  it('says by how much an over-budget idea goes over its category', async () => {
+    const { store } = await setup();
+    const fireworks = must(
+      ready(store).plan.ideas.find((idea) => idea.title === 'Fireworks finale'),
+    );
+    expect(fireworks.fit.fits).toBe(false);
+    const card = itemOf(panel('Ideas').getByRole('heading', { name: 'Fireworks finale' }));
+    const over = formatMoney(fireworks.fit.overBy, 'INR');
+    expect(over).toMatch(/^₹[\d,]+\.\d\d$/u);
+    expect(
+      within(card).getByText(`Over Activities & entertainment budget by ${over}`),
+    ).toBeTruthy();
+  });
+
+  it('has a Refresh button that says it costs one call, and the zero-call note', async () => {
+    await setup();
+    const i = panel('Ideas');
+    expect(i.getByRole('button', REFRESH)).toHaveProperty('disabled', false);
+    expect(i.getByText('Edits never call the AI; only this button does.')).toBeTruthy();
+  });
+
+  it('refresh is one call, disabled and announced while pending, and enabled again after', async () => {
+    const second = deferred<Answer>();
+    let asked = 0;
+    const client = fakeClient(() => {
+      asked += 1;
+      return asked === 1 ? Promise.resolve(freshAnswer) : second.promise;
+    });
+    const { user, store } = await setup({ client });
+    const i = panel('Ideas');
+    const button = i.getByRole('button', REFRESH);
+    expect(store.getState().calls).toBe(1);
+
+    await user.click(button);
+    expect(client.suggest).toHaveBeenCalledTimes(2);
+    expect(client.suggest.mock.calls[1]?.[2]).toEqual({ refresh: true });
+    expect(button).toHaveProperty('disabled', true);
+    expect(i.getByRole('status').textContent).toContain('Asking Gemini for fresh ideas');
+    // A second click while pending does nothing.
+    await user.click(button);
+    expect(client.suggest).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      second.resolve(freshAnswer);
+      await second.promise;
+    });
+    await settle();
+    expect(button).toHaveProperty('disabled', false);
+    expect(store.getState().calls).toBe(2);
+    expect(i.getByRole('status').textContent).toContain('AI calls this session: 2');
+  });
+
+  it('shows the standard ideas with an honest notice when the AI failed', async () => {
+    const client = fakeClient(() => Promise.resolve(err({ code: 'unavailable' })));
+    await setup({ client });
+    const i = panel('Ideas');
+    const card = itemOf(i.getByRole('heading', { name: 'Zero-waste food stalls' }));
+    expect(within(card).getByText('Standard suggestion')).toBeTruthy();
+    expect(within(card).queryByText('AI · personalized')).toBeNull();
+    expect(card.textContent).not.toContain('Why:');
+    expect(within(card).getByText('Fits Sanitation & waste budget')).toBeTruthy();
+    expect(i.getByText(/couldn't personalize these ideas/u)).toBeTruthy();
+    expect(i.getByRole('button', REFRESH)).toHaveProperty('disabled', false);
+  });
+
+  it('says the ideas are standard while the first answer is pending', async () => {
+    const client = fakeClient(() => new Promise<Answer>(() => undefined));
+    await setup({ client });
+    const i = panel('Ideas');
+    expect(i.getByText(/standard suggestions for now/u)).toBeTruthy();
+    expect(i.getByRole('button', REFRESH)).toHaveProperty('disabled', true);
+  });
+
+  it('says so when a restored plan was never personalized, and asks only on a click', async () => {
+    const saved = planReducer(initialPlanState, {
+      type: 'brief/submitted',
+      brief: festival,
+      today,
+    });
+    const seed = memoryStorage();
+    savePlan(seed, saved);
+    const client = fakeClient();
+    const { user, store } = await setup({
+      client,
+      storage: memoryStorage(seed.getItem(STORAGE_KEY) ?? ''),
+      start: null,
+    });
+    act(() => {
+      store.hydrate();
+    });
+    const i = panel('Ideas');
+    expect(i.getByText(/haven't been personalized yet/u)).toBeTruthy();
+    expect(client.suggest).not.toHaveBeenCalled();
+    await user.click(i.getByRole('button', REFRESH));
+    expect(client.suggest).toHaveBeenCalledTimes(1);
+  });
+
+  it('says so when the AI answered with no usable ideas', async () => {
+    const suggestions = { ...aiSuggestions, ideas: [] };
+    const client = fakeClient(() =>
+      Promise.resolve(ok({ suggestions, meta: aiMeta, cached: false })),
+    );
+    await setup({ client });
+    expect(panel('Ideas').getByText(/had no usable ideas/u)).toBeTruthy();
+    expect(panel('Ideas').getAllByText('Standard suggestion').length).toBeGreaterThan(0);
+  });
+
+  it('keeps the AI ideas when a later refresh fails', async () => {
+    let asked = 0;
+    const client = fakeClient(() => {
+      asked += 1;
+      return Promise.resolve(asked === 1 ? freshAnswer : err({ code: 'timeout' }));
+    });
+    const { user } = await setup({ client });
+    await user.click(panel('Ideas').getByRole('button', REFRESH));
+    expect(panel('Ideas').getByRole('heading', { name: 'Diya-lined walkways' })).toBeTruthy();
+    expect(panel('Ideas').queryByText(/couldn't personalize these ideas/u)).toBeNull();
+    expect(panel('Ideas').getByRole('status').textContent).toContain("didn't go through");
+  });
+});
+
+describe('volunteers', () => {
+  it('shows who each shift needs, with a table, and the roles', async () => {
+    await setup();
+    const v = panel('Volunteers');
+    expect(v.getByText('10 volunteers per shift')).toBeTruthy();
+    const table = v.getByRole('table');
+    expect(within(table).getByText(/^Volunteer shifts for 4 Jan 2027/u).tagName).toBe('CAPTION');
+    expect(
+      within(table)
+        .getAllByRole('columnheader')
+        .map((h) => h.textContent),
+    ).toEqual(['Shift', 'Needed', 'Assigned', 'Gap']);
+    const [first, second] = within(table).getAllByRole('row').slice(1);
+    expect(within(must(first)).getByRole('rowheader').textContent).toBe('18:00–21:00');
+    expect(within(must(second)).getByRole('rowheader').textContent).toBe('21:00–23:00');
+    expect(
+      within(must(first))
+        .getAllByRole('cell')
+        .map((c) => c.textContent),
+    ).toEqual(['10', '9', '▲ 1 short']);
+    expect(v.getByRole('heading', { level: 3, name: 'Volunteer roles' })).toBeTruthy();
+    const term = v.getByText('Registration desk');
+    expect(term.tagName).toBe('DT');
+    expect(term.nextElementSibling?.textContent).toContain('Greets guests');
+  });
+
+  it('calls out the shortfall when only 5 volunteers are available', async () => {
+    const { store } = await setup({ start: { ...festival, volunteersAvailable: 5 } });
+    expect(ready(store).plan.shifts.shortfall).toBe(15);
+    const v = panel('Volunteers');
+    expect(v.getByText("You're short by 15 volunteer slots")).toBeTruthy();
+    expect(v.queryByText(/Fully staffed/u)).toBeNull();
+    expect(v.getByText(/You have 5 volunteers for 2 shifts/u)).toBeTruthy();
+  });
+
+  it('says "Fully staffed" with the spare count when there are enough', async () => {
+    await setup({ start: { ...festival, volunteersAvailable: 60 } });
+    const v = panel('Volunteers');
+    expect(v.getByText('Fully staffed (40 spare)')).toBeTruthy();
+    expect(v.queryByText(/You're short by/u)).toBeNull();
+    expect(within(v.getByRole('table')).getAllByText('None')).toHaveLength(2);
+  });
+
+  it('uses the singular for one missing slot', async () => {
+    const { store } = await setup({ start: { ...festival, volunteersAvailable: 19 } });
+    expect(ready(store).plan.shifts.shortfall).toBe(1);
+    expect(panel('Volunteers').getByText("You're short by 1 volunteer slot")).toBeTruthy();
+  });
+
+  it('follows the plan when the guest count changes', async () => {
+    const { store } = await setup();
+    act(() => {
+      store.changeGuests(50);
+    });
+    expect(panel('Volunteers').getByText('2 volunteers per shift')).toBeTruthy();
   });
 });

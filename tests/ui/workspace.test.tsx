@@ -172,7 +172,7 @@ describe('workspace: zero-call edits', () => {
   it('lays out the budget table with meters, contingency, total and break-even', async () => {
     const { user } = await setup();
     await user.click(screen.getByRole('tab', { name: 'Budget' }));
-    const table = screen.getByRole('table');
+    const table = within(screen.getByRole('tabpanel', { name: 'Budget' })).getByRole('table');
     expect(within(table).getByText(/^How ₹1,50,000\.00 is split/u)).toBeTruthy();
     const meter = within(table).getByRole('meter', {
       name: /^Food & beverage: \d+% of the total$/u,
@@ -199,7 +199,9 @@ describe('workspace: AI failure', () => {
     const message = clientErrorMessage({ code: 'unavailable' });
     expect(statusRegion().textContent).toContain(message);
     await user.click(screen.getByRole('tab', { name: 'Budget' }));
-    expect(screen.getByRole('table')).toBeTruthy();
+    expect(
+      within(screen.getByRole('tabpanel', { name: 'Budget' })).getByRole('table'),
+    ).toBeTruthy();
     await user.click(screen.getByRole('tab', { name: 'Overview' }));
     await user.click(screen.getByRole('button', { name: 'Try again' }));
     await waitFor(() => {
@@ -429,11 +431,12 @@ describe('workspace: tabs', () => {
     expectSelected('Overview');
   });
 
-  it('keep later sections as labelled placeholders, and drop Volunteers outside community events', async () => {
+  it('drop Volunteers outside community events', async () => {
     const birthday = sampleBrief('birthday', today);
     await setup({ start: birthday });
     expect(screen.queryByRole('tab', { name: 'Volunteers' })).toBeNull();
-    expect(screen.getAllByText('Coming in the next step.')).toHaveLength(1);
+    expect(screen.queryByRole('heading', { name: 'Volunteers' })).toBeNull();
+    expect(screen.queryByText('Coming in the next step.')).toBeNull();
   });
 });
 

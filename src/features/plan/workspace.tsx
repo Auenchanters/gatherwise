@@ -13,6 +13,7 @@ import type { ReadyState } from '../../domain/reducer.js';
 import { BriefForm } from '../brief/brief-form.js';
 import { Budget } from './budget.js';
 import { Header } from './header.js';
+import { Ideas } from './ideas.js';
 import { InfeasibleBanner } from './infeasible-banner.js';
 import { Overview } from './overview.js';
 import type { PlannerSnapshot, PlannerStore } from './planner-store.js';
@@ -20,18 +21,9 @@ import { PLAN_ERROR_ID } from './storage-key.js';
 import { panelId, tabId, Tabs, type TabSpec } from './tabs.js';
 import { Timeline } from './timeline.js';
 import { Vendors } from './vendors.js';
+import { Volunteers } from './volunteers.js';
 
 type TabId = 'overview' | 'budget' | 'timeline' | 'vendors' | 'ideas' | 'volunteers';
-
-/** A tab whose content arrives in the next step; still a real, labelled, focusable panel. */
-function Placeholder({ title }: { readonly title: string }): ReactElement {
-  return (
-    <section className="placeholder">
-      <h2 className="panel-title">{title}</h2>
-      <p>Coming in the next step.</p>
-    </section>
-  );
-}
 
 /** Props for {@link Workspace}. */
 export interface WorkspaceProps {
@@ -75,10 +67,15 @@ export function Workspace({ state, snapshot, store }: WorkspaceProps): ReactElem
     { id: 'budget', label: 'Budget', panel: <Budget state={state} store={store} /> },
     { id: 'timeline', label: 'Timeline', panel: <Timeline state={state} store={store} /> },
     { id: 'vendors', label: 'Vendors', panel: <Vendors state={state} store={store} /> },
-    { id: 'ideas', label: 'Ideas', panel: <Placeholder title="Ideas" /> },
+    {
+      id: 'ideas',
+      label: 'Ideas',
+      // A new plan starts with no refresh behind it.
+      panel: <Ideas key={state.generation} state={state} calls={snapshot.calls} store={store} />,
+    },
   ];
   if (state.brief.kind === 'community') {
-    tabs.push({ id: 'volunteers', label: 'Volunteers', panel: <Placeholder title="Volunteers" /> });
+    tabs.push({ id: 'volunteers', label: 'Volunteers', panel: <Volunteers state={state} /> });
   }
   // An edit can turn a community event into another kind, taking its Volunteers tab away.
   const selected = tabs.some((t) => t.id === tab) ? tab : 'overview';

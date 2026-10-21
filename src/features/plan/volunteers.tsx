@@ -1,0 +1,96 @@
+/**
+ * The Volunteers tab (community events only): how many volunteers each shift needs, how many are
+ * placed, whether the event is short of people, and the roles volunteers fill.
+ * Does: show the engine's shift plan as a table with a caption, say "You're short by N volunteer
+ * slots" or "Fully staffed (N spare)", and list the template's roles.
+ * Never does: compute a shift or a gap (the engine's `planShifts` did), or call the AI.
+ */
+import { useId, type ReactElement } from 'react';
+import type { ReadyState } from '../../domain/reducer.js';
+import { templateFor } from '../../domain/templates/index.js';
+import { countOf, showDate } from './format.js';
+
+/** Props for {@link Volunteers}. */
+export interface VolunteersProps {
+  readonly state: ReadyState;
+}
+
+/** Shifts, staffing and roles. */
+export function Volunteers({ state }: VolunteersProps): ReactElement {
+  const titleId = useId();
+  const { brief, plan } = state;
+  const { shifts, shortfall, spare, needed } = plan.shifts;
+  const roles = templateFor(brief.kind).volunteerRoles;
+  const people = countOf(brief.volunteersAvailable, 'volunteer', 'volunteers');
+  return (
+    <section className="volunteers" aria-labelledby={titleId}>
+      <h2 className="panel-title" id={titleId}>
+        Volunteers
+      </h2>
+      <p className="volunteers__lead">{`${countOf(needed, 'volunteer', 'volunteers')} per shift`}</p>
+      <p className="volunteers__detail">
+        {`You have ${people} for ${countOf(shifts.length, 'shift', 'shifts')}. Each volunteer works one shift, so a gap is the number of people still to recruit.`}
+      </p>
+      {shortfall > 0 ? (
+        <p className="callout callout--risk">
+          <span className="callout__icon" aria-hidden="true">
+            ▲
+          </span>
+          {`You're short by ${countOf(shortfall, 'volunteer slot', 'volunteer slots')}`}
+        </p>
+      ) : (
+        <p className="callout callout--ok">
+          <span className="callout__icon" aria-hidden="true">
+            ✓
+          </span>
+          {`Fully staffed (${spare} spare)`}
+        </p>
+      )}
+      <table className="data-table volunteers__table">
+        <caption>Volunteer shifts for {showDate(plan.eventDate)}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Shift</th>
+            <th scope="col" className="num">
+              Needed
+            </th>
+            <th scope="col" className="num">
+              Assigned
+            </th>
+            <th scope="col">Gap</th>
+          </tr>
+        </thead>
+        <tbody>
+          {shifts.map((shift) => {
+            const gap = shift.needed - shift.assigned;
+            return (
+              <tr key={shift.start}>
+                <th scope="row">{`${shift.start}–${shift.end}`}</th>
+                <td className="num">{shift.needed}</td>
+                <td className="num">{shift.assigned}</td>
+                <td>
+                  {gap > 0 ? (
+                    <span className="status status--risk">
+                      <span aria-hidden="true">▲</span> {`${gap} short`}
+                    </span>
+                  ) : (
+                    'None'
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <h3 className="volunteers__roles-title">Volunteer roles</h3>
+      <dl className="roles">
+        {roles.map((role) => (
+          <div className="role" key={role.id}>
+            <dt>{role.label}</dt>
+            <dd>{role.description}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}

@@ -316,7 +316,7 @@ export function Budget({ state, store }: BudgetProps): ReactElement {
               guests or raise the budget.
             </p>
           )}
-          <table className="budget-table">
+          <table className="data-table">
             <caption>
               How {formatMoney(total, currency)} is split for{' '}
               {countOf(brief.guests, 'guest', 'guests')} on {showDate(plan.eventDate)}

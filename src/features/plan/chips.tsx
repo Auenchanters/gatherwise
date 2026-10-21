@@ -31,3 +31,8 @@ export function StatusChip({
 export function AiBadge(): ReactElement {
   return <span className="badge badge--ai">AI · personalized</span>;
 }
+
+/** The label every template-written suggestion carries. */
+export function StandardBadge(): ReactElement {
+  return <span className="badge badge--standard">Standard suggestion</span>;
+}
