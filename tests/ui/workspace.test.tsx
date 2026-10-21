@@ -433,7 +433,7 @@ describe('workspace: tabs', () => {
     const birthday = sampleBrief('birthday', today);
     await setup({ start: birthday });
     expect(screen.queryByRole('tab', { name: 'Volunteers' })).toBeNull();
-    expect(screen.getAllByText('Coming in the next step.')).toHaveLength(2);
+    expect(screen.getAllByText('Coming in the next step.')).toHaveLength(1);
   });
 });
 

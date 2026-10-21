@@ -19,6 +19,7 @@ import type { PlannerSnapshot, PlannerStore } from './planner-store.js';
 import { PLAN_ERROR_ID } from './storage-key.js';
 import { panelId, tabId, Tabs, type TabSpec } from './tabs.js';
 import { Timeline } from './timeline.js';
+import { Vendors } from './vendors.js';
 
 type TabId = 'overview' | 'budget' | 'timeline' | 'vendors' | 'ideas' | 'volunteers';
 
@@ -73,7 +74,7 @@ export function Workspace({ state, snapshot, store }: WorkspaceProps): ReactElem
     },
     { id: 'budget', label: 'Budget', panel: <Budget state={state} store={store} /> },
     { id: 'timeline', label: 'Timeline', panel: <Timeline state={state} store={store} /> },
-    { id: 'vendors', label: 'Vendors', panel: <Placeholder title="Vendors" /> },
+    { id: 'vendors', label: 'Vendors', panel: <Vendors state={state} store={store} /> },
     { id: 'ideas', label: 'Ideas', panel: <Placeholder title="Ideas" /> },
   ];
   if (state.brief.kind === 'community') {

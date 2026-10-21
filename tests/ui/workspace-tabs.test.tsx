@@ -13,11 +13,12 @@
  */
 import { act, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { addDays } from '../../src/domain/dates.js';
 import { type ReadyState } from '../../src/domain/reducer.js';
 import { sampleBrief } from '../../src/features/brief/samples.js';
 import type { PlannerStore } from '../../src/features/plan/planner-store.js';
 import { ok } from '../../src/shared/result.js';
-import { fakeClient } from '../support/fakes.js';
+import { fakeClient, type Answer } from '../support/fakes.js';
 import { aiMeta, aiSuggestions } from '../support/fixtures.js';
 import { festival, setup, today } from '../support/planner-ui.js';
 
@@ -62,6 +63,10 @@ function descriptionOf(element: HTMLElement): string {
   return ids.map((id) => document.getElementById(id)?.textContent ?? '').join(' ');
 }
 
+/** A vendor's card, by the vendor's label. */
+const card = (label: string): HTMLElement =>
+  itemOf(panel('Vendors').getByRole('heading', { level: 3, name: label }));
+
 /** Heading levels in a panel, in document order. */
 const levels = (tab: string): number[] =>
   panel(tab)
@@ -91,7 +96,7 @@ const DOWNLOAD = { name: 'Download calendar (.ics)' };
 describe('every new tab', () => {
   it('each starts at h2 and never skips a heading level', async () => {
     await setup();
-    for (const tab of ['Timeline']) {
+    for (const tab of ['Timeline', 'Vendors']) {
       const found = levels(tab);
       expect(found[0], tab).toBe(2);
       found.forEach((level, i) => {
@@ -106,7 +111,7 @@ describe('every new tab', () => {
     expect(document.querySelectorAll('[style]')).toHaveLength(0);
   });
 
-  it('never calls the AI for ticks, the download or printing', async () => {
+  it('never calls the AI for ticks, vendor edits, the download or printing', async () => {
     const { user, client, store } = await setup();
     captureDownloads();
     vi.spyOn(window, 'print').mockImplementation(() => undefined);
@@ -114,6 +119,12 @@ describe('every new tab', () => {
     await user.click(panel('Timeline').getByRole('checkbox', { name: 'Hide done tasks' }));
     await user.click(panel('Timeline').getByRole('button', DOWNLOAD));
     await user.click(panel('Timeline').getByRole('button', { name: 'Print plan' }));
+    await user.selectOptions(
+      panel('Vendors').getByRole('combobox', { name: 'Status for Tent / shamiana' }),
+      'Booked',
+    );
+    const first = must(ready(store).plan.vendors[0]?.checklist[0]).text;
+    await user.click(within(card('Tent / shamiana')).getByRole('checkbox', { name: first }));
     expect(client.suggest).toHaveBeenCalledTimes(1);
     expect(store.getState().calls).toBe(1);
   });
@@ -304,5 +315,114 @@ describe('timeline', () => {
     await setup({ start: sampleBrief('birthday', today) });
     expect(panel('Timeline').getAllByRole('checkbox').length).toBeGreaterThan(2);
     expect(screen.queryByRole('tab', { name: 'Volunteers' })).toBeNull();
+  });
+});
+
+describe('vendors', () => {
+  it('shows a card per vendor with its reason, booking chip, status select and checklist', async () => {
+    const { store } = await setup();
+    const vendors = ready(store).plan.vendors;
+    const v = panel('Vendors');
+    expect(v.getAllByRole('heading', { level: 3 })).toHaveLength(vendors.length);
+    const tent = itemOf(v.getByRole('heading', { level: 3, name: 'Tent / shamiana' }));
+    const reason = within(tent).getByText(/^Recommended: /u);
+    expect(reason.getAttribute('dir')).toBe('auto');
+    expect(within(tent).getByText('Book by 14 Dec 2026')).toBeTruthy();
+    const select = within(tent).getByRole('combobox', { name: 'Status for Tent / shamiana' });
+    expect(
+      within(select)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['To contact', 'Quoted', 'Booked']);
+    expect(select).toHaveProperty('value', 'to_contact');
+    expect(within(tent).getAllByRole('checkbox')).toHaveLength(must(vendors[0]).checklist.length);
+  });
+
+  it('changing the status updates the chip, though the plan object stays the same', async () => {
+    const { user, store } = await setup();
+    const before = ready(store).plan;
+    const tent = itemOf(panel('Vendors').getByRole('heading', { name: 'Tent / shamiana' }));
+    const select = within(tent).getByRole('combobox', { name: 'Status for Tent / shamiana' });
+    await user.selectOptions(select, 'Booked');
+    expect(select).toHaveProperty('value', 'booked');
+    expect(within(tent).getByText('Booked', { selector: '.status' })).toBeTruthy();
+    expect(within(tent).queryByText('Book by 14 Dec 2026')).toBeNull();
+    expect(ready(store).progress.vendorStatus).toEqual({ tent_shamiana: 'booked' });
+    expect(ready(store).plan).toBe(before);
+    expect(panel('Vendors').getByRole('status').textContent).toBe(
+      "Marked 'Tent / shamiana' as booked",
+    );
+    // "Quoted" is a status the chip does not show, so the select is what says it.
+    await user.selectOptions(select, 'Quoted');
+    expect(select).toHaveProperty('value', 'quoted');
+    expect(within(tent).getByText('Book by 14 Dec 2026')).toBeTruthy();
+  });
+
+  it('ticks stay put across tab switches and are announced', async () => {
+    const { user, store } = await setup();
+    const item = must(ready(store).plan.vendors[0]?.checklist[1]);
+    const tick = () => within(card('Tent / shamiana')).getByRole('checkbox', { name: item.text });
+    const input = tick();
+    if (!(input instanceof HTMLInputElement)) throw new Error('not an input');
+    expect(within(card('Tent / shamiana')).getByText(item.text).getAttribute('dir')).toBe('auto');
+    await user.click(input);
+    expect(input.checked).toBe(true);
+    expect(panel('Vendors').getByRole('status').textContent).toBe(`Marked '${item.text}' done`);
+    await user.click(screen.getByRole('tab', { name: 'Budget' }));
+    await user.click(screen.getByRole('tab', { name: 'Vendors' }));
+    expect(tick()).toHaveProperty('checked', true);
+    expect(ready(store).progress.checklistDone).toEqual([item.id]);
+    await user.click(tick());
+    expect(tick()).toHaveProperty('checked', false);
+    expect(panel('Vendors').getByRole('status').textContent).toBe(`Marked '${item.text}' not done`);
+  });
+
+  it('shows the booking urgency from the dates: overdue, then booked', async () => {
+    const { user } = await setup({ start: { ...festival, date: addDays(today, 10) } });
+    const tent = itemOf(panel('Vendors').getByRole('heading', { name: 'Tent / shamiana' }));
+    expect(within(tent).getByText('Booking overdue')).toBeTruthy();
+    expect(within(tent).getByText('Book by 10 Oct 2026')).toBeTruthy();
+    await user.selectOptions(
+      within(tent).getByRole('combobox', { name: 'Status for Tent / shamiana' }),
+      'Booked',
+    );
+    expect(within(tent).getByText('Booked', { selector: '.status' })).toBeTruthy();
+  });
+
+  it('shows "Book soon" with the date when the booking deadline is close', async () => {
+    await setup({ start: { ...festival, date: addDays(today, 25) } });
+    const tent = itemOf(panel('Vendors').getByRole('heading', { name: 'Tent / shamiana' }));
+    expect(within(tent).getByText('Book soon')).toBeTruthy();
+    expect(within(tent).getByText('Book by 25 Oct 2026')).toBeTruthy();
+  });
+
+  it('follows the plan when guests change: reasons quote the new count', async () => {
+    const { store } = await setup();
+    const toilets = () =>
+      itemOf(panel('Vendors').getByRole('heading', { name: 'Portable toilets' })).textContent;
+    expect(toilets()).toContain('250 guests');
+    act(() => {
+      store.changeGuests(400);
+    });
+    expect(toilets()).toContain('400 guests');
+    expect(toilets()).not.toContain('250 guests');
+  });
+
+  it('lists AI questions under the vendor they are for, labelled as AI text', async () => {
+    await setup();
+    const v = panel('Vendors');
+    const tent = itemOf(v.getByRole('heading', { level: 3, name: 'Tent / shamiana' }));
+    const heading = within(tent).getByRole('heading', { level: 4 });
+    expect(heading.textContent).toBe('Questions to ask (AI · personalized)');
+    const question = within(tent).getByText('Is the tent rain-proof?');
+    expect(question.getAttribute('dir')).toBe('auto');
+    expect(question.closest('ul')).toBeTruthy();
+    expect(v.getAllByRole('heading', { level: 4 })).toHaveLength(1);
+  });
+
+  it('has no questions section without an AI answer', async () => {
+    const client = fakeClient(() => new Promise<Answer>(() => undefined));
+    await setup({ client });
+    expect(panel('Vendors').queryByRole('heading', { level: 4 })).toBeNull();
   });
 });
