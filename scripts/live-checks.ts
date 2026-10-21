@@ -60,9 +60,16 @@ export function checkHealth(status: number, body: unknown): string[] {
     : ["GET /api/health is not {status: 'ok', ai: 'configured'} (is GEMINI_API_KEY set?)"];
 }
 
-/** The landing page: reached without a login wall, with a title and the noscript feature text. */
+/** What Vercel's deployment protection answers with when it blocks a request outright (a 401). */
+const SSO_BODY = /vercel\.com\/sso|Authentication Required/iu;
+
+/**
+ * The landing page: reached without a login wall (a redirect to Vercel's SSO page, or a 401 whose
+ * body asks for authentication), with a title and the noscript feature text.
+ */
 export function checkPage(status: number, finalUrl: string, html: string): string[] {
-  if (/vercel\.com\/sso/iu.test(finalUrl)) {
+  const loginWall = /vercel\.com\/sso/iu.test(finalUrl) || (status === 401 && SSO_BODY.test(html));
+  if (loginWall) {
     return ['GET / ended at a Vercel login page (turn off SSO protection for production)'];
   }
   const failures: string[] = [];
@@ -74,19 +81,13 @@ export function checkPage(status: number, finalUrl: string, html: string): strin
   return failures;
 }
 
-/** The outcome of checking one plan call. */
-interface PlanCheck {
-  readonly failures: string[];
-  readonly summary: string | undefined;
-}
-
 /** The plan call: 200, `no-store`, security headers, a parsing body and a latency under the cap. */
 export function checkPlan(
   status: number,
   headers: Headers,
   body: unknown,
   latencyMs: number,
-): PlanCheck {
+): SmokeResult {
   const failures = checkHeaders(headers).map((failure) => `POST /api/plan: ${failure}`);
   if (headers.get('cache-control') !== 'no-store') {
     failures.push('POST /api/plan is not Cache-Control: no-store');

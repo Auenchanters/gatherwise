@@ -190,6 +190,17 @@ describe('checkPage', () => {
     ]);
   });
 
+  it('calls a 401 that asks for Vercel authentication a login wall', () => {
+    const wall = '<title>Authentication Required</title><a href="https://vercel.com/sso-api">';
+    expect(checkPage(401, `${ORIGIN}/`, wall)).toEqual([
+      'GET / ended at a Vercel login page (turn off SSO protection for production)',
+    ]);
+    // A 401 that says nothing of Vercel is just a failed status.
+    expect(checkPage(401, `${ORIGIN}/`, '<title>x</title>')).toContain(
+      'GET / answered 401, expected 200',
+    );
+  });
+
   it('wants a 200, a title and the noscript feature text', () => {
     expect(checkPage(404, `${ORIGIN}/`, '<html></html>')).toEqual([
       'GET / answered 404, expected 200',
