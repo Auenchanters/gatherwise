@@ -9,43 +9,8 @@
  * on Overview and Budget, no horizontal page scroll, and a clean console.
  * Never does: reach a real model.
  */
-import { readFileSync } from 'node:fs';
-import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { aiMeta, aiSuggestions } from '../support/fixtures.js';
-
-const WCAG_AA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
-const axeViolations = async (page: Page) =>
-  (await new AxeBuilder({ page }).withTags(WCAG_AA).analyze()).violations;
-
-const CSP = /"Content-Security-Policy",\s*"value":\s*"([^"]+)"/u.exec(
-  readFileSync('vercel.json', 'utf8'),
-)?.[1];
-
-/**
- * Serves every response with the production CSP, answers `/api/plan` with the fixed answer, and
- * records each plan request body and each console error.
- */
-async function prepare(page: Page) {
-  const requests: unknown[] = [];
-  const errors: string[] = [];
-  page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(message.text());
-  });
-  await page.route('**/*', async (route) => {
-    const response = await route.fetch();
-    await route.fulfill({
-      response,
-      headers: { ...response.headers(), 'content-security-policy': CSP ?? '' },
-    });
-  });
-  // Registered last, so it handles /api/plan before the catch-all above.
-  await page.route('**/api/plan', async (route) => {
-    requests.push(route.request().postDataJSON());
-    await route.fulfill({ json: { suggestions: aiSuggestions, meta: aiMeta } });
-  });
-  return { requests, errors };
-}
+import { axeViolations, CSP, noSidewaysScroll, prepare } from './helpers.js';
 
 /** The Allocated cell of the Food & beverage row. */
 const foodLine = (page: Page) =>
@@ -53,13 +18,6 @@ const foodLine = (page: Page) =>
     .getByRole('row', { name: /^Food & beverage/u })
     .getByRole('cell')
     .first();
-
-/**
- * Whether the page fits the layout viewport. `clientWidth` stays at the device width; a mobile
- * browser zooms out to fit wide content, so `innerWidth` would grow with the overflow and hide it.
- */
-const noSidewaysScroll = (page: Page) =>
-  page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 
 test('the community sample becomes a plan with one AI call, and edits and reloads cost none', async ({
   page,
