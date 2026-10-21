@@ -22,6 +22,8 @@ export default defineConfig({
           include: ['tests/ui/**/*.test.tsx'],
           environment: 'jsdom',
           setupFiles: ['tests/ui/setup.ts'],
+          // Rendering a whole plan and driving it with user-event takes seconds on a slow runner.
+          testTimeout: 20_000,
         },
       },
     ],
