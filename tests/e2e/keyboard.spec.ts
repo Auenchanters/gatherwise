@@ -47,14 +47,18 @@ async function pressUntil(
 ): Promise<void> {
   for (let stop = 1; stop <= max; stop += 1) {
     await page.keyboard.press(key);
-    const focused = await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 120));
-    expect(await focusIsVisible(page), `focus ring at stop ${stop}: ${focused}`).toBe(true);
+    if (!(await focusIsVisible(page))) {
+      const html = await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 120));
+      throw new Error(`no focus ring at stop ${stop}: ${html}`);
+    }
     if (await target.evaluate((el) => el === document.activeElement)) return;
   }
   throw new Error(`${key} did not reach ${target.toString()} in ${max} presses`);
 }
 
 test('the whole journey works with the keyboard alone', async ({ page }) => {
+  // About 150 key presses, each checked; a slow runner needs more than the default 30 s.
+  test.setTimeout(90_000);
   // A page-wide capture listener: a real mouse or touch would trip it, Enter and Space do not.
   await page.addInitScript(() => {
     addEventListener(
