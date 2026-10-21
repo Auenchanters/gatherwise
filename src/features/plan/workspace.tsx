@@ -82,7 +82,7 @@ export function Workspace({ state, snapshot, store }: WorkspaceProps): ReactElem
   const selected = tabs.some((t) => t.id === tab) ? tab : 'overview';
 
   return (
-    <div className="workspace" ref={rootRef}>
+    <div ref={rootRef}>
       <Header
         state={state}
         headingRef={headingRef}

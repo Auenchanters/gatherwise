@@ -12,7 +12,7 @@ import { LIMITS } from '../shared/limits.js';
 import { err, ok, type Result } from '../shared/result.js';
 import type { AiMeta, AiSuggestions, EventBrief } from '../shared/schema.js';
 import type { IsoDate } from './dates.js';
-import { AI_TASK_PREFIX, mergeSuggestions, type Adjustment } from './merge.js';
+import { isAiTask, mergeSuggestions, type Adjustment } from './merge.js';
 import { buildPlan, type Plan } from './plan.js';
 import type { TaskId } from './templates/types.js';
 import type { VendorItem, VendorStatus } from './vendors.js';
@@ -200,7 +200,7 @@ export function planReducer(state: PlanState, action: PlanAction): PlanState {
         ai: { status: 'applied', suggestions: action.suggestions, meta: action.meta },
         progress: {
           ...progress,
-          doneTasks: progress.doneTasks.filter((id) => !id.startsWith(AI_TASK_PREFIX)),
+          doneTasks: progress.doneTasks.filter((id) => !isAiTask(id)),
         },
       });
     case 'ai/failed':

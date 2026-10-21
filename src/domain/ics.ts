@@ -7,14 +7,14 @@
  * title, note or name can end its line and start a property or an event of its own. Lines over 75
  * octets are folded between code points, so a UTF-8 sequence or a surrogate pair is never cut in
  * half. Task events are marked free (`TRANSP:TRANSPARENT`) so reminders do not block the user's days.
- * A task Gemini added (its id starts with `AI_TASK_PREFIX`) says "AI · personalized" at the start
+ * A task Gemini added (see `isAiTask`) says "AI · personalized" at the start
  * of its description, so the label travels with the text into the user's calendar.
  * Never does: read the clock (the `DTSTAMP` is a parameter); emit unescaped user or model text;
  * modify its inputs.
  */
 import type { EventBrief } from '../shared/schema.js';
 import { addDays, type IsoDate } from './dates.js';
-import { AI_TASK_PREFIX } from './merge.js';
+import { AI_LABEL, isAiTask } from './merge.js';
 import type { Schedule } from './schedule.js';
 
 const CRLF = '\r\n';
@@ -71,7 +71,7 @@ function fold(line: string): string {
 const compact = (date: IsoDate): string => date.replaceAll('-', '');
 
 /** What a calendar app shows first in a task Gemini added: AI text is always labelled. */
-const AI_LABEL = 'AI · personalized — ';
+const AI_PREFIX = `${AI_LABEL} — `;
 
 /** One all-day VEVENT on `day`. The UID is `uidStem` (escaped) plus `@gatherwise`. */
 function allDayEvent(
@@ -134,7 +134,7 @@ export function toIcs(
           ['SUMMARY', task.title],
           [
             'DESCRIPTION',
-            `${task.id.startsWith(AI_TASK_PREFIX) ? AI_LABEL : ''}Start by ${task.latestStart}. Finish by ${task.latestEnd}.${task.note ? ` ${task.note}` : ''}`,
+            `${isAiTask(task.id) ? AI_PREFIX : ''}Start by ${task.latestStart}. Finish by ${task.latestEnd}.${task.note ? ` ${task.note}` : ''}`,
           ],
           ['CATEGORIES', task.categoryId],
         ]),

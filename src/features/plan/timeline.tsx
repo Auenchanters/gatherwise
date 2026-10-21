@@ -12,13 +12,14 @@
 import { useEffect, useId, useRef, useState, type ReactElement, type Ref } from 'react';
 import type { ReadyState } from '../../domain/reducer.js';
 import { toIcs } from '../../domain/ics.js';
+import { isAiTask } from '../../domain/merge.js';
 import type { ScheduledTask } from '../../domain/schedule.js';
 import { AiBadge, StatusChip } from './chips.js';
 import { icsBlob, icsFilename } from './download.js';
 import { categoryLabel, showDate, showMonth } from './format.js';
 import { LiveRegion, Panel } from './panel.js';
 import type { PlannerStore } from './planner-store.js';
-import { isAiTask, STATUS_UI } from './status-ui.js';
+import { STATUS_UI } from './status-ui.js';
 import { utcStamp } from './utc-stamp.js';
 
 /** How long the downloaded file's address stays valid; browsers have started the save well before. */

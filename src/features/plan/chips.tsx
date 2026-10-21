@@ -5,6 +5,7 @@
  * Never does: decide a status or a label (`STATUS_UI` and the engine do).
  */
 import type { ReactElement } from 'react';
+import { AI_LABEL } from '../../domain/merge.js';
 
 /** The look of one chip: an icon glyph and a modifier for the `status` class. */
 interface ChipUi {
@@ -29,7 +30,7 @@ export function StatusChip({
 
 /** The label every AI-written text carries. */
 export function AiBadge(): ReactElement {
-  return <span className="badge badge--ai">AI · personalized</span>;
+  return <span className="badge badge--ai">{AI_LABEL}</span>;
 }
 
 /** The label every template-written suggestion carries. */

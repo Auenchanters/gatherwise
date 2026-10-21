@@ -176,10 +176,10 @@
   font-weight: 600;
 }
 
-/* Busy while the checker loads: a visibly different, still AA-contrast state. Covers :hover too,
-   because base.css (loaded later) styles the primary hover. */
-.button--primary[aria-disabled='true'],
-.button--primary[aria-disabled='true']:hover {
+/* Busy while the checker loads: a visibly different, still AA-contrast state. Covers :hover too.
+   The doubled class out-ranks base.css's `.button[aria-disabled='true']`, which loads later. */
+.button.button--primary[aria-disabled='true'],
+.button.button--primary[aria-disabled='true']:hover {
   border-color: var(--color-accent);
   background: var(--color-accent-soft);
   color: var(--color-accent);

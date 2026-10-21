@@ -58,7 +58,7 @@ export function Notices({ snapshot, onDismiss }: NoticesProps): ReactElement {
   return (
     <div className="notices">
       {/* Not atomic: a new notice is read on its own, not with every notice already showing. */}
-      <div className="notices__region" role="status" aria-atomic="false">
+      <div role="status" aria-atomic="false">
         {status === 'pending' && (
           <p className="notice notice--info">
             <span className="spinner" aria-hidden="true" />
@@ -91,7 +91,7 @@ export function Notices({ snapshot, onDismiss }: NoticesProps): ReactElement {
           </p>
         ))}
       </div>
-      <div className="notices__region" role="alert">
+      <div role="alert">
         {plan.error && (
           <p className="notice notice--error" id={PLAN_ERROR_ID} tabIndex={-1}>
             <span className="notice__icon" aria-hidden="true">

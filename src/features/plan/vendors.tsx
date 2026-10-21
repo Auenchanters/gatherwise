@@ -12,6 +12,7 @@
 import { useId, useMemo, useState, type ReactElement } from 'react';
 import { vendorView, type ReadyState } from '../../domain/reducer.js';
 import type { IsoDate } from '../../domain/dates.js';
+import { AI_LABEL } from '../../domain/merge.js';
 import {
   bookingStatus,
   VENDOR_STATUSES,
@@ -113,7 +114,7 @@ function VendorCard(props: {
       {questions !== undefined && questions.length > 0 && (
         <div className="vendor__questions">
           <h4 className="vendor__questions-title">
-            <span aria-hidden="true">✦</span> Questions to ask (AI · personalized)
+            <span aria-hidden="true">✦</span> Questions to ask ({AI_LABEL})
           </h4>
           <ul className="vendor__question-list">
             {questions.map((question, index) => (

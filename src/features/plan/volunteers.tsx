@@ -26,19 +26,20 @@ export function Volunteers({ state }: VolunteersProps): ReactElement {
   const people = countOf(brief.volunteersAvailable, 'volunteer', 'volunteers');
   return (
     <Panel title="Volunteers">
-      <p className="volunteers__lead">{`${countOf(needed, 'volunteer', 'volunteers')} per shift`}</p>
+      <p className="volunteers__lead">{countOf(needed, 'volunteer', 'volunteers')} per shift</p>
       <p className="volunteers__detail">
-        {`You have ${people} for ${countOf(shifts.length, 'shift', 'shifts')}. Each volunteer works one shift, so a gap is the number of people still to recruit.`}
+        You have {people} for {countOf(shifts.length, 'shift', 'shifts')}. Each volunteer works one
+        shift, so a gap is the number of people still to recruit.
       </p>
       {shortfall > 0 ? (
         <p className="callout callout--risk">
           <span aria-hidden="true">▲</span>
-          {`You're short by ${countOf(shortfall, 'volunteer slot', 'volunteer slots')}`}
+          You&apos;re short by {countOf(shortfall, 'volunteer slot', 'volunteer slots')}
         </p>
       ) : (
         <p className="callout callout--ok">
           <span aria-hidden="true">✓</span>
-          {`Fully staffed (${spare} spare)`}
+          Fully staffed ({spare} spare)
         </p>
       )}
       <table className="data-table volunteers__table">

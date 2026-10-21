@@ -5,9 +5,10 @@
  * Never does: soften a deadline or hide that a task cannot be done in time (Review Focus 1).
  */
 import { useId, type MouseEvent, type ReactElement } from 'react';
+import { isAiTask } from '../../domain/merge.js';
 import type { Schedule } from '../../domain/schedule.js';
 import { AiBadge, StatusChip } from './chips.js';
-import { isAiTask, STATUS_UI } from './status-ui.js';
+import { STATUS_UI } from './status-ui.js';
 
 /** How many blocked tasks the banner names before summing up the rest. */
 const SHOWN = 5;

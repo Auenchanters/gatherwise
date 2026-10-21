@@ -27,11 +27,9 @@ import { fakeClient, memoryStorage, type Answer } from '../support/fakes.js';
 import { aiMeta, aiSuggestions } from '../support/fixtures.js';
 import { festival, settle, setup, today } from '../support/planner-ui.js';
 
-/** The planner's polite region (the Budget tab has a polite region of its own). */
+/** The planner's polite region: the first in the page (the tabs have polite regions of their own). */
 function statusRegion(): HTMLElement {
-  const region = screen
-    .getAllByRole('status')
-    .find((el) => el.classList.contains('notices__region'));
+  const [region] = screen.getAllByRole('status');
   if (!region) throw new Error('no notices region');
   return region;
 }

@@ -92,9 +92,7 @@ function AiStatus({ state, aiView, onPersonalize }: Omit<AiPanelProps, 'calls'>)
   }
   return (
     <p className="ai-panel__status ai-panel__status--done">
-      <span className="ai-panel__tick" aria-hidden="true">
-        ✓
-      </span>
+      <span aria-hidden="true">✓</span>
       {source}
     </p>
   );

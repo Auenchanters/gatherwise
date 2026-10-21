@@ -39,7 +39,13 @@ export interface MergeContext {
 const ai = LIMITS.ai;
 
 /** Extra tasks are named this prefix plus N, counting from 1 in response order (`ai-task-1`). */
-export const AI_TASK_PREFIX = 'ai-task-';
+const AI_TASK_PREFIX = 'ai-task-';
+
+/** Whether a task came from Gemini rather than the template, so it must carry the AI label. */
+export const isAiTask = (id: TaskId): boolean => id.startsWith(AI_TASK_PREFIX);
+
+/** The label every AI-written text carries: chips, calendar entries and copy all say it this way. */
+export const AI_LABEL = 'AI · personalized';
 
 const clamp = (n: number, min: number, max: number): number => Math.min(max, Math.max(min, n));
 
