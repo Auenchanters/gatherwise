@@ -7,13 +7,13 @@ import type {
   ACCESSIBILITY_OPTIONS,
   Currency,
   DIETARY_OPTIONS,
-  EventBrief,
+  EVENT_KINDS,
   SUBTYPES,
   VENUES,
-} from '../../shared/schema.js';
+} from '../../shared/options.js';
 
 /** Labels for event kinds. */
-export const KIND_LABELS: Record<EventBrief['kind'], string> = {
+export const KIND_LABELS: Record<(typeof EVENT_KINDS)[number], string> = {
   community: 'Community event',
   wedding: 'Wedding',
   birthday: 'Birthday',

@@ -170,6 +170,16 @@
   font-size: 0.9375rem;
 }
 
+.brief__status {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-weight: 600;
+}
+
+.button[aria-disabled='true'] {
+  cursor: progress;
+}
+
 /* Fields */
 
 .field {

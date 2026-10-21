@@ -4,9 +4,10 @@
  * Does: holds a string draft; shows character counts that a polite live region announces only at
  * 20, 10 and 0 left; validates on submit with a GOV.UK error summary (focused, one link per error)
  * plus an inline message on each field, tied to it with aria-invalid and aria-describedby; and hands
- * a schema-valid brief to `onSubmit`.
- * Never does: validate while typing, call the API, read the clock (`today` is a prop), or use inline
- * styles (the CSP forbids them).
+ * a schema-valid brief to `onSubmit`. The checker (zod and the schema) loads on the first submit,
+ * so the first page stays light.
+ * Never does: validate while typing, call the API, read the clock (`today` is a prop), use inline
+ * styles (the CSP forbids them), or let a failed checker load throw.
  */
 import {
   useRef,
@@ -26,8 +27,8 @@ import {
   EVENT_KINDS,
   SUBTYPES,
   VENUES,
-  type EventBrief,
-} from '../../shared/schema.js';
+} from '../../shared/options.js';
+import type { EventBrief } from '../../shared/schema.js';
 import './brief.css';
 import { draftFromBrief, EMPTY_DRAFT, toggleOption, withKind, type BriefDraft } from './draft.js';
 import {
@@ -38,9 +39,13 @@ import {
   SUBTYPE_LABELS,
   VENUE_LABELS,
 } from './labels.js';
-import { validateBrief, type FieldError, type FieldKey } from './validate.js';
+import type { FieldError, FieldKey } from './validate.js';
 
 const caps = LIMITS.brief;
+/** How long the checker may take to load before the form says it is working. */
+const SLOW_CHECK_MS = 150;
+const CHECKING = 'Checking your details…';
+const CHECKER_FAILED = "We couldn't load the form checker — check your connection and try again.";
 /** Counts that are announced to screen readers; every other count is only shown. */
 const ANNOUNCE_AT: ReadonlySet<number> = new Set([20, 10, 0]);
 
@@ -340,6 +345,8 @@ export function BriefForm({ initial, today, onSubmit, headingRef }: BriefFormPro
     initial === undefined ? EMPTY_DRAFT : draftFromBrief(initial),
   );
   const [errors, setErrors] = useState<readonly FieldError[]>([]);
+  const [checking, setChecking] = useState(false);
+  const [notice, setNotice] = useState('');
   const summaryRef = useRef<HTMLDivElement>(null);
 
   const set = <K extends keyof BriefDraft>(key: K, value: BriefDraft[K]): void => {
@@ -351,9 +358,19 @@ export function BriefForm({ initial, today, onSubmit, headingRef }: BriefFormPro
   const errorOf = (field: FieldKey): string | undefined =>
     errors.find((error) => error.field === field)?.message;
 
-  const submit = (event: SubmitEvent<HTMLFormElement>): void => {
-    event.preventDefault();
-    const result = validateBrief(draft, today);
+  const check = async (): Promise<void> => {
+    setChecking(true);
+    const slow = window.setTimeout(() => {
+      setNotice(CHECKING);
+    }, SLOW_CHECK_MS);
+    // Validation (zod and the schema) is a separate chunk, fetched on the first submit.
+    const checker = await import('./validate.js').catch(() => undefined);
+    window.clearTimeout(slow);
+    setChecking(false);
+    setNotice(checker === undefined ? CHECKER_FAILED : '');
+    if (checker === undefined) return;
+
+    const result = checker.validateBrief(draft, today);
     if (result.ok) {
       setErrors([]);
       onSubmit(result.brief);
@@ -364,6 +381,11 @@ export function BriefForm({ initial, today, onSubmit, headingRef }: BriefFormPro
       setErrors(result.errors);
     });
     summaryRef.current?.focus();
+  };
+
+  const submit = (event: SubmitEvent<HTMLFormElement>): void => {
+    event.preventDefault();
+    if (!checking) void check();
   };
 
   return (
@@ -712,11 +734,19 @@ export function BriefForm({ initial, today, onSubmit, headingRef }: BriefFormPro
       )}
 
       <div className="brief__actions">
-        <button className="button button--primary" type="submit">
+        {/* aria-disabled, not disabled, so a keyboard user's focus stays on the button. */}
+        <button
+          className="button button--primary"
+          type="submit"
+          aria-disabled={checking ? true : undefined}
+        >
           Generate my plan
         </button>
         <p className="brief__note">
           Creating the plan uses one AI call. Changing guests, budget or dates afterwards uses none.
+        </p>
+        <p className="brief__status" role="status">
+          {notice}
         </p>
       </div>
     </form>

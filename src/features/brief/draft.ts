@@ -6,7 +6,8 @@
  * a missing value so the schema reports it. Income and volunteers count only for community events.
  * Never does: validate (that is validate.ts and the schema), read the clock, or touch the DOM.
  */
-import { SUBTYPES, type EventBrief } from '../../shared/schema.js';
+import { SUBTYPES } from '../../shared/options.js';
+import type { EventBrief } from '../../shared/schema.js';
 
 type EventKind = EventBrief['kind'];
 type Income = NonNullable<Extract<EventBrief, { kind: 'community' }>['income']>;

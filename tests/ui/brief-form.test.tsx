@@ -4,25 +4,37 @@
  * Does: checks every control is named, the GOV.UK error summary (focus, links, aria-invalid and
  * aria-describedby), the kind-dependent subtype and community extras, the throttled counter
  * announcements, `dir="auto"` on free text, sample briefs submitting unchanged, and a keyboard-only
- * completion with Tab, Space and arrow keys.
+ * completion with Tab, Space and arrow keys. The checker loads on demand, so it also covers the
+ * slow-load notice, the busy button and a failed load (mocked with `vi.doMock`).
  * Never does: read the clock (`today` is fixed) or call the network.
  */
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { addDays, isoDate } from '../../src/domain/dates.js';
 import { BriefForm } from '../../src/features/brief/brief-form.js';
 import { sampleBrief } from '../../src/features/brief/samples.js';
 import { eventBriefSchema, type EventBrief } from '../../src/shared/schema.js';
 
 const today = isoDate('2026-10-21');
+const VALIDATE = '../../src/features/brief/validate.js';
+
+const submitButton = () => screen.getByRole('button', { name: 'Generate my plan' });
+/** Waits until the on-demand checker has loaded and the submit has been handled. */
+const settled = () =>
+  waitFor(() => {
+    expect(submitButton().getAttribute('aria-disabled')).toBeNull();
+  });
 
 function setup(initial?: EventBrief) {
   const onSubmit = vi.fn<(brief: EventBrief) => void>();
   const user = userEvent.setup();
   render(<BriefForm initial={initial} today={today} onSubmit={onSubmit} />);
   const form = screen.getByRole('form', { name: 'Tell us about your event' });
-  const submit = () => user.click(screen.getByRole('button', { name: 'Generate my plan' }));
+  const submit = async () => {
+    await user.click(submitButton());
+    await settled();
+  };
   return { user, form, onSubmit, submit };
 }
 
@@ -278,8 +290,9 @@ describe('BriefForm: keyboard only', () => {
     await user.keyboard(' ');
     await tabTo(screen.getByRole('checkbox', { name: 'Serving food' }));
     await user.keyboard(' ');
-    await tabTo(screen.getByRole('button', { name: 'Generate my plan' }));
+    await tabTo(submitButton());
     await user.keyboard('{Enter}');
+    await settled();
 
     expect(onSubmit).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
@@ -294,5 +307,54 @@ describe('BriefForm: keyboard only', () => {
         volunteersAvailable: 0,
       }),
     );
+  });
+});
+
+describe('BriefForm: loading the checker on demand', () => {
+  afterEach(() => {
+    vi.doUnmock(VALIDATE);
+  });
+
+  it('marks the button busy, says it is checking when the load is slow, and submits once', async () => {
+    let release = (): void => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.doMock(VALIDATE, async (importOriginal) => {
+      await gate;
+      return importOriginal();
+    });
+    const { user, onSubmit } = setup(sampleBrief('birthday', today));
+    await user.click(submitButton());
+    expect(submitButton().getAttribute('aria-disabled')).toBe('true');
+    const status = await screen.findByRole('status');
+    await waitFor(() => {
+      expect(status.textContent).toBe('Checking your details…');
+    });
+    await user.click(submitButton()); // ignored while busy
+    release();
+    await settled();
+    // Give a second, unguarded check time to land before asserting there was only one.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(onSubmit).toHaveBeenCalledOnce();
+    expect(status.textContent).toBe('');
+  });
+
+  it('says so when the checker cannot load, never throws, and works on a retry', async () => {
+    vi.doMock(VALIDATE, () => {
+      throw new Error('Failed to fetch dynamically imported module');
+    });
+    const { submit, onSubmit } = setup(sampleBrief('community', today));
+    await submit();
+    expect(screen.getByRole('status').textContent).toBe(
+      "We couldn't load the form checker — check your connection and try again.",
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    vi.doUnmock(VALIDATE);
+    await submit();
+    expect(onSubmit).toHaveBeenCalledOnce();
+    expect(screen.getByRole('status').textContent).toBe('');
   });
 });

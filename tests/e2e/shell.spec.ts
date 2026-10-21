@@ -72,7 +72,9 @@ test.describe('brief form', () => {
     expect(await axeViolations(page)).toEqual([]);
 
     await page.getByRole('button', { name: 'Generate my plan' }).click();
-    await expect(page.getByRole('status')).toHaveText('Plan ready to generate');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Plan ready to generate' }),
+    ).toBeVisible();
   });
 
   test('an empty submit focuses an error summary that has no axe violations', async ({ page }) => {

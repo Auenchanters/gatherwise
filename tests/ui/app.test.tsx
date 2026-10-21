@@ -59,7 +59,8 @@ describe('App landing state', () => {
       screen.getByRole('heading', { name: 'Tell us about your event' }),
     );
     await user.click(screen.getByRole('button', { name: 'Generate my plan' }));
+    const ready = await screen.findByText('Plan ready to generate');
+    expect(ready.getAttribute('role')).toBe('status');
     expect(screen.queryByRole('alert')).toBeNull();
-    expect(screen.getByRole('status').textContent).toBe('Plan ready to generate');
   });
 });
