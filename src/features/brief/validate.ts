@@ -1,0 +1,128 @@
+/**
+ * Submit-time validation for the brief form, in the GOV.UK error-summary style.
+ * Does: parses the draft with `eventBriefSchema`, checks the date window with `eventDateOf`, and
+ * turns every problem into one short, specific message per field, listed in the order the form
+ * shows the fields. A past date is reported together with any other errors, not after them.
+ * Never does: show the schema's own wording to people, read the clock (`today` is a parameter), or
+ * touch the DOM.
+ */
+import type { z } from 'zod';
+import type { IsoDate } from '../../domain/dates.js';
+import { eventDateOf } from '../../domain/schedule.js';
+import { LIMITS } from '../../shared/limits.js';
+import { eventBriefSchema, type EventBrief } from '../../shared/schema.js';
+import { draftToCandidate, type BriefDraft } from './draft.js';
+
+/** A form field that can carry an error: a draft key, or `income.<key>` for an income field. */
+export type FieldKey = Exclude<keyof BriefDraft, 'income'> | `income.${keyof BriefDraft['income']}`;
+
+/** One problem to show: in the error summary, and inline beside the field. */
+export interface FieldError {
+  readonly field: FieldKey;
+  readonly message: string;
+}
+
+/** The outcome of a submit: the validated brief, or the errors in form order. */
+export type BriefValidation =
+  | { readonly ok: true; readonly brief: EventBrief }
+  | { readonly ok: false; readonly errors: readonly FieldError[] };
+
+/** A field's messages: `empty` when it was left blank, `tooSmall` under its minimum, else `invalid`. */
+interface Copy {
+  readonly invalid: string;
+  readonly empty?: string;
+  readonly tooSmall?: string;
+}
+
+const { brief: caps } = LIMITS;
+const n = (value: number): string => value.toLocaleString('en-IN');
+const whole = (label: string, min: number, max: number): string =>
+  `${label} must be a whole number from ${n(min)} to ${n(max)}`;
+const longest = (label: string, max: number): string =>
+  `${label} must be ${n(max)} characters or fewer`;
+
+// Written in the order the form shows the fields; FIELD_KEYS reads the order back from here.
+const COPY = {
+  kind: { invalid: 'Choose the kind of event' },
+  subtype: { invalid: 'Choose the type of event' },
+  name: { empty: 'Enter the event name', invalid: longest('Event name', caps.nameMax) },
+  date: { invalid: 'Enter the event date' },
+  startTime: { invalid: 'Enter a start time, like 18:00' },
+  durationHours: {
+    empty: 'Enter how many hours the event lasts',
+    invalid: `Duration must be a whole number of hours from ${n(caps.durationHoursMin)} to ${n(caps.durationHoursMax)}`,
+  },
+  city: { invalid: longest('City', caps.cityMax) },
+  venue: { invalid: 'Choose a type of venue' },
+  guests: {
+    empty: 'Enter the number of guests',
+    invalid: whole('Guests', caps.guestsMin, caps.guestsMax),
+  },
+  budget: {
+    empty: `Enter a budget of at least ${n(caps.budgetMin)}`,
+    tooSmall: `Enter a budget of at least ${n(caps.budgetMin)}`,
+    invalid: whole('Budget', caps.budgetMin, caps.budgetMax),
+  },
+  currency: { invalid: 'Choose a currency' },
+  dietary: { invalid: `Choose each dietary need once, up to ${n(caps.listMax)}` },
+  accessibility: { invalid: `Choose each accessibility need once, up to ${n(caps.listMax)}` },
+  amplifiedSound: { invalid: 'Say whether there will be amplified sound' },
+  servesFood: { invalid: 'Say whether you will serve food' },
+  servesAlcohol: { invalid: 'Say whether you will serve alcohol' },
+  vibe: { invalid: longest('Vibe', caps.vibeMax) },
+  notes: { invalid: longest('Notes', caps.notesMax) },
+  volunteersAvailable: {
+    empty: 'Enter how many volunteers you have, or 0',
+    invalid: whole('Volunteers', 0, caps.volunteersMax),
+  },
+  'income.ticketPrice': { invalid: whole('Ticket price', 0, caps.budgetMax) },
+  'income.expectedPaidAttendance': { invalid: whole('Paid attendance', 0, caps.guestsMax) },
+  'income.sponsors': { invalid: whole('Sponsorship', 0, caps.budgetMax) },
+  'income.donations': { invalid: whole('Donations', 0, caps.budgetMax) },
+  'income.stallCount': { invalid: whole('Number of stalls', 0, caps.guestsMax) },
+  'income.stallFee': { invalid: whole('Fee per stall', 0, caps.budgetMax) },
+} satisfies Record<FieldKey, Copy>;
+
+const isFieldKey = (key: string): key is FieldKey => Object.hasOwn(COPY, key);
+/** Every field, in form order; errors are listed in this order. */
+const FIELD_KEYS: readonly FieldKey[] = Object.keys(COPY).filter(isFieldKey);
+
+/** Messages for the reasons `eventDateOf` rejects a date. */
+const DATE_COPY = {
+  invalid: 'Enter a real calendar date',
+  past: 'Choose a date from today onwards',
+  too_far: 'Choose a date within the next two years',
+} as const;
+
+/** The field an issue belongs to, as a FieldKey-shaped string (`income.sponsors`, `dietary`...). */
+const keyOf = (path: readonly PropertyKey[]): string =>
+  path[0] === 'income' ? `income.${String(path[1])}` : String(path[0]);
+
+const isBlank = (input: unknown): boolean =>
+  input === undefined || (typeof input === 'string' && input.trim() === '');
+
+function messageFor(copy: Copy, issue: z.core.$ZodIssue): string {
+  if (isBlank(issue.input)) return copy.empty ?? copy.invalid;
+  if (issue.code === 'too_small') return copy.tooSmall ?? copy.invalid;
+  return copy.invalid;
+}
+
+/**
+ * Validates a draft on submit. Success carries the schema's parsed brief (text trimmed); failure
+ * carries one message per invalid field, in form order. The date window is checked even when other
+ * fields fail, so every problem shows at once.
+ */
+export function validateBrief(draft: BriefDraft, today: IsoDate): BriefValidation {
+  const parsed = eventBriefSchema.safeParse(draftToCandidate(draft), { reportInput: true });
+  const issues = parsed.error?.issues ?? [];
+  const dateCheck = eventDateOf({ date: draft.date }, today);
+  const errors = FIELD_KEYS.flatMap((field): FieldError[] => {
+    const issue = issues.find((candidate) => keyOf(candidate.path) === field);
+    if (issue) return [{ field, message: messageFor(COPY[field], issue) }];
+    if (field === 'date' && !dateCheck.ok) return [{ field, message: DATE_COPY[dateCheck.error] }];
+    return [];
+  });
+  return parsed.success && errors.length === 0
+    ? { ok: true, brief: parsed.data }
+    : { ok: false, errors };
+}

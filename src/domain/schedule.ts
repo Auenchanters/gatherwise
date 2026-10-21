@@ -65,10 +65,11 @@ export type ScheduleError =
 
 /**
  * The event date of a brief, checked against `today`: it must be a real calendar date, not in the
- * past, and at most `LIMITS.brief.horizonDays` ahead. Today itself is allowed.
+ * past, and at most `LIMITS.brief.horizonDays` ahead. Today itself is allowed. Only the date is
+ * read, so the brief form can check it before the rest of the brief is valid.
  */
 export function eventDateOf(
-  brief: EventBrief,
+  brief: Pick<EventBrief, 'date'>,
   today: IsoDate,
 ): Result<IsoDate, 'invalid' | 'past' | 'too_far'> {
   const parsed = parseIsoDate(brief.date);
