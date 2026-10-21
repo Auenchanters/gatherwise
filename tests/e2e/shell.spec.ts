@@ -6,12 +6,8 @@
  * Never does: generate a plan; tests/e2e/planner.spec.ts covers that, with the API mocked.
  */
 import { readFileSync } from 'node:fs';
-import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
-
-const WCAG_AA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
-const axeViolations = async (page: Page) =>
-  (await new AxeBuilder({ page }).withTags(WCAG_AA).analyze()).violations;
+import { expect, test } from '@playwright/test';
+import { axeViolations, openSampleForm } from './helpers.js';
 
 test.describe('app shell', () => {
   test('has one main landmark, one h1 and the brand in the banner', async ({ page }) => {
@@ -62,12 +58,8 @@ test.describe('brief form', () => {
   test('the community sample fills the form, takes focus and has no axe violations', async ({
     page,
   }) => {
-    await page.goto('/');
-    await page.getByRole('button', { name: 'Try a sample community event' }).click();
+    await openSampleForm(page);
     await expect(page.getByRole('heading', { name: 'Tell us about your event' })).toBeFocused();
-    await expect(page.getByRole('textbox', { name: 'Event name' })).toHaveValue(
-      'Green Park Diwali Mela',
-    );
     await expect(page.getByRole('group', { name: 'Community extras' })).toBeVisible();
     await expect(
       page.getByRole('status').filter({ hasText: 'Filled in the sample community event' }),

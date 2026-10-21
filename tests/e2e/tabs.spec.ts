@@ -11,7 +11,14 @@
  */
 import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
-import { axeViolations, generateSample, isoIn, noSidewaysScroll, prepare } from './helpers.js';
+import {
+  axeViolations,
+  generateSample,
+  isoIn,
+  noSidewaysScroll,
+  prepare,
+  SAMPLE_NAME,
+} from './helpers.js';
 
 const TABS = ['Overview', 'Budget', 'Timeline', 'Vendors', 'Ideas', 'Volunteers'] as const;
 const NEW_TABS = ['Timeline', 'Vendors', 'Ideas', 'Volunteers'] as const;
@@ -82,7 +89,7 @@ test('the calendar downloads as an iCalendar file named after the event', async 
   const text = await readFile(path, 'utf8');
   expect(text.startsWith('BEGIN:VCALENDAR')).toBe(true);
   expect(text.trimEnd().endsWith('END:VCALENDAR')).toBe(true);
-  expect(text).toContain('SUMMARY:Green Park Diwali Mela');
+  expect(text).toContain(`SUMMARY:${SAMPLE_NAME}`);
   expect(text).toMatch(/DTSTAMP:\d{8}T\d{6}Z/u);
   // A task Gemini added says so in the calendar too (long lines are folded, so unfold first).
   expect(text.replaceAll('\r\n ', '')).toContain(
@@ -153,7 +160,7 @@ test('the model-call budget: 1 to generate, none for five edits, 1 for Refresh i
   // It asks about the plan as edited, not as first generated.
   expect(requests[1]).toEqual({
     brief: expect.objectContaining({
-      name: 'Green Park Diwali Mela',
+      name: SAMPLE_NAME,
       guests: 300,
       budget: 200_000,
     }),

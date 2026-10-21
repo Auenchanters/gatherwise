@@ -10,7 +10,7 @@
  * Never does: use the mouse, or reach a real model.
  */
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { prepare } from './helpers.js';
+import { AI_DONE, prepare, SAMPLE_NAME } from './helpers.js';
 
 /** Each tab and the h2 its panel opens with. */
 const TABS = [
@@ -80,17 +80,15 @@ test('the whole journey works with the keyboard alone', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Try a sample community event' })).toBeFocused();
   expect(await focusIsVisible(page)).toBe(true);
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('textbox', { name: 'Event name' })).toHaveValue(
-    'Green Park Diwali Mela',
-  );
+  await expect(page.getByRole('textbox', { name: 'Event name' })).toHaveValue(SAMPLE_NAME);
   await expect(page.getByRole('heading', { name: 'Tell us about your event' })).toBeFocused();
 
   // Tab down the form to Generate, and press Enter.
   await pressUntil(page, 'Tab', page.getByRole('button', { name: 'Generate my plan' }));
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Green Park Diwali Mela');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(SAMPLE_NAME);
   await expect(page.getByRole('heading', { level: 1 })).toBeFocused();
-  await expect(page.getByText('Personalized by gemini-3.5-flash-lite in one call.')).toBeVisible();
+  await expect(page.getByText(AI_DONE)).toBeVisible();
   expect(requests).toHaveLength(1);
 
   // Tab to the tabs, then arrow through every one; each opens its panel and its heading shows.

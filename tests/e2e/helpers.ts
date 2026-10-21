@@ -2,14 +2,20 @@
  * Shared pieces of the plan workspace's browser journeys.
  * Does: serve every response under the production CSP, answer `/api/plan` with the fixed answer
  * (shaped like the real API) or, when a test passes one, a failure, while recording each request
- * body and console error, run axe at WCAG
- * 2.1 A and AA, check for sideways page scroll, and open the community sample's plan.
+ * body and console error; run axe at WCAG 2.1 A and AA; check for sideways page scroll; fill the
+ * form from the community sample; and open the sample's plan.
  * Never does: reach a real model.
  */
 import { readFileSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page } from '@playwright/test';
 import { aiMeta, aiSuggestions } from '../support/fixtures.js';
+
+/** The community sample's event name, which becomes the plan's h1. */
+export const SAMPLE_NAME = 'Green Park Diwali Mela';
+
+/** The line the AI panel shows once the fixed answer has landed. */
+export const AI_DONE = 'Personalized by gemini-3.5-flash-lite in one call.';
 
 const WCAG_AA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 
@@ -68,13 +74,19 @@ export async function prepare(
 export const noSidewaysScroll = (page: Page): Promise<boolean> =>
   page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 
-/** Opens the community sample's plan and waits until the AI's answer has landed. */
-export async function generateSample(page: Page): Promise<void> {
+/** Opens the landing and fills the form from the community sample. */
+export async function openSampleForm(page: Page): Promise<void> {
   await page.goto('/');
   await page.getByRole('button', { name: 'Try a sample community event' }).click();
+  await expect(page.getByRole('textbox', { name: 'Event name' })).toHaveValue(SAMPLE_NAME);
+}
+
+/** Opens the community sample's plan and waits until the AI's answer has landed. */
+export async function generateSample(page: Page): Promise<void> {
+  await openSampleForm(page);
   await page.getByRole('button', { name: 'Generate my plan' }).click();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Green Park Diwali Mela');
-  await expect(page.getByText('Personalized by gemini-3.5-flash-lite in one call.')).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(SAMPLE_NAME);
+  await expect(page.getByText(AI_DONE)).toBeVisible();
 }
 
 /** The local calendar date `days` from now, as `YYYY-MM-DD`. */

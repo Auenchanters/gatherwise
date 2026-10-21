@@ -13,21 +13,13 @@ import { expect, test, type Page } from '@playwright/test';
 import { clientErrorMessage } from '../../src/features/client/messages.js';
 import { STORAGE_KEY } from '../../src/features/plan/storage-key.js';
 import { SYSTEM_INSTRUCTION } from '../../src/shared/prompt.js';
-import { axeViolations, isoIn, prepare } from './helpers.js';
+import { AI_DONE, axeViolations, isoIn, openSampleForm, prepare, SAMPLE_NAME } from './helpers.js';
 
-const SAMPLE_NAME = 'Green Park Diwali Mela';
 const CANT_DO = "Can't be done in time";
 const BLOCKED = /Overdue|Can't be done in time/u;
 
 /** The date field on the brief form (the Budget tab's own is "Event date"). */
 const dateField = (page: Page) => page.getByLabel('Date', { exact: true });
-
-/** Opens the landing and fills the form from the community sample. */
-async function openSampleForm(page: Page): Promise<void> {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Try a sample community event' }).click();
-  await expect(page.getByRole('textbox', { name: 'Event name' })).toHaveValue(SAMPLE_NAME);
-}
 
 test('a past date is refused with an error summary and no request', async ({ page }) => {
   const { requests } = await prepare(page);
@@ -55,15 +47,17 @@ test('an event in six days still gets a plan that names what cannot be done in t
   await dateField(page).fill(isoIn(6));
   await page.getByRole('button', { name: 'Generate my plan' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(SAMPLE_NAME);
-  await expect(page.getByText('Personalized by gemini-3.5-flash-lite in one call.')).toBeVisible();
+  await expect(page.getByText(AI_DONE)).toBeVisible();
   expect(requests).toHaveLength(1);
 
   // Six days out, most tasks' deadlines have already passed (Overdue) and a few cannot fit
-  // (Can't be done in time). The banner names the first five in words and counts the rest.
+  // (Can't be done in time). The banner names the first five in words, the ones that cannot be
+  // done in time first, and counts the rest.
   const banner = page.getByRole('region', { name: "Some deadlines can't be met" });
   await expect(banner).toBeVisible();
   const items = await banner.getByRole('listitem').all();
   expect(items.length).toBeGreaterThan(0);
+  await expect(banner.getByRole('listitem').first()).toContainText(CANT_DO);
   for (const item of items) await expect(item).toContainText(BLOCKED);
   await expect(banner).toContainText(/and \d+ more\./u);
   expect(await axeViolations(page), 'axe on the Overview with the banner').toEqual([]);
@@ -87,6 +81,8 @@ test('an event in six days still gets a plan that names what cannot be done in t
 test('a 502 from the API leaves the deterministic plan, standard ideas and an honest notice', async ({
   page,
 }) => {
+  // Asserts no `pageerror` rather than a clean console: Chromium logs "Failed to load resource"
+  // for the mocked 502, which is expected here.
   const pageErrors: Error[] = [];
   page.on('pageerror', (error) => pageErrors.push(error));
   const { requests } = await prepare(page, {
@@ -136,7 +132,7 @@ test('injection text in the notes is sanitized data in the prompt and never runs
   await page.getByRole('textbox', { name: 'Notes (optional)' }).fill(injection);
   await page.getByRole('button', { name: 'Generate my plan' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(SAMPLE_NAME);
-  await expect(page.getByText('Personalized by gemini-3.5-flash-lite in one call.')).toBeVisible();
+  await expect(page.getByText(AI_DONE)).toBeVisible();
   expect(requests).toEqual([{ brief: expect.objectContaining({ notes: injection }) }]);
 
   // The receipt: fixed instruction first, then the data. The words are only in the data, as the

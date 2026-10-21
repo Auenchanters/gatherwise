@@ -10,7 +10,15 @@
  * Never does: reach a real model.
  */
 import { expect, test, type Page } from '@playwright/test';
-import { axeViolations, CSP, noSidewaysScroll, prepare } from './helpers.js';
+import {
+  AI_DONE,
+  axeViolations,
+  CSP,
+  noSidewaysScroll,
+  openSampleForm,
+  prepare,
+  SAMPLE_NAME,
+} from './helpers.js';
 
 /** The Allocated cell of the Food & beverage row. */
 const foodLine = (page: Page) =>
@@ -24,22 +32,19 @@ test('the community sample becomes a plan with one AI call, and edits and reload
 }) => {
   expect(CSP).toBeTruthy();
   const { requests, errors } = await prepare(page);
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Try a sample community event' }).click();
+  await openSampleForm(page);
   await page.getByRole('button', { name: 'Generate my plan' }).click();
 
   const heading = page.getByRole('heading', { level: 1 });
-  await expect(heading).toHaveText('Green Park Diwali Mela');
+  await expect(heading).toHaveText(SAMPLE_NAME);
   await expect(heading).toBeFocused();
-  await expect(page.getByText('Personalized by gemini-3.5-flash-lite in one call.')).toBeVisible();
-  expect(requests).toEqual([
-    { brief: expect.objectContaining({ name: 'Green Park Diwali Mela' }) },
-  ]);
+  await expect(page.getByText(AI_DONE)).toBeVisible();
+  expect(requests).toEqual([{ brief: expect.objectContaining({ name: SAMPLE_NAME }) }]);
 
   // Overview: the AI panel shows the prompt that was sent, and the counter says 1.
   const prompt = page.getByRole('region', { name: 'What we sent to Gemini' });
   await expect(prompt).toContainText('You are Gatherwise');
-  await expect(prompt).toContainText('"name": "Green Park Diwali Mela"');
+  await expect(prompt).toContainText(`"name": "${SAMPLE_NAME}"`);
   await expect(page.getByRole('region', { name: 'Engine adjustments' })).toContainText(
     "Cost of 'Fireworks finale' clamped",
   );
@@ -62,7 +67,7 @@ test('the community sample becomes a plan with one AI call, and edits and reload
 
   // A reload restores the plan from this browser without asking the AI again.
   await page.reload();
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Green Park Diwali Mela');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(SAMPLE_NAME);
   await expect(page.getByText('Restored with your saved plan — no new AI call.')).toBeVisible();
   await page.getByRole('tab', { name: 'Budget' }).click();
   await expect(page.getByRole('spinbutton', { name: 'Guests attending' })).toHaveValue('400');
