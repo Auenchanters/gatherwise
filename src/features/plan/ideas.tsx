@@ -2,27 +2,25 @@
  * The Ideas tab: a card for each idea with its category, estimated cost, whether the cost fits that
  * category's budget, and who wrote it, plus the one button in the workspace that asks the AI for
  * new ideas.
- * Does: call `store.refreshIdeas()` from that button's click, disabled while a request is pending;
- * say plainly that edits never call the AI; label every idea "AI · personalized" (with why it was
- * chosen) or "Standard suggestion"; when no AI ideas are showing, say why, honestly.
+ * Does: call `store.refreshIdeas()` from that button's click; mark the button `aria-disabled` while
+ * a request is pending (it keeps keyboard focus, and a click does nothing); say plainly that edits
+ * never call the AI; announce what a refresh brought, truthfully (fresh, the same as before, or
+ * nothing usable); label every idea "AI · personalized" (with why it was chosen) or "Standard
+ * suggestion"; when no AI ideas are showing, say why.
  * Never does: call the AI from anywhere else, compute a fit (the engine did), or show AI text
  * unlabelled.
  */
-import { useId, useState, type ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { formatMoney } from '../../domain/money.js';
 import type { Plan } from '../../domain/plan.js';
 import type { AiState, ReadyState } from '../../domain/reducer.js';
 import { AiBadge, StandardBadge, StatusChip } from './chips.js';
 import { categoryLabel, formatCount } from './format.js';
+import { LiveRegion, Panel } from './panel.js';
 import type { PlannerStore } from './planner-store.js';
+import { STATUS_UI } from './status-ui.js';
 
 type AiStatus = AiState['status'];
-
-/** The look of the two fits: an icon and a status colour, as everywhere else. */
-const FIT_UI = {
-  fits: { icon: '✓', className: 'status--ok' },
-  over: { icon: '▲', className: 'status--risk' },
-} as const;
 
 /** Why standard suggestions are showing, by where the AI stands. Only used when none are AI's. */
 const STANDARD_NOTICE: Readonly<Record<AiStatus, string>> = {
@@ -33,15 +31,17 @@ const STANDARD_NOTICE: Readonly<Record<AiStatus, string>> = {
   applied: "Gemini's answer had no usable ideas, so you're seeing standard suggestions.",
 };
 
-/** What the refresh just did, as one polite sentence. */
-function refreshMessage(status: AiStatus, calls: number): string {
-  const messages: Readonly<Record<AiStatus, string>> = {
-    idle: '',
-    pending: 'Asking Gemini for fresh ideas… this uses 1 AI call.',
-    applied: `Fresh ideas are in. AI calls this session: ${formatCount(calls)}.`,
-    failed: "The refresh didn't go through, so your ideas are unchanged.",
-  };
-  return messages[status];
+/** What the refresh the user asked for has done, as one polite sentence. */
+function refreshMessage(
+  status: AiStatus,
+  answer: { readonly hasAiIdeas: boolean; readonly cached: boolean; readonly calls: number },
+): string {
+  if (status === 'pending') return 'Asking Gemini for fresh ideas… this uses 1 AI call.';
+  if (status === 'failed') return "The refresh didn't go through, so your ideas are unchanged.";
+  if (status === 'idle') return '';
+  if (!answer.hasAiIdeas) return STANDARD_NOTICE.applied;
+  if (answer.cached) return 'Same ideas as before — reused from this session, no new AI call.';
+  return `Fresh ideas are in. AI calls this session: ${formatCount(answer.calls)}.`;
 }
 
 /** One idea. */
@@ -55,9 +55,9 @@ function IdeaCard({
   const { currency } = plan.budget;
   const category = categoryLabel(plan.budget, idea.categoryId);
   const fit = idea.fit.fits
-    ? { ui: FIT_UI.fits, label: `Fits ${category} budget` }
+    ? { ui: STATUS_UI.fit.fits, label: `Fits ${category} budget` }
     : {
-        ui: FIT_UI.over,
+        ui: STATUS_UI.fit.over,
         label: `Over ${category} budget by ${formatMoney(idea.fit.overBy, currency)}`,
       };
   return (
@@ -99,28 +99,31 @@ export interface IdeasProps {
   readonly state: ReadyState;
   /** Real AI calls this session, for the refresh's announcement. */
   readonly calls: number;
+  /** True when the latest answer was reused from this session's cache rather than fetched. */
+  readonly cached: boolean;
   readonly store: PlannerStore;
 }
 
 /** The idea cards and the refresh button. */
-export function Ideas({ state, calls, store }: IdeasProps): ReactElement {
-  const titleId = useId();
-  const [requested, setRequested] = useState(false);
+export function Ideas({ state, calls, cached, store }: IdeasProps): ReactElement {
+  // The generation the user refreshed for: a new plan is a new generation, so it starts unasked.
+  const [askedFor, setAskedFor] = useState<number | undefined>(undefined);
   const { ideas } = state.plan;
   const { status } = state.ai;
-  const hasAi = ideas.some((idea) => idea.source === 'ai');
+  const hasAiIdeas = ideas.some((idea) => idea.source === 'ai');
+  const pending = status === 'pending';
+  const asked = askedFor === state.generation;
   return (
-    <section className="ideas" aria-labelledby={titleId}>
-      <h2 className="panel-title" id={titleId}>
-        Ideas
-      </h2>
+    <Panel title="Ideas">
       <div className="ideas__bar">
+        {/* aria-disabled, not disabled: the button keeps keyboard focus while it waits. */}
         <button
           className="button button--primary"
           type="button"
-          disabled={status === 'pending'}
+          aria-disabled={pending}
           onClick={() => {
-            setRequested(true);
+            if (pending) return;
+            setAskedFor(state.generation);
             void store.refreshIdeas();
           }}
         >
@@ -128,20 +131,18 @@ export function Ideas({ state, calls, store }: IdeasProps): ReactElement {
         </button>
         <p className="ideas__note">Edits never call the AI; only this button does.</p>
       </div>
-      <p className="visually-hidden" role="status">
-        {requested ? refreshMessage(status, calls) : ''}
-      </p>
-      {requested && status === 'pending' && (
+      <LiveRegion message={asked ? refreshMessage(status, { hasAiIdeas, cached, calls }) : ''} />
+      {asked && pending && (
         <p className="ideas__pending" aria-hidden="true">
           <span className="spinner" /> Asking Gemini for fresh ideas…
         </p>
       )}
-      {!hasAi && <p className="callout callout--info">{STANDARD_NOTICE[status]}</p>}
-      <ul className="cards cards--ideas">
+      {!hasAiIdeas && <p className="callout callout--info">{STANDARD_NOTICE[status]}</p>}
+      <ul className="cards">
         {ideas.map((idea) => (
           <IdeaCard key={idea.id} idea={idea} plan={state.plan} />
         ))}
       </ul>
-    </section>
+    </Panel>
   );
 }

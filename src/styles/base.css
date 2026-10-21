@@ -137,6 +137,17 @@ h1 {
   background: var(--color-accent-soft);
 }
 
+/* Waiting: a native `disabled` button, or one that stays focusable with `aria-disabled`. */
+.button:disabled,
+.button:disabled:hover,
+.button[aria-disabled='true'],
+.button[aria-disabled='true']:hover {
+  border-color: var(--color-track);
+  background: var(--color-track);
+  color: var(--color-muted);
+  cursor: not-allowed;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;

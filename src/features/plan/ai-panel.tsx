@@ -128,7 +128,12 @@ export function AiPanel({ state, aiView, calls, onPersonalize }: AiPanelProps): 
   const prompt = useMemo(() => promptText(source, state.today), [source, state.today]);
   return (
     <details className="ai-panel" open>
-      <summary className="ai-panel__summary">AI at work</summary>
+      <summary className="ai-panel__summary">
+        <span className="ai-panel__icon" aria-hidden="true">
+          ✦
+        </span>
+        AI at work
+      </summary>
       <div className="ai-panel__body">
         <AiStatus state={state} aiView={aiView} onPersonalize={onPersonalize} />
         <dl className="ai-panel__meta">

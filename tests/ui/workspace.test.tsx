@@ -295,6 +295,8 @@ describe('workspace: AI at work', () => {
     const panel = screen.getByText('AI at work').closest('details');
     if (!panel) throw new Error('no AI panel');
     expect(panel.open).toBe(true);
+    // The sparkle beside the title is decoration: hidden from assistive technology, not generated text.
+    expect(panel.querySelector('summary > [aria-hidden="true"]')?.textContent).toBe('✦');
     // Each receipt is itself a named, focusable region.
     const sent = within(panel).getByRole('region', { name: 'What we sent to Gemini' });
     expect(sent.tagName).toBe('PRE');

@@ -284,6 +284,28 @@ describe('toIcs: calendar and event structure', () => {
     expect(valueOf(block, 'DESCRIPTION')).toBe('Start by 2026-11-05. Finish by 2026-11-06.');
   });
 
+  it('labels a task Gemini added "AI · personalized" in its description, and only that one', () => {
+    const out = render(
+      scheduleOf(task('ai-task-1', { note: 'Ask, then confirm' }), task('book_venue')),
+    );
+    const [ai, own] = eventsOf(out).slice(1);
+    expect(valueOf(must(ai, 'AI task'), 'DESCRIPTION')).toBe(
+      String.raw`AI · personalized — Start by 2026-11-05. Finish by 2026-11-06. Ask\, then confirm`,
+    );
+    expect(valueOf(must(own, 'template task'), 'DESCRIPTION')).toBe(
+      'Start by 2026-11-05. Finish by 2026-11-06.',
+    );
+    // The label is in the file's text, not a property of its own, so nothing new can be injected.
+    expect(valueOf(must(ai, 'AI task'), 'SUMMARY')).toBe('Task ai-task-1');
+  });
+
+  it('does not take a title or id that merely contains "ai-task" for an AI task', () => {
+    const out = render(scheduleOf(task('x-ai-task-1', { title: 'ai-task-1' })));
+    expect(valueOf(taskBlock(out), 'DESCRIPTION')).toBe(
+      'Start by 2026-11-05. Finish by 2026-11-06.',
+    );
+  });
+
   it('skips done tasks and keeps the rest', () => {
     const out = render(fixtureSchedule);
     expect(out).not.toContain('sound_licence');

@@ -6,13 +6,15 @@
  * Never does: compute a figure (each one is the engine's) or call the AI except through the panel's
  * buttons.
  */
-import { useId, type ReactElement } from 'react';
+import type { ReactElement } from 'react';
 import { formatMoney, minor } from '../../domain/money.js';
 import { vendorView, type ReadyState } from '../../domain/reducer.js';
 import type { Status } from '../../domain/schedule.js';
 import { KIND_LABELS, SUBTYPE_LABELS } from '../brief/labels.js';
 import { AiPanel } from './ai-panel.js';
+import { AiBadge } from './chips.js';
 import { countOf, formatCount, showDate } from './format.js';
+import { Panel } from './panel.js';
 import type { PlannerSnapshot } from './planner-store.js';
 
 /** Task statuses that need the organizer's attention. */
@@ -43,7 +45,6 @@ function Tile(props: {
 
 /** Summary, stat tiles and the AI panel. */
 export function Overview({ state, snapshot, onPersonalize }: OverviewProps): ReactElement {
-  const titleId = useId();
   const { brief, plan } = state;
   const { budget, breakEven, schedule } = plan;
   const money = (amount: number): string => formatMoney(minor(amount), brief.currency);
@@ -54,14 +55,10 @@ export function Overview({ state, snapshot, onPersonalize }: OverviewProps): Rea
   const shortfall = breakEven.surplus < 0;
 
   return (
-    <section className="overview" aria-labelledby={titleId}>
-      <h2 className="panel-title" id={titleId}>
-        Your plan at a glance
-      </h2>
+    <Panel title="Your plan at a glance">
       {summary ? (
         <p className="summary">
-          <span className="badge badge--ai">AI · personalized</span>{' '}
-          <span dir="auto">{summary}</span>
+          <AiBadge /> <span dir="auto">{summary}</span>
         </p>
       ) : (
         <p className="summary">
@@ -122,6 +119,6 @@ export function Overview({ state, snapshot, onPersonalize }: OverviewProps): Rea
         calls={snapshot.calls}
         onPersonalize={onPersonalize}
       />
-    </section>
+    </Panel>
   );
 }

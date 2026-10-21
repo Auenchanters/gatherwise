@@ -40,6 +40,11 @@ describe('icsFilename', () => {
     expect(icsFilename(name, date)).toBe('gatherwise-plan-2026-12-20.ics');
   });
 
+  it('folds the German sharp s to "ss", capital or small', () => {
+    expect(icsFilename('Straße Fest', date)).toBe('gatherwise-strasse-fest-2026-12-20.ics');
+    expect(icsFilename('STRAẞE', date)).toBe('gatherwise-strasse-2026-12-20.ics');
+  });
+
   it('keeps the ASCII part of a mixed name', () => {
     expect(icsFilename('Diwali दिवाली 🎉 Mela', date)).toBe(
       'gatherwise-diwali-mela-2026-12-20.ics',

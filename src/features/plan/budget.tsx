@@ -23,9 +23,12 @@ import { LIMITS } from '../../shared/limits.js';
 import { Field } from '../brief/fields.js';
 import { currencySymbol } from '../brief/labels.js';
 import type { FieldKey } from '../brief/validate.js';
+import { StatusChip } from './chips.js';
 import { callCount, countOf, showDate } from './format.js';
 import { errorText } from './notices.js';
+import { Panel } from './panel.js';
 import type { PlannerStore } from './planner-store.js';
+import { STATUS_UI } from './status-ui.js';
 
 const shareFormat = new Intl.NumberFormat('en-IN', { style: 'percent' });
 
@@ -211,11 +214,7 @@ function Line(props: {
       </td>
       <td>{props.scales}</td>
       <td>
-        {props.tooLow && (
-          <span className="status status--risk">
-            <span aria-hidden="true">▲</span> Too low for this category
-          </span>
-        )}
+        {props.tooLow && <StatusChip ui={STATUS_UI.fit.over} label="Too low for this category" />}
       </td>
     </tr>
   );
@@ -294,24 +293,18 @@ function BreakEven({ state }: { readonly state: ReadyState }): ReactElement | nu
 
 /** Controls, the reconciled table, the over-budget callout and the break-even ledger. */
 export function Budget({ state, store }: BudgetProps): ReactElement {
-  const titleId = useId();
   const { brief, plan, generation } = state;
   const { budget, breakEven } = plan;
   const { currency, total } = budget;
   return (
-    <section className="budget" aria-labelledby={titleId}>
-      <h2 className="panel-title" id={titleId}>
-        Budget
-      </h2>
+    <Panel title="Budget">
       <div className="budget__layout">
         {/* A new plan (generation) starts the drafts from its own brief. */}
         <Controls key={generation} state={state} store={store} />
-        <div className="budget__main">
+        <div>
           {budget.overBy !== undefined && (
             <p className="callout callout--risk">
-              <span className="callout__icon" aria-hidden="true">
-                ▲
-              </span>
+              <span aria-hidden="true">▲</span>
               Over budget by {formatMoney(budget.overBy, currency)} — contingency is used up. Lower
               guests or raise the budget.
             </p>
@@ -367,6 +360,6 @@ export function Budget({ state, store }: BudgetProps): ReactElement {
           <BreakEven state={state} />
         </div>
       </div>
-    </section>
+    </Panel>
   );
 }

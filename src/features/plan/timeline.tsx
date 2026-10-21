@@ -4,22 +4,24 @@
  * Does: label every checkbox with the task's title and describe it by its status and dates; tell
  * a screen reader politely what a tick did; keep focus on a neighbouring task when "Hide done
  * tasks" removes the one just ticked; label tasks Gemini added "AI · personalized"; build the
- * calendar file from the schedule with the clock read once, at the click.
+ * calendar file from the schedule with the clock read once, at the click, and let go of the file's
+ * address a little later (at once if another download or the tab's end comes first).
  * Never does: compute a date or status (the engine's), call the AI, or leave a task's state to
  * colour alone (every status is an icon and words too).
  */
-import { useId, useRef, useState, type ReactElement } from 'react';
+import { useEffect, useId, useRef, useState, type ReactElement, type Ref } from 'react';
 import type { ReadyState } from '../../domain/reducer.js';
 import { toIcs } from '../../domain/ics.js';
 import type { ScheduledTask } from '../../domain/schedule.js';
 import { AiBadge, StatusChip } from './chips.js';
 import { icsBlob, icsFilename } from './download.js';
 import { categoryLabel, showDate, showMonth } from './format.js';
+import { LiveRegion, Panel } from './panel.js';
 import type { PlannerStore } from './planner-store.js';
 import { isAiTask, STATUS_UI } from './status-ui.js';
 import { utcStamp } from './utc-stamp.js';
 
-/** How long the downloaded file's URL stays valid; browsers have started the save well before. */
+/** How long the downloaded file's address stays valid; browsers have started the save well before. */
 const RELEASE_AFTER_MS = 30_000;
 
 /** The tasks, which the schedule has ordered by latest start, in one run per month. */
@@ -40,9 +42,10 @@ function byMonth(
 function TaskRow(props: {
   readonly task: ScheduledTask;
   readonly category: string;
-  readonly onToggle: (task: ScheduledTask, input: HTMLInputElement) => void;
+  readonly inputRef: Ref<HTMLInputElement>;
+  readonly onToggle: (task: ScheduledTask) => void;
 }): ReactElement {
-  const { task, category, onToggle } = props;
+  const { task, category, inputRef, onToggle } = props;
   const id = useId();
   const ui = STATUS_UI.task[task.status];
   return (
@@ -50,11 +53,12 @@ function TaskRow(props: {
       <input
         className="task__input"
         id={id}
+        ref={inputRef}
         type="checkbox"
         checked={task.status === 'done'}
         aria-describedby={`${id}-details`}
-        onChange={(event) => {
-          onToggle(task, event.currentTarget);
+        onChange={() => {
+          onToggle(task);
         }}
       />
       <label className="task__title" htmlFor={id} dir="auto">
@@ -87,26 +91,35 @@ export interface TimelineProps {
 
 /** The month-by-month task list with its filter and its calendar and print buttons. */
 export function Timeline({ state, store }: TimelineProps): ReactElement {
-  const titleId = useId();
   const filterId = useId();
   const [hideDone, setHideDone] = useState(false);
   const [message, setMessage] = useState('');
-  const panelRef = useRef<HTMLElement>(null);
   const filterRef = useRef<HTMLInputElement>(null);
+  /** Each shown task's checkbox, for moving focus when a ticked task leaves the list. */
+  const inputs = useRef(new Map<string, HTMLInputElement>());
+  /** Lets go of the last download's address now; set while one is waiting to be released. */
+  const release = useRef<(() => void) | undefined>(undefined);
   const { brief, plan } = state;
   const { tasks } = plan.schedule;
   const doneCount = tasks.filter((task) => task.status === 'done').length;
   const shown = hideDone ? tasks.filter((task) => task.status !== 'done') : tasks;
 
+  // When the tab goes away, so does its file's address.
+  useEffect(
+    () => () => {
+      release.current?.();
+    },
+    [],
+  );
+
   /** Ticks a task and says so. If the task is about to be hidden, focus moves on first. */
-  const toggle = (task: ScheduledTask, input: HTMLInputElement): void => {
+  const toggle = (task: ScheduledTask): void => {
     const becomesDone = task.status !== 'done';
     if (hideDone && becomesDone) {
-      const inputs = [
-        ...(panelRef.current?.querySelectorAll<HTMLInputElement>('.task__input') ?? []),
-      ];
-      const at = inputs.indexOf(input);
-      (inputs[at + 1] ?? inputs[at - 1] ?? filterRef.current)?.focus();
+      const at = shown.findIndex((t) => t.id === task.id);
+      const next = shown[at + 1] ?? shown[at - 1];
+      const input = next ? inputs.current.get(next.id) : undefined;
+      (input ?? filterRef.current)?.focus();
     }
     store.toggleTask(task.id);
     setMessage(`Marked '${task.title}' ${becomesDone ? 'done' : 'not done'}`);
@@ -114,25 +127,31 @@ export function Timeline({ state, store }: TimelineProps): ReactElement {
 
   /** Downloads the calendar: the clock is read here, once, for the file's DTSTAMP. */
   const download = (): void => {
+    release.current?.();
     const text = toIcs(plan.schedule, brief, plan.eventDate, utcStamp(new Date()));
     const url = URL.createObjectURL(icsBlob(text));
     const link = document.createElement('a');
     link.href = url;
     link.download = icsFilename(brief.name, plan.eventDate);
+    // Some browsers only follow a link that is in the page.
+    document.body.append(link);
     link.click();
-    setTimeout(() => {
+    link.remove();
+    const timer = setTimeout(() => release.current?.(), RELEASE_AFTER_MS);
+    release.current = () => {
+      clearTimeout(timer);
       URL.revokeObjectURL(url);
-    }, RELEASE_AFTER_MS);
+      release.current = undefined;
+    };
   };
 
   return (
-    <section className="timeline" aria-labelledby={titleId} ref={panelRef}>
-      <h2 className="panel-title" id={titleId}>
-        Timeline
-      </h2>
+    <Panel title="Timeline">
       <div className="timeline__top">
-        <div className="timeline__progress">
-          <p className="timeline__count">{`${doneCount} of ${tasks.length} tasks done`}</p>
+        <div>
+          <p className="timeline__count">
+            {doneCount} of {tasks.length} tasks done
+          </p>
           <progress
             className="timeline__bar"
             max={tasks.length}
@@ -173,12 +192,10 @@ export function Timeline({ state, store }: TimelineProps): ReactElement {
         your local authority. The calendar lists each task you haven&apos;t finished, on the day to
         start by.
       </p>
-      <p className="visually-hidden" role="status">
-        {message}
-      </p>
+      <LiveRegion message={message} />
       {shown.length === 0 && <p className="timeline__empty">Every task is done.</p>}
       {byMonth(shown).map((group) => (
-        <section className="timeline__month" key={group.month}>
+        <div className="timeline__month" key={group.month}>
           <h3 className="timeline__month-title">{group.month}</h3>
           <ul className="tasks">
             {group.tasks.map((task) => (
@@ -186,12 +203,16 @@ export function Timeline({ state, store }: TimelineProps): ReactElement {
                 key={task.id}
                 task={task}
                 category={categoryLabel(plan.budget, task.categoryId)}
+                inputRef={(input) => {
+                  if (input) inputs.current.set(task.id, input);
+                  else inputs.current.delete(task.id);
+                }}
                 onToggle={toggle}
               />
             ))}
           </ul>
-        </section>
+        </div>
       ))}
-    </section>
+    </Panel>
   );
 }

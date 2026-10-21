@@ -11,7 +11,7 @@
  * the volunteer table with a shortfall and with spare volunteers; heading order; and `dir="auto"`.
  * Never does: call the network or read the clock (today is fixed; Date is faked where a stamp is checked).
  */
-import { act, fireEvent, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { addDays } from '../../src/domain/dates.js';
 import { formatMoney } from '../../src/domain/money.js';
@@ -25,9 +25,22 @@ import { deferred, fakeClient, freshAnswer, memoryStorage, type Answer } from '.
 import { aiMeta, aiSuggestions } from '../support/fixtures.js';
 import { festival, settle, setup, today } from '../support/planner-ui.js';
 
+/** The blob-URL statics jsdom lacks, as they were before a test stubbed them. */
+const urlStatics = new Map<'createObjectURL' | 'revokeObjectURL', PropertyDescriptor | undefined>();
+
+function stubUrl(name: 'createObjectURL' | 'revokeObjectURL', value: unknown): void {
+  if (!urlStatics.has(name)) urlStatics.set(name, Object.getOwnPropertyDescriptor(URL, name));
+  Object.defineProperty(URL, name, { configurable: true, writable: true, value });
+}
+
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+  for (const [name, original] of urlStatics) {
+    if (original) Object.defineProperty(URL, name, original);
+    else Reflect.deleteProperty(URL, name);
+  }
+  urlStatics.clear();
 });
 
 /** Queries inside one tab's panel (every panel is in the DOM; CSS is not loaded in jsdom). */
@@ -76,20 +89,26 @@ const levels = (tab: string): number[] =>
     .getAllByRole('heading')
     .map((h) => Number(h.tagName.slice(1)));
 
-/** Stands in for the browser's blob URLs (jsdom has none) and records what is downloaded. */
+/**
+ * Stands in for the browser's blob URLs (jsdom has none; the originals come back after the test)
+ * and records what is downloaded: each link's address, file name and whether it was in the page.
+ */
 function captureDownloads() {
   const blobs: Blob[] = [];
-  const clicks: { href: string; download: string }[] = [];
-  URL.createObjectURL = vi.fn((blob: Blob) => {
-    blobs.push(blob);
-    return 'blob:calendar';
-  });
+  const clicks: { href: string; download: string; inPage: boolean }[] = [];
+  stubUrl(
+    'createObjectURL',
+    vi.fn((blob: Blob) => {
+      blobs.push(blob);
+      return `blob:calendar-${blobs.length}`;
+    }),
+  );
   const revoke = vi.fn();
-  URL.revokeObjectURL = revoke;
+  stubUrl('revokeObjectURL', revoke);
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
     this: HTMLAnchorElement,
   ) {
-    clicks.push({ href: this.href, download: this.download });
+    clicks.push({ href: this.href, download: this.download, inPage: this.isConnected });
   });
   return { blobs, clicks, revoke };
 }
@@ -98,6 +117,16 @@ const DOWNLOAD = { name: 'Download calendar (.ics)' };
 const REFRESH = { name: 'Refresh ideas (1 AI call)' };
 
 describe('every new tab', () => {
+  it('has one named landmark, its own section, and the vendor questions add none', async () => {
+    await setup();
+    for (const tab of ['Timeline', 'Vendors', 'Ideas', 'Volunteers']) {
+      const regions = panel(tab).getAllByRole('region');
+      expect(regions, tab).toHaveLength(1);
+      expect(regions[0]?.getAttribute('aria-labelledby'), tab).toBeTruthy();
+      expect(within(must(regions[0])).getByRole('heading', { level: 2 }).textContent).toBe(tab);
+    }
+  });
+
   it('each starts at h2 and never skips a heading level', async () => {
     await setup();
     for (const tab of ['Timeline', 'Vendors', 'Ideas', 'Volunteers']) {
@@ -157,7 +186,10 @@ describe('timeline', () => {
     expect(within(row).getByText('On track')).toBeTruthy();
     expect(row.textContent).toContain('Start by 4 Dec 2026 · finish by 25 Dec 2026');
     expect(row.textContent).toContain('Venue & permits');
-    expect(row.textContent).toContain('Check with your local authority — processing times vary');
+    const note = within(row).getByText(
+      'Check with your local authority — processing times vary by city',
+    );
+    expect(note.getAttribute('dir')).toBe('auto');
     const label = within(row).getByText('Apply for public-space permission');
     expect(label.tagName).toBe('LABEL');
     expect(label.getAttribute('dir')).toBe('auto');
@@ -253,8 +285,14 @@ describe('timeline', () => {
     await user.click(panel('Timeline').getByRole('button', DOWNLOAD));
 
     expect(clicks).toEqual([
-      { href: 'blob:calendar', download: 'gatherwise-green-park-diwali-mela-2027-01-04.ics' },
+      {
+        href: 'blob:calendar-1',
+        download: 'gatherwise-green-park-diwali-mela-2027-01-04.ics',
+        inPage: true,
+      },
     ]);
+    // The link was in the page only for the click.
+    expect(document.querySelector('a[download]')).toBeNull();
     const blob = must(blobs[0]);
     expect(blob.type).toBe('text/calendar;charset=utf-8');
     const text = await blob.text();
@@ -266,14 +304,37 @@ describe('timeline', () => {
     expect(text).toContain('SUMMARY:Form the organizing committee');
   });
 
-  it('releases the file URL a little after the click', async () => {
+  it('releases the file URL a little after the click, once', async () => {
     const { revoke } = captureDownloads();
     await setup();
     vi.useFakeTimers();
     fireEvent.click(panel('Timeline').getByRole('button', DOWNLOAD));
     expect(revoke).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(30_000);
-    expect(revoke).toHaveBeenCalledWith('blob:calendar');
+    vi.advanceTimersByTime(60_000);
+    expect(revoke.mock.calls).toEqual([['blob:calendar-1']]);
+  });
+
+  it('a second download releases the first file at once, and no timer is left over', async () => {
+    const { revoke } = captureDownloads();
+    await setup();
+    vi.useFakeTimers();
+    const button = panel('Timeline').getByRole('button', DOWNLOAD);
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(revoke.mock.calls).toEqual([['blob:calendar-1']]);
+    vi.advanceTimersByTime(60_000);
+    expect(revoke.mock.calls).toEqual([['blob:calendar-1'], ['blob:calendar-2']]);
+  });
+
+  it('releases the file when the timeline goes away, and does nothing more later', async () => {
+    const { revoke } = captureDownloads();
+    await setup();
+    vi.useFakeTimers();
+    fireEvent.click(panel('Timeline').getByRole('button', DOWNLOAD));
+    cleanup();
+    expect(revoke.mock.calls).toEqual([['blob:calendar-1']]);
+    vi.advanceTimersByTime(60_000);
+    expect(revoke).toHaveBeenCalledTimes(1);
   });
 
   it('names a Hindi event "plan" in the file name and keeps its text in the calendar', async () => {
@@ -416,8 +477,12 @@ describe('vendors', () => {
     await setup();
     const v = panel('Vendors');
     const tent = itemOf(v.getByRole('heading', { level: 3, name: 'Tent / shamiana' }));
-    const heading = within(tent).getByRole('heading', { level: 4 });
-    expect(heading.textContent).toBe('Questions to ask (AI · personalized)');
+    // Named by its words alone: the decoration beside it is hidden from assistive technology.
+    const heading = within(tent).getByRole('heading', {
+      level: 4,
+      name: 'Questions to ask (AI · personalized)',
+    });
+    expect(heading.querySelector('[aria-hidden="true"]')?.textContent).toBe('✦');
     const question = within(tent).getByText('Is the tent rain-proof?');
     expect(question.getAttribute('dir')).toBe('auto');
     expect(question.closest('ul')).toBeTruthy();
@@ -470,11 +535,11 @@ describe('ideas', () => {
   it('has a Refresh button that says it costs one call, and the zero-call note', async () => {
     await setup();
     const i = panel('Ideas');
-    expect(i.getByRole('button', REFRESH)).toHaveProperty('disabled', false);
+    expect(i.getByRole('button', REFRESH).getAttribute('aria-disabled')).toBe('false');
     expect(i.getByText('Edits never call the AI; only this button does.')).toBeTruthy();
   });
 
-  it('refresh is one call, disabled and announced while pending, and enabled again after', async () => {
+  it('refresh is one call, aria-disabled and announced while pending, and enabled again after', async () => {
     const second = deferred<Answer>();
     let asked = 0;
     const client = fakeClient(() => {
@@ -489,20 +554,59 @@ describe('ideas', () => {
     await user.click(button);
     expect(client.suggest).toHaveBeenCalledTimes(2);
     expect(client.suggest.mock.calls[1]?.[2]).toEqual({ refresh: true });
-    expect(button).toHaveProperty('disabled', true);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
     expect(i.getByRole('status').textContent).toContain('Asking Gemini for fresh ideas');
-    // A second click while pending does nothing.
+    // A second click while pending does nothing, and the button keeps keyboard focus.
+    button.focus();
+    await user.keyboard('{Enter}');
     await user.click(button);
     expect(client.suggest).toHaveBeenCalledTimes(2);
+    expect(document.activeElement).toBe(button);
 
     await act(async () => {
       second.resolve(freshAnswer);
       await second.promise;
     });
     await settle();
-    expect(button).toHaveProperty('disabled', false);
+    expect(button.getAttribute('aria-disabled')).toBe('false');
     expect(store.getState().calls).toBe(2);
-    expect(i.getByRole('status').textContent).toContain('AI calls this session: 2');
+    expect(i.getByRole('status').textContent).toBe('Fresh ideas are in. AI calls this session: 2.');
+  });
+
+  it('says the ideas are the same when the answer was reused, not that they are fresh', async () => {
+    let asked = 0;
+    const client = fakeClient(() => {
+      asked += 1;
+      return Promise.resolve(ok({ suggestions: aiSuggestions, meta: aiMeta, cached: asked > 1 }));
+    });
+    const { user } = await setup({ client });
+    await user.click(panel('Ideas').getByRole('button', REFRESH));
+    expect(panel('Ideas').getByRole('status').textContent).toBe(
+      'Same ideas as before — reused from this session, no new AI call.',
+    );
+  });
+
+  it("says there was nothing usable, in the callout's words, when a refresh brings no ideas", async () => {
+    let asked = 0;
+    const client = fakeClient(() => {
+      asked += 1;
+      const suggestions = asked > 1 ? { ...aiSuggestions, ideas: [] } : aiSuggestions;
+      return Promise.resolve(ok({ suggestions, meta: aiMeta, cached: false }));
+    });
+    const { user } = await setup({ client });
+    await user.click(panel('Ideas').getByRole('button', REFRESH));
+    const notice = "Gemini's answer had no usable ideas, so you're seeing standard suggestions.";
+    expect(panel('Ideas').getByRole('status').textContent).toBe(notice);
+    expect(panel('Ideas').getByText(notice, { selector: 'p.callout' })).toBeTruthy();
+  });
+
+  it('forgets a refresh when a new plan starts', async () => {
+    const { user, store } = await setup();
+    await user.click(panel('Ideas').getByRole('button', REFRESH));
+    expect(panel('Ideas').getByRole('status').textContent).toContain('Fresh ideas are in');
+    await act(() => store.submit({ ...festival, name: 'Green Park Mela 2' }).settled);
+    expect(ready(store).generation).toBe(2);
+    expect(panel('Ideas').getByRole('status').textContent).toBe('');
   });
 
   it('shows the standard ideas with an honest notice when the AI failed', async () => {
@@ -515,7 +619,7 @@ describe('ideas', () => {
     expect(card.textContent).not.toContain('Why:');
     expect(within(card).getByText('Fits Sanitation & waste budget')).toBeTruthy();
     expect(i.getByText(/couldn't personalize these ideas/u)).toBeTruthy();
-    expect(i.getByRole('button', REFRESH)).toHaveProperty('disabled', false);
+    expect(i.getByRole('button', REFRESH).getAttribute('aria-disabled')).toBe('false');
   });
 
   it('says the ideas are standard while the first answer is pending', async () => {
@@ -523,7 +627,7 @@ describe('ideas', () => {
     await setup({ client });
     const i = panel('Ideas');
     expect(i.getByText(/standard suggestions for now/u)).toBeTruthy();
-    expect(i.getByRole('button', REFRESH)).toHaveProperty('disabled', true);
+    expect(i.getByRole('button', REFRESH).getAttribute('aria-disabled')).toBe('true');
   });
 
   it('says so when a restored plan was never personalized, and asks only on a click', async () => {

@@ -70,8 +70,9 @@ export function Workspace({ state, snapshot, store }: WorkspaceProps): ReactElem
     {
       id: 'ideas',
       label: 'Ideas',
-      // A new plan starts with no refresh behind it.
-      panel: <Ideas key={state.generation} state={state} calls={snapshot.calls} store={store} />,
+      panel: (
+        <Ideas state={state} calls={snapshot.calls} cached={snapshot.aiView.cached} store={store} />
+      ),
     },
   ];
   if (state.brief.kind === 'community') {

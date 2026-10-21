@@ -29,6 +29,16 @@ test('every tab is reachable by keyboard, and each new tab has no axe violations
     await expect(tab).toBeFocused();
     await expect(tab).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByRole('tabpanel', { name })).toBeVisible();
+    if (name === 'Vendors') {
+      // Named by its words alone: the sparkle beside it is decoration, not part of the name.
+      await expect(
+        page.getByRole('heading', {
+          level: 4,
+          name: 'Questions to ask (AI · personalized)',
+          exact: true,
+        }),
+      ).toBeVisible();
+    }
     if ((NEW_TABS as readonly string[]).includes(name)) {
       await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
       expect(await axeViolations(page), `axe on ${name}`).toEqual([]);
@@ -74,6 +84,10 @@ test('the calendar downloads as an iCalendar file named after the event', async 
   expect(text.trimEnd().endsWith('END:VCALENDAR')).toBe(true);
   expect(text).toContain('SUMMARY:Green Park Diwali Mela');
   expect(text).toMatch(/DTSTAMP:\d{8}T\d{6}Z/u);
+  // A task Gemini added says so in the calendar too (long lines are folded, so unfold first).
+  expect(text.replaceAll('\r\n ', '')).toContain(
+    'SUMMARY:Order clay diyas\r\nDESCRIPTION:AI · personalized — Start by ',
+  );
   // The task ticked off is not in the calendar; an open one is.
   expect(text).not.toContain('SUMMARY:Book the venue');
   expect(text).toContain('SUMMARY:Form the organizing committee');

@@ -5,10 +5,13 @@
  * slots" or "Fully staffed (N spare)", and list the template's roles.
  * Never does: compute a shift or a gap (the engine's `planShifts` did), or call the AI.
  */
-import { useId, type ReactElement } from 'react';
+import type { ReactElement } from 'react';
 import type { ReadyState } from '../../domain/reducer.js';
 import { templateFor } from '../../domain/templates/index.js';
+import { StatusChip } from './chips.js';
 import { countOf, showDate } from './format.js';
+import { Panel } from './panel.js';
+import { STATUS_UI } from './status-ui.js';
 
 /** Props for {@link Volunteers}. */
 export interface VolunteersProps {
@@ -17,32 +20,24 @@ export interface VolunteersProps {
 
 /** Shifts, staffing and roles. */
 export function Volunteers({ state }: VolunteersProps): ReactElement {
-  const titleId = useId();
   const { brief, plan } = state;
   const { shifts, shortfall, spare, needed } = plan.shifts;
   const roles = templateFor(brief.kind).volunteerRoles;
   const people = countOf(brief.volunteersAvailable, 'volunteer', 'volunteers');
   return (
-    <section className="volunteers" aria-labelledby={titleId}>
-      <h2 className="panel-title" id={titleId}>
-        Volunteers
-      </h2>
+    <Panel title="Volunteers">
       <p className="volunteers__lead">{`${countOf(needed, 'volunteer', 'volunteers')} per shift`}</p>
       <p className="volunteers__detail">
         {`You have ${people} for ${countOf(shifts.length, 'shift', 'shifts')}. Each volunteer works one shift, so a gap is the number of people still to recruit.`}
       </p>
       {shortfall > 0 ? (
         <p className="callout callout--risk">
-          <span className="callout__icon" aria-hidden="true">
-            ▲
-          </span>
+          <span aria-hidden="true">▲</span>
           {`You're short by ${countOf(shortfall, 'volunteer slot', 'volunteer slots')}`}
         </p>
       ) : (
         <p className="callout callout--ok">
-          <span className="callout__icon" aria-hidden="true">
-            ✓
-          </span>
+          <span aria-hidden="true">✓</span>
           {`Fully staffed (${spare} spare)`}
         </p>
       )}
@@ -65,17 +60,13 @@ export function Volunteers({ state }: VolunteersProps): ReactElement {
             const gap = shift.needed - shift.assigned;
             return (
               <tr key={shift.start}>
-                <th scope="row">{`${shift.start}–${shift.end}`}</th>
+                <th scope="row">
+                  {shift.start}–{shift.end}
+                </th>
                 <td className="num">{shift.needed}</td>
                 <td className="num">{shift.assigned}</td>
                 <td>
-                  {gap > 0 ? (
-                    <span className="status status--risk">
-                      <span aria-hidden="true">▲</span> {`${gap} short`}
-                    </span>
-                  ) : (
-                    'None'
-                  )}
+                  {gap > 0 ? <StatusChip ui={STATUS_UI.fit.over} label={`${gap} short`} /> : 'None'}
                 </td>
               </tr>
             );
@@ -91,6 +82,6 @@ export function Volunteers({ state }: VolunteersProps): ReactElement {
           </div>
         ))}
       </dl>
-    </section>
+    </Panel>
   );
 }

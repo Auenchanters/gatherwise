@@ -6,6 +6,7 @@
  */
 import { useId, type MouseEvent, type ReactElement } from 'react';
 import type { Schedule } from '../../domain/schedule.js';
+import { AiBadge, StatusChip } from './chips.js';
 import { isAiTask, STATUS_UI } from './status-ui.js';
 
 /** How many blocked tasks the banner names before summing up the rest. */
@@ -50,11 +51,9 @@ export function InfeasibleBanner({
             <li className="banner__item" key={task.id}>
               <span className="banner__task">
                 <span dir="auto">{task.title}</span>
-                {isAiTask(task.id) && <span className="badge badge--ai">AI · personalized</span>}
+                {isAiTask(task.id) && <AiBadge />}
               </span>
-              <span className={`status ${ui.className}`}>
-                <span aria-hidden="true">{ui.icon}</span> {ui.label}
-              </span>
+              <StatusChip ui={ui} label={ui.label} />
             </li>
           );
         })}

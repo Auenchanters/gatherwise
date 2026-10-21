@@ -11,12 +11,16 @@ import type { IsoDate } from '../../domain/dates.js';
 /** Longest slug kept, so a long event name still makes a sensible file name. */
 const SLUG_MAX = 50;
 
-/** Lower-case ASCII letters and digits joined by single hyphens; accents fold to their letters. */
+/**
+ * Lower-case ASCII letters and digits joined by single hyphens. Accents fold to their letters (NFKD
+ * then dropping the marks), and so does the sharp s, the one common letter NFKD leaves whole.
+ */
 function slugOf(name: string): string {
   return name
     .normalize('NFKD')
     .replace(/\p{M}+/gu, '')
     .toLowerCase()
+    .replaceAll('ß', 'ss')
     .replace(/[^a-z0-9]+/gu, '-')
     .slice(0, SLUG_MAX)
     .replace(/^-+|-+$/gu, '');

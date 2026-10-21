@@ -21,6 +21,7 @@ import {
 } from '../../domain/vendors.js';
 import { StatusChip } from './chips.js';
 import { showDate } from './format.js';
+import { LiveRegion, Panel } from './panel.js';
 import type { PlannerStore } from './planner-store.js';
 import { STATUS_UI } from './status-ui.js';
 
@@ -110,9 +111,9 @@ function VendorCard(props: {
         </ul>
       </fieldset>
       {questions !== undefined && questions.length > 0 && (
-        <section className="vendor__questions" aria-labelledby={`${id}-questions`}>
-          <h4 className="vendor__questions-title" id={`${id}-questions`}>
-            Questions to ask (AI · personalized)
+        <div className="vendor__questions">
+          <h4 className="vendor__questions-title">
+            <span aria-hidden="true">✦</span> Questions to ask (AI · personalized)
           </h4>
           <ul className="vendor__question-list">
             {questions.map((question, index) => (
@@ -121,7 +122,7 @@ function VendorCard(props: {
               </li>
             ))}
           </ul>
-        </section>
+        </div>
       )}
     </li>
   );
@@ -135,23 +136,17 @@ export interface VendorsProps {
 
 /** The vendor cards. */
 export function Vendors({ state, store }: VendorsProps): ReactElement {
-  const titleId = useId();
   const [message, setMessage] = useState('');
   // The state, not `state.plan`: a status or tick leaves the plan object as it was.
   const vendors = useMemo(() => vendorView(state), [state]);
   const questions = state.plan.addenda?.vendorQuestions;
   return (
-    <section className="vendors" aria-labelledby={titleId}>
-      <h2 className="panel-title" id={titleId}>
-        Vendors
-      </h2>
+    <Panel title="Vendors">
       <p className="panel-note">
         Book-by dates count back from your event date; they are typical planning heuristics, so
         confirm real lead times with each vendor.
       </p>
-      <p className="visually-hidden" role="status">
-        {message}
-      </p>
+      <LiveRegion message={message} />
       <ul className="cards">
         {vendors.map((vendor) => (
           <VendorCard
@@ -170,6 +165,6 @@ export function Vendors({ state, store }: VendorsProps): ReactElement {
           />
         ))}
       </ul>
-    </section>
+    </Panel>
   );
 }
