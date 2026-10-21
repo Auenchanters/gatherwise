@@ -69,6 +69,9 @@ test.describe('brief form', () => {
       'Green Park Diwali Mela',
     );
     await expect(page.getByRole('group', { name: 'Community extras' })).toBeVisible();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Filled in the sample community event' }),
+    ).toBeVisible();
     expect(await axeViolations(page)).toEqual([]);
 
     await page.getByRole('button', { name: 'Generate my plan' }).click();

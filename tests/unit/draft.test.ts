@@ -9,6 +9,7 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import {
+  draftApi,
   draftFromBrief,
   draftToCandidate,
   EMPTY_DRAFT,
@@ -90,6 +91,22 @@ describe('draftToCandidate number parsing', () => {
     expect(candidate.budget).toBe(12.5);
   });
 
+  it.each([
+    ['0x10', Number.NaN],
+    ['1e3', Number.NaN],
+    ['1,500', Number.NaN],
+    ['', undefined],
+    ['.5', 0.5],
+    ['12.', 12],
+    ['-5', -5],
+  ])('accepts only plain decimal numbers: %j → %s', (input, expected) => {
+    expect(draftToCandidate(community({ guests: input })).guests).toBe(expected);
+  });
+
+  it('turns -0 into 0', () => {
+    expect(Object.is(draftToCandidate(community({ budget: '-0' })).budget, 0)).toBe(true);
+  });
+
   it('keeps blank text as an empty string, which the schema accepts for optional text', () => {
     const candidate = draftToCandidate(community({ city: '', vibe: '', notes: '' }));
     expect(candidate).toMatchObject({ city: '', vibe: '', notes: '' });
@@ -128,10 +145,8 @@ describe('draftToCandidate community extras', () => {
     expect(candidate.volunteersAvailable).toBe(0);
   });
 
-  it('reports blank volunteers on a community event as missing', () => {
-    expect(draftToCandidate(community({ volunteersAvailable: '' })).volunteersAvailable).toBe(
-      undefined,
-    );
+  it('counts blank volunteers on a community event as 0, like blank income (R68)', () => {
+    expect(draftToCandidate(community({ volunteersAvailable: ' ' })).volunteersAvailable).toBe(0);
   });
 });
 
@@ -145,6 +160,7 @@ describe('EMPTY_DRAFT', () => {
       guests: '',
       budget: '',
       currency: 'INR',
+      volunteersAvailable: '',
     });
     const parsed = eventBriefSchema.safeParse(draftToCandidate(EMPTY_DRAFT));
     expect(parsed.success).toBe(false);
@@ -169,5 +185,48 @@ describe('toggleOption', () => {
   it('is idempotent and ignores values that are not options', () => {
     expect(toggleOption(['vegan'], DIETARY_OPTIONS, 'vegan', true)).toEqual(['vegan']);
     expect(toggleOption(['vegan'], DIETARY_OPTIONS, 'pizza', true)).toEqual(['vegan']);
+  });
+});
+
+describe('draftApi', () => {
+  /** A stand-in for React's setState that applies each functional update to a held draft. */
+  function holder(start: BriefDraft) {
+    let current = start;
+    const setDraft = (change: (draft: BriefDraft) => BriefDraft): void => {
+      current = change(current);
+    };
+    return { setDraft, get: () => current };
+  }
+  const errors = [{ field: 'guests', message: 'Enter the number of guests' }] as const;
+
+  it('binds a text key to its value, its error and a functional update', () => {
+    const state = holder(community({ guests: '' }));
+    const api = draftApi(state.get(), state.setDraft, errors);
+    const guests = api.bind('guests');
+    expect([guests.field, guests.value, guests.error]).toEqual([
+      'guests',
+      '',
+      'Enter the number of guests',
+    ]);
+    guests.onChange('250');
+    api.bind('city').onChange('Pune');
+    expect([state.get().guests, state.get().city]).toEqual(['250', 'Pune']);
+    expect(api.bind('budget').error).toBeUndefined();
+  });
+
+  it('binds an income key under its income.<key> field', () => {
+    const state = holder(community());
+    const api = draftApi(state.get(), state.setDraft, []);
+    const sponsors = api.bindIncome('sponsors');
+    expect(sponsors.field).toBe('income.sponsors');
+    sponsors.onChange('40000');
+    api.bindIncome('donations').onChange('5');
+    expect([state.get().income.sponsors, state.get().income.donations]).toEqual(['40000', '5']);
+  });
+
+  it('passes other updates straight through', () => {
+    const state = holder(community({ servesFood: false }));
+    draftApi(state.get(), state.setDraft, []).update((d) => ({ ...d, servesFood: true }));
+    expect(state.get().servesFood).toBe(true);
   });
 });

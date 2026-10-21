@@ -16,6 +16,8 @@
   --color-on-accent: #ffffff;
   --color-celebrate: #b45309;
   --color-celebrate-soft: #fdf1e3;
+  /* Decorative only (bunting); never used for text. */
+  --color-festive-gold: #e0a526;
   --status-ok: #166534;
   --status-soon: #1d4ed8;
   --status-risk: #92400e;

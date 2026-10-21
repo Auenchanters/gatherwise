@@ -1,7 +1,7 @@
 /**
  * The words people see for each option code in the brief: one lookup per option list, so the form
  * and the plan header name things the same way.
- * Never does: hold logic, or show a raw code such as `outdoor_public` to anyone.
+ * Never does: show a raw code such as `outdoor_public` to anyone.
  */
 import type {
   ACCESSIBILITY_OPTIONS,
@@ -72,3 +72,20 @@ export const ACCESSIBILITY_LABELS: Record<(typeof ACCESSIBILITY_OPTIONS)[number]
   elderly: 'Older guests',
   infants: 'Infants',
 };
+
+// One formatter call per currency, ever: a symbol never changes at runtime.
+const symbols = new Map<string, string>();
+
+/** The symbol shown before a money input, e.g. ₹ for INR or A$ for AUD (from `Intl`, en-IN). */
+export function currencySymbol(currency: string): string {
+  let symbol = symbols.get(currency);
+  if (symbol === undefined) {
+    symbol = new Intl.NumberFormat('en-IN', { style: 'currency', currency })
+      .formatToParts(0)
+      .filter((part) => part.type === 'currency')
+      .map((part) => part.value)
+      .join('');
+    symbols.set(currency, symbol);
+  }
+  return symbol;
+}

@@ -5,7 +5,7 @@
  * the form and moves focus to it.
  * Never does: hold state, fill the form itself, or call the API.
  */
-import type { ReactElement } from 'react';
+import { useId, type ReactElement } from 'react';
 import type { SampleKind } from './samples.js';
 
 const PROMISES = [
@@ -34,10 +34,11 @@ export interface LandingProps {
 
 /** The empty-state intro: headline, promise, three proof points and the sample buttons. */
 export function Landing({ onUseSample }: LandingProps): ReactElement {
+  const titleId = useId();
   return (
-    <section className="landing" aria-labelledby="landing-title">
+    <section className="landing" aria-labelledby={titleId}>
       <p className="landing__eyebrow">For weddings, birthdays and community events</p>
-      <h1 className="landing__title" id="landing-title">
+      <h1 className="landing__title" id={titleId}>
         Plan a celebration that <span className="landing__highlight">adds up</span>
       </h1>
       <p className="landing__lede">

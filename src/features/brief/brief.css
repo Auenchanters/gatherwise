@@ -26,8 +26,8 @@
       100% repeat-x,
     conic-gradient(from -30deg at 50% 100%, var(--color-celebrate) 60deg, transparent 0) 1.5rem 0 /
       4.5rem 100% repeat-x,
-    conic-gradient(from -30deg at 50% 100%, #e0a526 60deg, transparent 0) 3rem 0 / 4.5rem 100%
-      repeat-x;
+    conic-gradient(from -30deg at 50% 100%, var(--color-festive-gold) 60deg, transparent 0) 3rem 0 /
+      4.5rem 100% repeat-x;
   opacity: 0.85;
 }
 
@@ -176,8 +176,22 @@
   font-weight: 600;
 }
 
-.button[aria-disabled='true'] {
+/* Busy while the checker loads: a visibly different, still AA-contrast state. Covers :hover too,
+   because base.css (loaded later) styles the primary hover. */
+.button--primary[aria-disabled='true'],
+.button--primary[aria-disabled='true']:hover {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
   cursor: progress;
+}
+
+.brief__status--warning {
+  color: var(--status-risk);
+}
+
+.brief__status-icon {
+  margin-right: 0.375rem;
 }
 
 /* Fields */

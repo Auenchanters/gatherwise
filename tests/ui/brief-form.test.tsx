@@ -1,15 +1,17 @@
 /**
  * RTL tests for the brief form (src/features/brief/brief-form.tsx) in jsdom.
  *
- * Does: checks every control is named, the GOV.UK error summary (focus, links, aria-invalid and
- * aria-describedby), the kind-dependent subtype and community extras, the throttled counter
- * announcements, `dir="auto"` on free text, sample briefs submitting unchanged, and a keyboard-only
- * completion with Tab, Space and arrow keys. The checker loads on demand, so it also covers the
- * slow-load notice, the busy button and a failed load (mocked with `vi.doMock`).
- * Never does: read the clock (`today` is fixed) or call the network.
+ * Does: checks that every control has an accessible name and optional fields say so; the GOV.UK
+ * error summary (focus, links, aria-invalid and aria-describedby); the kind-dependent subtype and
+ * community extras; the throttled counter announcements; `dir="auto"` on free text; sample briefs
+ * submitting unchanged; unreadable numbers; and a keyboard-only completion. The checker loads on
+ * demand, so it also covers the busy button, the slow-load notice, a failed load, a submit made
+ * stale by an unmount, and StrictMode (loads are gated with `vi.doMock`).
+ * Never does: read the clock (`today` is fixed), call the network, or sleep for a fixed time.
  */
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { addDays, isoDate } from '../../src/domain/dates.js';
 import { BriefForm } from '../../src/features/brief/brief-form.js';
@@ -18,6 +20,8 @@ import { eventBriefSchema, type EventBrief } from '../../src/shared/schema.js';
 
 const today = isoDate('2026-10-21');
 const VALIDATE = '../../src/features/brief/validate.js';
+const FAILED_LOAD =
+  "We couldn't check your details — check your connection, then try again or reload the page.";
 
 const submitButton = () => screen.getByRole('button', { name: 'Generate my plan' });
 /** Waits until the on-demand checker has loaded and the submit has been handled. */
@@ -25,17 +29,50 @@ const settled = () =>
   waitFor(() => {
     expect(submitButton().getAttribute('aria-disabled')).toBeNull();
   });
+/** Lets every pending dynamic import, and the code awaiting it, run to the end. */
+const drained = async () => {
+  await vi.dynamicImportSettled();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+};
 
-function setup(initial?: EventBrief) {
+function setup(initial?: EventBrief, { strict = false } = {}) {
   const onSubmit = vi.fn<(brief: EventBrief) => void>();
   const user = userEvent.setup();
-  render(<BriefForm initial={initial} today={today} onSubmit={onSubmit} />);
-  const form = screen.getByRole('form', { name: 'Tell us about your event' });
+  const form = <BriefForm initial={initial} today={today} onSubmit={onSubmit} />;
+  const { unmount } = render(strict ? <StrictMode>{form}</StrictMode> : form);
   const submit = async () => {
     await user.click(submitButton());
     await settled();
   };
-  return { user, form, onSubmit, submit };
+  /**
+   * Submits with Enter from the name field, which does not warm the checker. A gated mock needs
+   * exactly one import in flight: Vitest serves a second, concurrent import of a module whose mock
+   * factory is still pending from the real module (browsers share one promise instead).
+   */
+  const submitWithEnter = async () => {
+    await user.click(screen.getByRole('textbox', { name: 'Event name' }));
+    await user.keyboard('{Enter}');
+  };
+  return { user, onSubmit, submit, submitWithEnter, unmount };
+}
+
+/** A checker load that waits for `release`; `loaded` settles once the module is ready. */
+function gateChecker() {
+  let release = (): void => undefined;
+  let markLoaded = (): void => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const loaded = new Promise<void>((resolve) => {
+    markLoaded = resolve;
+  });
+  vi.doMock(VALIDATE, async (importOriginal) => {
+    await gate;
+    const original = await importOriginal();
+    markLoaded();
+    return original;
+  });
+  return { release, loaded };
 }
 
 /** The text of every element an input's aria-describedby points at. */
@@ -44,32 +81,64 @@ function descriptionOf(element: HTMLElement): string {
   return ids.map((id) => document.getElementById(id)?.textContent ?? `#${id} missing`).join(' | ');
 }
 
-/** The polite live region that announces a field's character count. */
-const liveRegionOf = (control: HTMLElement): HTMLElement => {
-  const region = control.closest('.field')?.querySelector<HTMLElement>('[aria-live="polite"]');
-  if (!region) throw new Error(`No live counter for ${control.id}`);
+/** The polite live region that announces a field's character count, found by its id. */
+function liveRegionOf(control: HTMLElement): HTMLElement {
+  const region = document.getElementById(`${control.id}-announce`);
+  if (region?.getAttribute('aria-live') !== 'polite')
+    throw new Error(`No live count: ${control.id}`);
   return region;
-};
+}
+
+afterEach(() => {
+  vi.doUnmock(VALIDATE);
+});
 
 describe('BriefForm: structure', () => {
-  it('names every input, select and textarea, for the community form with its extras', () => {
-    const { form } = setup(sampleBrief('community', today));
-    const controls = form.querySelectorAll<HTMLInputElement>('input, select, textarea');
-    expect(controls.length).toBeGreaterThan(40);
-    for (const control of controls) {
-      const label = control.labels?.[0]?.textContent.trim() ?? '';
-      expect(label, control.outerHTML).not.toBe('');
+  it('gives every control an accessible name, community extras included', () => {
+    setup(sampleBrief('community', today));
+    const form = screen.getByRole('form', { name: 'Tell us about your event' });
+    const roles = ['radio', 'checkbox', 'textbox', 'spinbutton', 'combobox'] as const;
+    let named = 0;
+    for (const role of roles) {
+      const all = within(form).getAllByRole(role);
+      expect(within(form).getAllByRole(role, { name: /\S/u }), role).toHaveLength(all.length);
+      named += all.length;
     }
+    // Date and time inputs have no ARIA role; they are found through their labels instead.
+    expect(screen.getByLabelText('Date')).toBeTruthy();
+    expect(screen.getByLabelText('Start time')).toBeTruthy();
+    expect(form.querySelectorAll('input, select, textarea')).toHaveLength(named + 2);
   });
 
-  it('groups the form into four labelled sections', () => {
-    const { form } = setup();
-    const legends = [...form.querySelectorAll(':scope fieldset > legend')].map((l) =>
-      l.textContent.trim(),
-    );
-    expect(legends).toEqual(
-      expect.arrayContaining(['Your event', 'People and money', 'Preferences', 'Community extras']),
-    );
+  it('says which fields are optional, and marks the rest required', () => {
+    setup();
+    const optional = [
+      screen.getByRole('textbox', { name: 'City or town (optional)' }),
+      screen.getByRole('textbox', { name: 'Vibe (optional)' }),
+      screen.getByRole('textbox', { name: 'Notes (optional)' }),
+      screen.getByRole('spinbutton', { name: 'Volunteers available (optional)' }),
+    ];
+    expect(optional.map((control) => control.hasAttribute('required'))).toEqual([
+      false,
+      false,
+      false,
+      false,
+    ]);
+    expect(screen.getByRole('group', { name: 'Expected income (optional)' })).toBeTruthy();
+    const required = [
+      screen.getByRole('textbox', { name: 'Event name' }),
+      screen.getByRole('spinbutton', { name: 'Guests' }),
+      screen.getByRole('spinbutton', { name: 'Total budget' }),
+      screen.getByRole('spinbutton', { name: 'Duration (hours)' }),
+    ];
+    expect(required.every((control) => control.hasAttribute('required'))).toBe(true);
+  });
+
+  it('groups the form into four sections named by their legends', () => {
+    setup();
+    for (const name of ['Your event', 'People and money', 'Preferences', 'Community extras']) {
+      expect(screen.getByRole('group', { name })).toBeTruthy();
+    }
   });
 
   it('bounds the native inputs with the schema limits and the planning window', () => {
@@ -86,15 +155,28 @@ describe('BriefForm: structure', () => {
     );
   });
 
-  it('keeps dir="auto" on Hindi and emoji text in the name, vibe and notes', async () => {
+  it('keeps dir="auto" on Hindi, Arabic and emoji text in every free-text field', async () => {
     const { user } = setup();
     const name = screen.getByRole('textbox', { name: 'Event name' });
-    await user.type(name, 'दिवाली मेला 🎉');
-    expect(name).toHaveProperty('value', 'दिवाली मेला 🎉');
-    expect(name.getAttribute('dir')).toBe('auto');
-    for (const label of ['Vibe', 'Notes', 'City or town']) {
+    for (const text of ['दिवाली मेला 🎉', 'حفلة الحي']) {
+      await user.clear(name);
+      await user.type(name, text);
+      expect(name).toHaveProperty('value', text);
+      expect(name.getAttribute('dir')).toBe('auto');
+    }
+    for (const label of ['Vibe (optional)', 'Notes (optional)', 'City or town (optional)']) {
       expect(screen.getByRole('textbox', { name: label }).getAttribute('dir')).toBe('auto');
     }
+  });
+
+  it('tells money fields to use digits only', () => {
+    setup();
+    expect(descriptionOf(screen.getByRole('spinbutton', { name: 'Total budget' }))).toContain(
+      'Digits only, like 150000.',
+    );
+    expect(descriptionOf(screen.getByRole('spinbutton', { name: 'Sponsorship' }))).toContain(
+      'Digits only',
+    );
   });
 });
 
@@ -102,44 +184,50 @@ describe('BriefForm: kind-dependent fields', () => {
   it('shows community extras, including income, only for community events', async () => {
     const { user } = setup();
     expect(screen.getByRole('spinbutton', { name: 'Ticket price' })).toBeTruthy();
-    expect(screen.getByRole('spinbutton', { name: 'Volunteers available' })).toBeTruthy();
     for (const kind of ['Wedding', 'Birthday']) {
       await user.click(screen.getByRole('radio', { name: kind }));
       expect(screen.queryByRole('group', { name: 'Community extras' })).toBeNull();
       expect(screen.queryByRole('spinbutton', { name: 'Ticket price' })).toBeNull();
     }
     await user.click(screen.getByRole('radio', { name: 'Community event' }));
-    const income = screen.getByRole('group', { name: 'Expected income' });
+    const income = screen.getByRole('group', { name: 'Expected income (optional)' });
     expect(descriptionOf(income)).toContain('blanks count as 0');
     expect(within(income).getByRole('spinbutton', { name: 'Sponsorship' })).toBeTruthy();
   });
 
   it('resets the subtype to a valid one when the kind changes', async () => {
     const { user } = setup();
-    const subtypes = () => screen.getByRole('group', { name: 'Type of event' });
-    expect(within(subtypes()).getByRole('radio', { name: 'Festival or fair' })).toHaveProperty(
+    const subtypes = () => within(screen.getByRole('group', { name: 'Type of event' }));
+    expect(subtypes().getByRole('radio', { name: 'Festival or fair' })).toHaveProperty(
       'checked',
       true,
     );
     await user.click(screen.getByRole('radio', { name: 'Birthday' }));
-    const birthday = within(subtypes()).getAllByRole('radio');
-    expect(birthday.map((r) => r.getAttribute('value'))).toEqual(['kids', 'adult', 'milestone']);
-    expect(within(subtypes()).getByRole('radio', { name: "Kids' party" })).toHaveProperty(
-      'checked',
-      true,
-    );
+    const values = subtypes()
+      .getAllByRole('radio')
+      .map((r) => r.getAttribute('value'));
+    expect(values).toEqual(['kids', 'adult', 'milestone']);
+    expect(subtypes().getByRole('radio', { name: "Kids' party" })).toHaveProperty('checked', true);
     await user.click(screen.getByRole('radio', { name: 'Wedding' }));
-    expect(within(subtypes()).getByRole('radio', { name: 'Ceremony & reception' })).toHaveProperty(
+    expect(subtypes().getByRole('radio', { name: 'Ceremony & reception' })).toHaveProperty(
       'checked',
       true,
     );
   });
+
+  it('keeps ticks in the options order, whatever order they were ticked in', async () => {
+    const { user, submit, onSubmit } = setup(sampleBrief('birthday', today));
+    await user.click(screen.getByRole('checkbox', { name: 'Vegan' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Halal' }));
+    await submit();
+    expect(onSubmit.mock.calls[0]?.[0].dietary).toEqual(['vegan', 'halal', 'nut_free']);
+  });
 });
 
 describe('BriefForm: character counters', () => {
-  it('describes the notes field with a visible count and announces only at 20, 10 and 0 left', async () => {
+  it('describes the notes with a visible count and announces only at 20, 10 and 0 left', async () => {
     const { user } = setup();
-    const notes = screen.getByRole('textbox', { name: 'Notes' });
+    const notes = screen.getByRole('textbox', { name: 'Notes (optional)' });
     const live = liveRegionOf(notes);
     expect(descriptionOf(notes)).toContain('500 characters left');
     expect(live.textContent).toBe('');
@@ -161,7 +249,7 @@ describe('BriefForm: character counters', () => {
 
   it('counts the name and the vibe too, and says "1 character left" in the singular', async () => {
     const { user } = setup();
-    const vibe = screen.getByRole('textbox', { name: 'Vibe' });
+    const vibe = screen.getByRole('textbox', { name: 'Vibe (optional)' });
     await user.click(vibe);
     await user.paste('y'.repeat(119));
     expect(descriptionOf(vibe)).toContain('1 character left');
@@ -203,6 +291,16 @@ describe('BriefForm: validation on submit', () => {
     expect(
       within(summary).getByRole('link', { name: 'Enter a budget of at least 1' }),
     ).toBeTruthy();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('says to use digits when the browser could not read a number', async () => {
+    const { submit, onSubmit } = setup(sampleBrief('community', today));
+    const sponsors = screen.getByRole('spinbutton', { name: 'Sponsorship' });
+    // jsdom cannot type unreadable text into a number input, so report it as Chrome would.
+    Object.defineProperty(sponsors, 'validity', { value: { badInput: true } });
+    await submit();
+    expect(descriptionOf(sponsors)).toContain('Enter the amount as digits only, like 150000');
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
@@ -254,8 +352,7 @@ describe('BriefForm: samples', () => {
       await submit();
       expect(screen.queryByRole('alert')).toBeNull();
       expect(onSubmit).toHaveBeenCalledExactlyOnceWith(sample);
-      const submitted = onSubmit.mock.calls[0]?.[0];
-      expect(eventBriefSchema.safeParse(submitted).success).toBe(true);
+      expect(eventBriefSchema.safeParse(onSubmit.mock.calls[0]?.[0]).success).toBe(true);
     },
   );
 });
@@ -311,50 +408,57 @@ describe('BriefForm: keyboard only', () => {
 });
 
 describe('BriefForm: loading the checker on demand', () => {
-  afterEach(() => {
-    vi.doUnmock(VALIDATE);
-  });
-
   it('marks the button busy, says it is checking when the load is slow, and submits once', async () => {
-    let release = (): void => undefined;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    vi.doMock(VALIDATE, async (importOriginal) => {
-      await gate;
-      return importOriginal();
-    });
-    const { user, onSubmit } = setup(sampleBrief('birthday', today));
-    await user.click(submitButton());
+    const { release, loaded } = gateChecker();
+    const { user, onSubmit, submitWithEnter } = setup(sampleBrief('birthday', today));
+    await submitWithEnter();
     expect(submitButton().getAttribute('aria-disabled')).toBe('true');
-    const status = await screen.findByRole('status');
+    const status = screen.getByRole('status');
     await waitFor(() => {
       expect(status.textContent).toBe('Checking your details…');
     });
-    await user.click(submitButton()); // ignored while busy
+    await user.keyboard('{Enter}'); // a second submit while busy is ignored
     release();
+    await loaded;
     await settled();
-    // Give a second, unguarded check time to land before asserting there was only one.
-    await new Promise((resolve) => setTimeout(resolve, 100));
     expect(onSubmit).toHaveBeenCalledOnce();
     expect(status.textContent).toBe('');
+    expect(submitButton().getAttribute('aria-disabled')).toBeNull();
+  });
+
+  it('drops a submit whose form was unmounted while the checker loaded', async () => {
+    const { release, loaded } = gateChecker();
+    const { onSubmit, submitWithEnter, unmount } = setup(sampleBrief('community', today));
+    await submitWithEnter();
+    unmount();
+    release();
+    await loaded;
+    await drained();
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it('says so when the checker cannot load, never throws, and works on a retry', async () => {
     vi.doMock(VALIDATE, () => {
       throw new Error('Failed to fetch dynamically imported module');
     });
-    const { submit, onSubmit } = setup(sampleBrief('community', today));
-    await submit();
-    expect(screen.getByRole('status').textContent).toBe(
-      "We couldn't load the form checker — check your connection and try again.",
-    );
+    const { submit, submitWithEnter, onSubmit } = setup(sampleBrief('community', today));
+    await submitWithEnter();
+    await settled();
+    const status = screen.getByRole('status');
+    expect(status.textContent).toContain(FAILED_LOAD);
+    expect(status.querySelector('[aria-hidden="true"]')?.textContent).toContain('⚠');
     expect(screen.queryByRole('alert')).toBeNull();
     expect(onSubmit).not.toHaveBeenCalled();
 
     vi.doUnmock(VALIDATE);
     await submit();
     expect(onSubmit).toHaveBeenCalledOnce();
-    expect(screen.getByRole('status').textContent).toBe('');
+    expect(status.textContent).toBe('');
+  });
+
+  it('still submits under StrictMode, which mounts effects twice', async () => {
+    const { submit, onSubmit } = setup(sampleBrief('birthday', today), { strict: true });
+    await submit();
+    expect(onSubmit).toHaveBeenCalledOnce();
   });
 });

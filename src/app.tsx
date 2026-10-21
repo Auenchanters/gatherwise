@@ -1,7 +1,8 @@
 /**
  * The application shell: skip link, brand header and the single `<main>`.
- * Does: shows the landing and the brief form, fills the form from a sample and moves focus to its
- * heading, and for now only announces that a submitted plan is ready (Task 15a wires the planner).
+ * Does: shows the landing and the brief form; fills the form from a sample, moves focus to its
+ * heading and announces it politely; and for now only announces that a submitted plan is ready
+ * (Task 15a wires the planner).
  * Never does: read the clock outside `todayIso`, or render more than one `<main>` or `<h1>`.
  */
 import { useRef, useState, type ReactElement } from 'react';
@@ -11,6 +12,12 @@ import { Landing } from './features/brief/landing.js';
 import { sampleBrief, type SampleKind } from './features/brief/samples.js';
 import { todayIso } from './features/plan/today.js';
 import type { EventBrief } from './shared/schema.js';
+
+/** How the sample announcement names each sample. */
+const SAMPLE_NAMES: Record<SampleKind, string> = {
+  community: 'community event',
+  birthday: 'birthday',
+};
 
 /** What the brief form starts from; a new `key` remounts it with that brief. */
 interface FormSeed {
@@ -29,7 +36,9 @@ export function App(): ReactElement {
     // Commit the refilled form first, so the heading that takes focus is the new one.
     flushSync(() => {
       setSeed((current) => ({ key: current.key + 1, initial: sampleBrief(kind, today) }));
-      setStatus('');
+      setStatus(
+        `Filled in the sample ${SAMPLE_NAMES[kind]} — check the details, then generate your plan.`,
+      );
     });
     headingRef.current?.focus();
   };
