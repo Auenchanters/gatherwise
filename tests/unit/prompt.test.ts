@@ -58,6 +58,7 @@ describe('SYSTEM_INSTRUCTION', () => {
       'dietary, accessibility, subtype, guests, venue',
       'servesAlcohol',
       'check with your local authority',
+      'Never include URLs, email addresses or phone numbers',
     ]) {
       expect(SYSTEM_INSTRUCTION).toContain(phrase);
     }

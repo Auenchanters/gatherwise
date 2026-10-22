@@ -64,7 +64,7 @@ The cache of the last 8 answers lives in memory in the planner's client (`src/fe
 
 ## Text sanitizing trades a few characters for safety
 
-`src/shared/sanitize-text.ts` removes Unicode tag characters to stop hidden instructions, which also turns the England, Scotland and Wales flag emoji into a plain black flag. Text is capped by code points, so a cut can split an emoji built from several code points.
+`src/shared/sanitize-text.ts` removes Unicode tag characters to stop hidden instructions, which also turns the England, Scotland and Wales flag emoji into a plain black flag. It turns `http://`, `https://`, `www.` and `javascript:` into a space wherever they appear, so a venue link typed in the notes reaches the model as a bare address, and a word that happens to contain `www.` is split. Text is capped by code points, so a cut can split an emoji built from several code points.
 
 **What would lift it:** an allowlist for the three subdivision flags, and `Intl.Segmenter` to cut by grapheme.
 
