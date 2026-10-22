@@ -8,11 +8,15 @@
  */
 import type { ClientError } from './api-client.js';
 
-/** "a minute" without a wait, otherwise whole minutes rounded up so nobody retries too early. */
+/**
+ * "a minute" without a wait, otherwise whole minutes up to an hour and a half, and whole hours
+ * beyond (a spent daily budget waits for UTC midnight), always rounded up so nobody retries early.
+ */
 function waitPhrase(seconds: number | undefined): string {
   if (seconds === undefined) return 'a minute';
   const minutes = Math.ceil(seconds / 60);
-  return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+  if (minutes <= 90) return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+  return `${Math.ceil(seconds / 3600)} hours`;
 }
 
 /**

@@ -1,7 +1,7 @@
 /**
- * One structured log line per API request.
+ * One structured log line per API request, and one for each limiter fallback.
  * Does: write a JSON line of ids, numbers and fixed labels: `console.info` normally,
- * `console.error` for a 5xx.
+ * `console.error` for a 5xx, `console.warn` when the rate limits fall back to memory.
  * Never does: log brief text, model text, provider messages, request paths or IP addresses; the
  * line's type only has room for the fields below.
  */
@@ -33,4 +33,18 @@ export function logRequest(line: RequestLog): void {
   const text = JSON.stringify(line);
   if (line.status >= 500) console.error(text);
   else console.info(text);
+}
+
+/**
+ * An infrastructure event, not tied to one request: the rate limits fell back to this instance's
+ * memory because no shared store is configured, or because it failed or timed out.
+ */
+export interface EventLog {
+  readonly event: 'limiter_fallback';
+  readonly reason: 'not_configured' | 'error' | 'timeout';
+}
+
+/** Writes one event's log line, as a warning. */
+export function logEvent(line: EventLog): void {
+  console.warn(JSON.stringify(line));
 }

@@ -14,7 +14,7 @@ Planning is iterative: an organizer changes the guest count, the budget and the 
 - **Repeats are free.** The client (`src/features/client/api-client.ts`) remembers the last 8 successful answers, keyed by the SHA-256 of the brief's canonical JSON. **Adjust with AI** skips that lookup, asks once with the organizer's change and the current answer, and stores the new answer. Failures and aborts are never cached.
 - **No automatic retries anywhere.** The client never retries, the server makes one model call per request and never repairs an answer (`server/handler.ts`, `server/answer.ts`), and the SDK is created with `retryOptions: { attempts: 1 }` (`server/provider.ts`).
 - **A small, bounded call.** The default model is `gemini-3.5-flash-lite` with `thinkingLevel: MINIMAL`, `maxOutputTokens: 4096` (room for the largest answer the schema allows; a typical one uses about 1,000), a 20-second SDK timeout and the request's abort signal passed through. The browser gives up after 25 seconds.
-- **Server-side ceilings.** Per warm instance: 10 plan requests a minute per client, 60 a minute in total (`server/rate-limit.ts`) and 3 model calls in flight (`server/capacity.ts`).
+- **Server-side ceilings.** Shared across instances through an Upstash store: 10 plan requests a minute per client and a daily budget of model calls (300 by default, `AI_DAILY_LIMIT`), with an in-memory fallback that never fails a request (`server/rate-limit.ts`). Per instance: 3 model calls in flight (`server/capacity.ts`).
 - **The count is visible.** "AI calls this session" is the client's count of real requests, shown on the Overview tab, in the AI panel and in the Budget tab's update message.
 
 ## Consequences
@@ -31,7 +31,7 @@ Planning is iterative: an organizer changes the guest count, the budget and the 
 - An adjustment replaces the whole AI layer (summary, ideas, extra tasks and vendor questions). The model is asked to keep what the change does not affect, but nothing forces it to; a ticked AI task stays ticked only when the new answer has a task with the same title.
 - A transient failure is not recovered automatically; the user presses "Try again" or **Adjust with AI**.
 - The cache lives in memory in one tab. A reload seeds it only with the saved plan's answer (a restored plan costs 0 calls, and so does submitting its brief again); other answers from before the reload are gone.
-- The server ceilings are per instance and in memory (see `docs/KNOWN-LIMITATIONS.md`).
+- The daily budget is global: once it is spent, every plan gets standard ideas until UTC midnight, and a caller with many addresses can spend it early (see `docs/KNOWN-LIMITATIONS.md`).
 
 ## Alternatives considered
 

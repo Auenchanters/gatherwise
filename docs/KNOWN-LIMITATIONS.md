@@ -2,11 +2,11 @@
 
 What Gatherwise does not do yet, or does only partly, and what would lift each limit.
 
-## Rate limits are per instance and in memory
+## The daily budget is the only ceiling a determined caller meets
 
-`server/rate-limit.ts` allows 10 plan requests a minute per client and 60 a minute per instance, and `server/capacity.ts` allows 3 model calls in flight. Each warm serverless instance keeps its own counters in memory, so the real ceiling grows with the number of instances and resets when an instance is recycled. Clients are told apart by a SHA-256 of the first `x-vercel-forwarded-for` address; requests without that header (local development) share one bucket.
+`server/rate-limit.ts` counts 10 plan requests a minute per client and a daily budget of model calls (300 by default, `AI_DAILY_LIMIT`) in a shared Upstash store, so the limits hold across instances. Clients are told apart by a SHA-256 of the first `x-vercel-forwarded-for` address, which Vercel's edge sets. A script that forges the `Origin` and spreads its requests over many addresses passes the per-client limit, so all it can do is spend the daily budget early: after that every plan gets standard ideas until UTC midnight, for everyone. When the store is not configured, fails or takes over a second, the counters fall back to each instance's memory, where they grow with the number of instances and reset when an instance is recycled; that is logged as `limiter_fallback`. `server/capacity.ts` still allows 3 model calls in flight per instance, and requests without a forwarded address (local development) share one bucket.
 
-**What would lift it:** a shared store for the counters (a key-value service with atomic increments), or rate limiting at the platform edge.
+**What would lift it:** bot protection or a per-session token issued with the page, so the budget is spent by people; a per-client daily budget as well as the global one.
 
 ## One device, no sync, no accounts
 
@@ -16,7 +16,7 @@ A plan lives in the `localStorage` of the browser that made it (ADR 0004). There
 
 ## The Gemini free tier has a small quota
 
-On a free-tier API key the number of requests per minute and per day is small. When the quota runs out, the provider answers 429, the API returns `AI_BUSY` (503, `Retry-After: 60`), and the plan keeps working with standard ideas and a notice that says when to try again.
+On a free-tier API key the number of requests per minute and per day is small. When the quota runs out, the provider answers 429, the API returns `AI_BUSY` (503, `Retry-After: 60`), and the plan keeps working with standard ideas and a notice that says when to try again. The app's own daily budget (`AI_DAILY_LIMIT`) can be set below the provider's quota so the app runs out first, at a known time (UTC midnight).
 
 **What would lift it:** a paid Gemini tier with a higher quota.
 
@@ -70,6 +70,6 @@ The cache of the last 8 answers lives in memory in the planner's client (`src/fe
 
 ## The origin check is not authentication
 
-A request must carry an allowed `Origin`, which stops other websites from calling the API from a visitor's browser. A script can set a matching `Origin` itself, so the check does not identify who is calling. Such a caller is still held by the other limits: JSON only, 16 KB, the strict brief schema and the rate limits.
+A request must carry an allowed `Origin`, which stops other websites from calling the API from a visitor's browser. A script can set a matching `Origin` itself, so the check does not identify who is calling. Such a caller is still held by the other limits: JSON only, 64 KB, the strict brief schema, the rate limits and the daily budget.
 
 **What would lift it:** a signed per-session token issued with the page, or bot protection at the platform edge.

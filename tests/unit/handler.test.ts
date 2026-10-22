@@ -4,13 +4,23 @@
  * Never calls the network.
  */
 import { ApiError } from '@google/genai';
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type Mock,
+  type MockInstance,
+} from 'vitest';
 import {
   createHandler,
   handlerFromEnv,
   type Env,
   type HandlerOptions,
 } from '../../server/handler.js';
+import { createMemoryLimits, type Limits } from '../../server/rate-limit.js';
 import type { Generate } from '../../server/provider.js';
 import { buildPlan } from '../../src/domain/plan.js';
 import { buildPrompt } from '../../src/shared/prompt.js';
@@ -85,13 +95,22 @@ async function errorOf(response: Response): Promise<{ code: string; message: str
 
 let info: MockInstance<typeof console.info>;
 let error: MockInstance<typeof console.error>;
+let warn: MockInstance<typeof console.warn>;
 beforeEach(() => {
   info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
   error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 });
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
+
+/** Limits that admit everything and record each check. */
+const recording = (): { limits: Limits; request: Mock<Limits['request']> } => {
+  const request = vi.fn<Limits['request']>(() => Promise.resolve());
+  return { limits: { request, aiCall: () => Promise.resolve() }, request };
+};
 
 describe('request matrix', () => {
   it('405 with Allow: POST for a GET on the plan route, before anything else', async () => {
@@ -230,12 +249,33 @@ describe('request matrix', () => {
   });
 
   it('keys the rate limit on a hash of the forwarded address, never the raw IP', async () => {
-    const rateLimit = vi.fn();
-    await handlerWith({ generate: answering(), rateLimit })(
+    const { limits, request } = recording();
+    await handlerWith({ generate: answering(), limits })(
       post(undefined, { 'x-vercel-forwarded-for': '203.0.113.7, 10.0.0.1' }),
     );
-    expect(rateLimit).toHaveBeenCalledWith(expect.stringMatching(/^[0-9a-f]{64}$/u), NOW.getTime());
-    expect(JSON.stringify(rateLimit.mock.calls)).not.toContain('203.0.113.7');
+    expect(request).toHaveBeenCalledWith(expect.stringMatching(/^[0-9a-f]{64}$/u), NOW.getTime());
+    expect(JSON.stringify(request.mock.calls)).not.toContain('203.0.113.7');
+  });
+
+  it('503 AI_BUSY once the daily budget is spent, with Retry-After until UTC midnight', async () => {
+    const generate = answering();
+    const handler = handlerWith({ generate, limits: createMemoryLimits(2) });
+    expect((await handler(post())).status).toBe(200);
+    expect((await handler(post())).status).toBe(200);
+    const spent = await handler(post());
+    expect(spent.status).toBe(503);
+    // NOW is 10:00 UTC, so midnight is 14 hours away.
+    expect(spent.headers.get('retry-after')).toBe(String(14 * 3600));
+    expect((await errorOf(spent)).code).toBe('AI_BUSY');
+    expect(generate).toHaveBeenCalledTimes(2);
+  });
+
+  it('spends nothing from the daily budget on a request that never reaches the model', async () => {
+    const limits = createMemoryLimits(1);
+    const handler = handlerWith({ generate: answering(), limits });
+    expect((await handler(post({ brief: brief('community', { guests: 0 }) }))).status).toBe(400);
+    expect((await handlerWith({ limits })(post())).status).toBe(503);
+    expect((await handler(post())).status).toBe(200);
   });
 
   it('429 CAPACITY_LIMITED with Retry-After on the fourth concurrent request', async () => {
@@ -498,10 +538,13 @@ describe('request matrix', () => {
   });
 
   it('500 INTERNAL_ERROR with a generic message for an unexpected bug', async () => {
-    const rateLimit = () => {
-      throw new Error('private operational detail');
+    const limits: Limits = {
+      request: () => {
+        throw new Error('private operational detail');
+      },
+      aiCall: () => Promise.resolve(),
     };
-    const response = await handlerWith({ generate: answering(), rateLimit })(post());
+    const response = await handlerWith({ generate: answering(), limits })(post());
     expect(response.status).toBe(500);
     const { code, message } = await errorOf(response);
     expect(code).toBe('INTERNAL_ERROR');
@@ -617,6 +660,58 @@ describe('handlerFromEnv', () => {
     ['blank', { GEMINI_API_KEY: '   ' }],
   ])('is not configured when GEMINI_API_KEY is %s', async (_name, env) => {
     await expect(health(env)).resolves.toEqual({ status: 'ok', ai: 'not_configured' });
+  });
+
+  it('counts in memory without a shared store, and says so once when it is built', () => {
+    handlerFromEnv({ KV_REST_API_URL: 'https://store.example' });
+    expect(warn).toHaveBeenCalledOnce();
+    expect(JSON.parse(String(warn.mock.calls[0]?.[0]))).toEqual({
+      event: 'limiter_fallback',
+      reason: 'not_configured',
+    });
+  });
+
+  it.each<[string, Env]>([
+    [
+      'the Vercel Marketplace names',
+      { KV_REST_API_URL: 'https://kv.example', KV_REST_API_TOKEN: 't1' },
+    ],
+    [
+      'the Upstash names',
+      { UPSTASH_REDIS_REST_URL: 'https://kv.example', UPSTASH_REDIS_REST_TOKEN: 't1' },
+    ],
+  ])('counts in the shared store configured with %s', async (_name, env) => {
+    const store = vi.fn<typeof fetch>(() =>
+      Promise.resolve(Response.json([{ result: 1 }, { result: 1 }])),
+    );
+    vi.stubGlobal('fetch', store);
+    const response = await handlerFromEnv(env)(post());
+    expect(response.status).toBe(503);
+    expect((await errorOf(response)).code).toBe('AI_NOT_CONFIGURED');
+    expect(store).toHaveBeenCalledOnce();
+    const [url, init] = store.mock.calls[0] ?? [];
+    expect(url).toBe('https://kv.example/pipeline');
+    expect(new Headers(init?.headers).get('authorization')).toBe('Bearer t1');
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['1', 1],
+    ['0', 300],
+    ['many', 300],
+    [' 2 ', 2],
+  ])('reads AI_DAILY_LIMIT %j as a budget of %i calls', async (value, budget) => {
+    sdk.generateContent.mockResolvedValue({ text: JSON.stringify(SUGGESTIONS) });
+    const handler = handlerFromEnv({
+      GEMINI_API_KEY: 'test-key-not-a-secret',
+      AI_DAILY_LIMIT: value,
+    });
+    const plan = () => handler(post({ brief: brief('community', { date: soon() }) }));
+    const statuses: number[] = [];
+    for (let i = 0; i < Math.min(budget, 2) + 1; i += 1) statuses.push((await plan()).status);
+    expect(statuses).toEqual(
+      budget === 1 ? [200, 503] : budget === 2 ? [200, 200, 503] : [200, 200, 200],
+    );
   });
 
   it('is configured with a key, and honours a model override and APP_ORIGIN', async () => {

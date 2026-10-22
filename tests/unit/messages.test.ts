@@ -39,6 +39,10 @@ describe('clientErrorMessage', () => {
     [30, 'in 1 minute.'],
     [1, 'in 1 minute.'],
     [3600, 'in 60 minutes'],
+    [5400, 'in 90 minutes'],
+    [5401, 'in 2 hours'],
+    [14 * 3600, 'in 14 hours'],
+    [86_400, 'in 24 hours'],
   ])('quotes a wait of %i seconds as %j', (retryAfterSeconds, phrase) => {
     const message = clientErrorMessage({ code: 'rate_limited', retryAfterSeconds });
     expect(message).toContain(phrase);

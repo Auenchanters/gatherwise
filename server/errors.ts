@@ -1,7 +1,8 @@
 /**
  * The API's one error catalog: every public failure has a fixed status, code and message.
  * Does: turn a failure into the `{ error: { code, message } }` envelope, with `fields` for a bad
- * brief, `Allow` for a wrong method and `Retry-After` when waiting helps.
+ * brief, `Allow` for a wrong method and `Retry-After` when waiting helps (60 seconds unless the
+ * error says how long, as a spent daily budget does).
  * Never does: put a provider message, stack trace, request path or user input in a response;
  * messages come only from this table.
  */
@@ -9,7 +10,7 @@
 interface ErrorSpec {
   readonly status: number;
   readonly message: string;
-  /** Waiting a minute can help, so the response carries `Retry-After: 60`. */
+  /** Waiting can help, so the response carries `Retry-After` (60 seconds unless detailed). */
   readonly retry?: true;
 }
 
@@ -44,7 +45,7 @@ const CATALOG = {
   },
   AI_BUSY: {
     status: 503,
-    message: 'The AI service is busy. Your plan still works; try again in a minute.',
+    message: 'The AI service is busy. Your plan still works; try again after the Retry-After wait.',
     retry: true,
   },
   AI_TIMEOUT: {
@@ -72,6 +73,8 @@ interface ErrorDetail {
   readonly fields?: readonly string[];
   /** The method the route accepts, sent as the `Allow` header with a 405. */
   readonly allow?: string;
+  /** Seconds to wait, sent as `Retry-After` in place of the default 60. */
+  readonly retryAfter?: number;
 }
 
 /** An expected failure with a catalogued status and message. */
@@ -98,7 +101,7 @@ export function errorResponse(error: AppError): Response {
   const { code, message, status, retry, detail } = error;
   const headers = new Headers({ 'Cache-Control': 'no-store' });
   if (detail.allow) headers.set('Allow', detail.allow);
-  if (retry) headers.set('Retry-After', '60');
+  if (retry) headers.set('Retry-After', String(detail.retryAfter ?? 60));
   const fields = detail.fields ? { fields: detail.fields } : {};
   return Response.json({ error: { code, message, ...fields } }, { status, headers });
 }

@@ -2,9 +2,9 @@
  * The planning API's one Fetch handler, shared by the Vercel functions and the local dev server.
  * Does: route `POST /api/plan` and `GET /api/health`; run the request gate (method, content type,
  * origin, rate limit, size, JSON, schema, adjustment, date); build the engine plan and the prompt
- * (with the organizer's change and earlier answer when adjusting); make exactly one model
- * call inside the concurrency gate; answer with sanitized suggestions and call metadata; write
- * one log line per request.
+ * (with the organizer's change and earlier answer when adjusting); count the call against the
+ * daily budget; make exactly one model call inside the concurrency gate; answer with sanitized
+ * suggestions and call metadata; write one log line per request.
  * Never does: retry a model call, return a provider message, log brief or model text, or cache.
  */
 import { randomUUID } from 'node:crypto';
@@ -17,7 +17,14 @@ import { createInferenceGate } from './capacity.js';
 import { AppError, errorResponse, type ErrorCode } from './errors.js';
 import { logRequest } from './log.js';
 import { createGeminiGenerator, type Generate, type Generation } from './provider.js';
-import { clientId, createRateLimiter, type RateLimiter } from './rate-limit.js';
+import { logEvent } from './log.js';
+import {
+  clientId,
+  createMemoryLimits,
+  createSharedLimits,
+  DEFAULT_DAILY_LIMIT,
+  type Limits,
+} from './rate-limit.js';
 import { planFor, readPlanRequest, validateTransport } from './request.js';
 
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
@@ -34,9 +41,10 @@ export interface HandlerOptions {
   readonly model?: string;
   /** `APP_ORIGIN`, accepted in addition to the request's own origin. */
   readonly origin?: string;
-  /** The clock for the date window and the rate limit. */
+  /** The clock for the date window, the rate limit and the daily budget. */
   readonly now?: () => Date;
-  readonly rateLimit?: RateLimiter;
+  /** The quotas; by default in-memory counters for this handler alone. */
+  readonly limits?: Limits;
 }
 
 /** Facts about a request gathered for its log line as handling proceeds. */
@@ -95,17 +103,19 @@ export function createHandler(
   options: HandlerOptions = {},
 ): (request: Request) => Promise<Response> {
   const { generate, model = DEFAULT_MODEL, origin, now = () => new Date() } = options;
-  const rateLimit = options.rateLimit ?? createRateLimiter();
+  const limits = options.limits ?? createMemoryLimits();
   const withCapacity = createInferenceGate();
 
   async function planRoute(request: Request, requestId: string, trace: Trace): Promise<Response> {
     validateTransport(request, origin);
-    rateLimit(clientId(request), now().getTime());
+    await limits.request(clientId(request), now().getTime());
     const { brief, adjust } = await readPlanRequest(request);
     trace.eventKind = brief.kind;
     const plan = planFor(brief, now());
     if (!generate) throw new AppError('AI_NOT_CONFIGURED');
     request.signal.throwIfAborted();
+    // Counted before the call, as an attempt: the provider bills a call that fails too.
+    await limits.aiCall(now().getTime());
     const prompt = buildPrompt(plan, adjust);
     const started = performance.now();
     const generation = await withCapacity(() => callModel(generate, prompt, request.signal));
@@ -170,8 +180,12 @@ export type Env = Readonly<Record<string, string | undefined>>;
 
 /**
  * A handler configured from `env`, built once per warm instance by each function entry point:
- * `GEMINI_API_KEY` (no key, no model calls), `GEMINI_MODEL` and `APP_ORIGIN`. A value that is
- * unset or blank (`NAME=`) means "not set".
+ * `GEMINI_API_KEY` (no key, no model calls), `GEMINI_MODEL`, `APP_ORIGIN`, `AI_DAILY_LIMIT` (a
+ * whole number of model calls a UTC day; 300 when unset or not a positive whole number) and the
+ * shared store for the limits: `KV_REST_API_URL` and `KV_REST_API_TOKEN` as the Vercel Marketplace
+ * names them, or `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`. Without a store the
+ * limits count in this instance's memory, and that is logged once. A value that is unset or blank
+ * (`NAME=`) means "not set".
  */
 export function handlerFromEnv(env: Env): (request: Request) => Promise<Response> {
   const setting = (name: string): string | undefined => {
@@ -181,8 +195,19 @@ export function handlerFromEnv(env: Env): (request: Request) => Promise<Response
   const key = setting('GEMINI_API_KEY');
   const model = setting('GEMINI_MODEL') ?? DEFAULT_MODEL;
   const origin = setting('APP_ORIGIN');
+  const daily = Number(setting('AI_DAILY_LIMIT'));
+  const dailyLimit = Number.isSafeInteger(daily) && daily > 0 ? daily : DEFAULT_DAILY_LIMIT;
+  const url = setting('KV_REST_API_URL') ?? setting('UPSTASH_REDIS_REST_URL');
+  const token = setting('KV_REST_API_TOKEN') ?? setting('UPSTASH_REDIS_REST_TOKEN');
+  let limits = createMemoryLimits(dailyLimit);
+  if (url === undefined || token === undefined) {
+    logEvent({ event: 'limiter_fallback', reason: 'not_configured' });
+  } else {
+    limits = createSharedLimits({ url, token, dailyLimit, fallback: limits });
+  }
   return createHandler({
     model,
+    limits,
     ...(key ? { generate: createGeminiGenerator(key, model) } : {}),
     ...(origin ? { origin } : {}),
   });

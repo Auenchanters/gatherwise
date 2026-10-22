@@ -25,8 +25,11 @@ const ENDPOINT = '/api/plan';
 /** Longer than the server's 20 s model timeout, so the server's answer normally arrives first. */
 const DEFAULT_TIMEOUT_MS = 25_000;
 const DEFAULT_CACHE_SIZE = 8;
-/** The longest wait the client will repeat to a user; anything beyond is a server fault. */
-const MAX_RETRY_AFTER_SECONDS = 3600;
+/**
+ * The longest wait the client will repeat to a user: a day, since a spent daily budget waits for
+ * UTC midnight. Anything beyond is a server fault.
+ */
+const MAX_RETRY_AFTER_SECONDS = 86_400;
 
 /** A validated answer: the model's suggestions and the facts about the call. Treat as immutable. */
 export interface SuggestResponse {
@@ -40,7 +43,7 @@ export interface SuggestResponse {
 /** Why a request produced no suggestions; the plan itself is unaffected. */
 export interface ClientError {
   readonly code: AiErrorCode;
-  /** Only for `rate_limited`, only when the server's `Retry-After` was a sane 1 to 3600. */
+  /** Only for `rate_limited`, only when the server's `Retry-After` was a sane 1 to 86400. */
   readonly retryAfterSeconds?: number;
 }
 
@@ -105,7 +108,7 @@ function codeForStatus(status: number): ClientErrorCode {
   return status >= 500 ? 'unavailable' : 'invalid';
 }
 
-/** `Retry-After` as whole seconds, only if it is a plain integer from 1 to 3600. */
+/** `Retry-After` as whole seconds, only if it is a plain integer from 1 to 86400 (a day). */
 function parseRetryAfter(header: string | null): number | undefined {
   if (header === null || !/^\d+$/u.test(header)) return undefined;
   const seconds = Number(header);
