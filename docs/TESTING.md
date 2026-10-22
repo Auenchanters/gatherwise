@@ -1,6 +1,6 @@
 # Testing
 
-`npm run verify` runs lint, type-checking, the unit and component tests with coverage, knip, the production build (with its bundle and runtime checks) and the Prettier check. At this commit it runs 1,366 Vitest tests, and every measured file is at 100% statements, branches, functions and lines. CI (`.github/workflows/ci.yml`) runs `npm run verify`, then the Playwright journeys against the build that `verify` just made, and `npm audit`.
+`npm run verify` runs lint, type-checking, the unit and component tests with coverage, knip, the production build (with its bundle and runtime checks) and the Prettier check. At this commit it runs 1,370 Vitest tests, and every measured file is at 100% statements, branches, functions and lines. CI (`.github/workflows/ci.yml`) runs `npm run verify`, then the Playwright journeys against the build that `verify` just made, and `npm audit`.
 
 ## Layers
 
@@ -33,7 +33,7 @@ Coverage is collected by `@vitest/coverage-v8` as configured in `vitest.config.t
 - **Measured:** `src/domain/**`, `src/shared/**`, `src/features/**/*.ts`, every `.tsx` component under `src/` and `server/**`.
 - **Excluded:** Vitest's default exclusions, `**/*.d.ts` (ambient declarations compile to nothing) and `src/main.tsx`.
 - **Thresholds** (the run fails below them): lines 95%, statements 95%, functions 95%, branches 90%. The code is at 100% on all four at this commit; the thresholds are the floor, not the target.
-- **At this commit** (`npm run test:coverage`, 71 files fully covered): statements 100% (1805 of 1805), branches 100% (949 of 949), functions 100% (571 of 571), lines 100% (1555 of 1555). No coverage-ignore comments are used anywhere; a branch is either reached by a test or the code that made it is gone.
+- **At this commit** (`npm run test:coverage`, 71 files fully covered): statements 100% (1810 of 1810), branches 100% (955 of 955), functions 100% (572 of 572), lines 100% (1560 of 1560). No coverage-ignore comments are used anywhere; a branch is either reached by a test or the code that made it is gone.
 
 What is outside the measured scope, and why:
 
