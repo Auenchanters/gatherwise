@@ -65,7 +65,7 @@ export default defineConfig(
     rules: { 'no-console': ['error', { allow: ['info', 'warn', 'error'] }] },
   },
   {
-    // Plain Node scripts have no type information; only the baseline rules apply.
+    // The one plain Node script (it must load the emitted API as plain ESM); baseline rules only.
     files: ['scripts/**/*.mjs'],
     extends: [js.configs.recommended],
     languageOptions: { globals: { process: 'readonly', Request: 'readonly' } },

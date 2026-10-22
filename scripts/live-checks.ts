@@ -12,7 +12,7 @@
 import { z } from 'zod';
 import type { IsoDate } from '../src/domain/dates.js';
 import { sampleBrief } from '../src/features/brief/samples.js';
-import { suggestionsSchemaFor } from '../src/shared/prompt.js';
+import { suggestionsSchemaFor } from '../src/ai/prompt.js';
 import { aiMetaSchema } from '../src/shared/schema.js';
 
 /** A plan call slower than this fails the smoke test (the server's own model timeout is 25 s). */

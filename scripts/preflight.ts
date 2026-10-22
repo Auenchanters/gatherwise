@@ -1,12 +1,12 @@
 /**
  * Verify the size, branch, file-hygiene and documentation gates before publishing.
- * The Markdown checks are pure functions in doc-checks.ts (unit-tested), which Node runs directly.
+ * The Markdown checks are pure functions in doc-checks.ts (unit-tested).
  */
 import { execFileSync, spawnSync } from 'node:child_process';
-import { docPaths, hasLiveUrl, missingHeadings, missingPaths } from './doc-checks.ts';
+import { docPaths, hasLiveUrl, missingHeadings, missingPaths } from './doc-checks.js';
 
-const git = (...args) => execFileSync('git', args, { encoding: 'utf8' });
-const split = (text, separator) => text.split(separator).filter(Boolean);
+const git = (...args: string[]): string => execFileSync('git', args, { encoding: 'utf8' });
+const split = (text: string, separator: string): string[] => text.split(separator).filter(Boolean);
 
 // git commands are relative to the working directory, so cover the whole repo from anywhere.
 process.chdir(git('rev-parse', '--show-toplevel').trim());
@@ -19,17 +19,16 @@ if (tracked.length === 0) {
   throw new Error('No tracked project files. Stage the project files before preflight.');
 }
 
-const checks = [];
-const verify = (name, passed) => {
+const checks: { readonly name: string; readonly passed: boolean }[] = [];
+const verify = (name: string, passed: boolean): void => {
   checks.push({ name, passed });
   process.stdout.write(`${passed ? 'PASS' : 'FAIL'} ${name}\n`);
 };
 
-// Gitlinks and unmerged entries report "-" instead of a size.
-const totalBytes = split(git('ls-files', '--format=%(objectsize)'), '\n').reduce(
-  (sum, size) => sum + (Number(size) || 0),
-  0,
-);
+// Gitlinks and unmerged entries report "-" instead of a size, which counts as 0.
+const totalBytes = split(git('ls-files', '--format=%(objectsize)'), '\n')
+  .map(Number)
+  .reduce((sum, size) => sum + (Number.isInteger(size) ? size : 0), 0);
 verify(
   `Tracked repository files under 10 MB (${totalBytes.toLocaleString('en-US')} bytes)`,
   totalBytes < 10_000_000,
@@ -54,8 +53,8 @@ verify('No known credential signatures in tracked files', secretScan.status === 
 if (secretScan.status === 0) {
   process.stdout.write(`  matched in: ${secretScan.stdout.trim()}\n`);
 } else if (secretScan.status !== 1) {
-  const reason = secretScan.error?.message ?? secretScan.stderr?.trim();
-  process.stdout.write(`  git grep failed (status ${secretScan.status}): ${reason}\n`);
+  const reason = secretScan.error?.message ?? secretScan.stderr.trim();
+  process.stdout.write(`  git grep failed (status ${String(secretScan.status)}): ${reason}\n`);
 }
 
 // Remote-tracking refs are what this clone knows about; run `git fetch --prune` first.
@@ -64,7 +63,7 @@ if (secretScan.status === 0) {
 const remotes = split(git('remote'), '\n');
 if (remotes.length > 0) {
   const remoteRefs = split(git('for-each-ref', '--format=%(refname)', 'refs/remotes'), '\n');
-  const isRemoteRef = (ref, name) =>
+  const isRemoteRef = (ref: string, name: string): boolean =>
     remotes.some((remote) => ref === `refs/remotes/${remote}/${name}`);
   verify(
     'No remote branches other than main',
@@ -73,14 +72,14 @@ if (remotes.length > 0) {
 }
 
 // The docs as staged: every path they name must exist, and the README needs its four headings.
-const staged = (file) => git('show', `:${file}`);
+const staged = (file: string): string => git('show', `:${file}`);
 const docs = tracked.filter((file) => file.endsWith('.md'));
 const missing = docs.flatMap((file) =>
   missingPaths(docPaths(staged(file), file), tracked).map((path) => `${file}: ${path}`),
 );
 verify(
-  `Every repo path named in the ${docs.length} tracked Markdown files exists`,
-  !missing.length,
+  `Every repo path named in the ${String(docs.length)} tracked Markdown files exists`,
+  missing.length === 0,
 );
 for (const line of missing) process.stdout.write(`  missing ${line}\n`);
 
