@@ -96,6 +96,7 @@ test('the community sample becomes a plan with one AI call, and edits and reload
   // Submitting the same brief again after the reload reuses the restored answer: still no call.
   await page.getByRole('button', { name: 'Edit details' }).click();
   await page.getByRole('button', { name: 'Generate my plan' }).click();
+  await page.getByRole('tab', { name: 'Overview' }).click();
   await expect(
     page.getByText('Reused the answer for this exact brief — no new AI call.'),
   ).toBeVisible();
