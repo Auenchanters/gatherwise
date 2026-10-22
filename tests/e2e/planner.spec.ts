@@ -16,7 +16,7 @@ import {
   AI_DONE,
   axeViolations,
   CSP,
-  noSidewaysScroll,
+  sidewaysOverflow,
   openSampleForm,
   prepare,
   SAMPLE_NAME,
@@ -70,7 +70,7 @@ test('the community sample becomes a plan with one AI call, and edits and reload
   );
   await expect(page.locator('.ai-panel__calls dd')).toHaveText('1');
   expect(await axeViolations(page)).toEqual([]);
-  expect(await noSidewaysScroll(page)).toBe(true);
+  expect(await sidewaysOverflow(page)).toEqual([]);
 
   // Budget: guests 250 → 400 rescales the per-guest lines locally.
   await page.getByRole('tab', { name: 'Budget' }).click();
@@ -82,7 +82,7 @@ test('the community sample becomes a plan with one AI call, and edits and reload
   await expect(foodLine(page)).not.toHaveText(before ?? '');
   await expect(page.getByText(/Over budget by ₹/u)).toBeVisible();
   expect(await axeViolations(page)).toEqual([]);
-  expect(await noSidewaysScroll(page)).toBe(true);
+  expect(await sidewaysOverflow(page)).toEqual([]);
   expect(requests).toHaveLength(1);
 
   // A reload restores the plan from this browser without asking the AI again.
@@ -127,7 +127,7 @@ test('the wedding sample opens a calm wedding plan with a bar vendor and no Volu
   await expect(page.getByRole('heading', { level: 3, name: 'Bar service' })).toBeVisible();
   await expect(page.getByText('Is a licensed bartender included?', { exact: true })).toBeVisible();
   expect(await axeViolations(page)).toEqual([]);
-  expect(await noSidewaysScroll(page)).toBe(true);
+  expect(await sidewaysOverflow(page)).toEqual([]);
   expect(requests).toHaveLength(1);
   expect(errors).toEqual([]);
 });

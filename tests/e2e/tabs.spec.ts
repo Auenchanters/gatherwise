@@ -15,7 +15,7 @@ import {
   axeViolations,
   generateSample,
   isoIn,
-  noSidewaysScroll,
+  sidewaysOverflow,
   prepare,
   SAMPLE_NAME,
 } from './helpers.js';
@@ -49,7 +49,7 @@ test('every tab is reachable by keyboard, and each new tab has no axe violations
     if (NEW_TABS.some((tab) => tab === name)) {
       await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
       expect(await axeViolations(page), `axe on ${name}`).toEqual([]);
-      expect(await noSidewaysScroll(page), `no sideways scroll on ${name}`).toBe(true);
+      expect(await sidewaysOverflow(page), `no sideways scroll on ${name}`).toEqual([]);
     }
   }
 

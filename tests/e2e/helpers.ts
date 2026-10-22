@@ -82,11 +82,25 @@ export async function prepare(
 }
 
 /**
- * Whether the page fits the layout viewport. `clientWidth` stays at the device width; a mobile
- * browser zooms out to fit wide content, so `innerWidth` would grow with the overflow and hide it.
+ * What makes the page wider than the layout viewport: empty when it fits, otherwise the outermost
+ * elements that cross the right edge, so a failure names its cause. `clientWidth` stays at the
+ * device width; a mobile browser zooms out to fit wide content, so `innerWidth` would grow with
+ * the overflow and hide it.
  */
-export const noSidewaysScroll = (page: Page): Promise<boolean> =>
-  page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
+export const sidewaysOverflow = (page: Page): Promise<string[]> =>
+  page.evaluate(() => {
+    const root = document.documentElement;
+    if (root.scrollWidth <= root.clientWidth) return [];
+    const edge = root.clientWidth + 0.5;
+    const crosses = (el: Element | null): boolean =>
+      el !== null && el.getBoundingClientRect().right > edge;
+    return Array.from(document.body.querySelectorAll('*'))
+      .filter((el) => crosses(el) && !crosses(el.parentElement))
+      .map(
+        (el) =>
+          `${el.tagName.toLowerCase()}.${el.className}: ${el.textContent.trim().slice(0, 40)}`,
+      );
+  });
 
 /** Opens the landing and fills the form from a sample (the community one unless told otherwise). */
 export async function openSampleForm(page: Page, sample: Sample = COMMUNITY_SAMPLE): Promise<void> {
