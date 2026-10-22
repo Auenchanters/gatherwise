@@ -31,7 +31,7 @@ const optionList = <T extends z.ZodType<string>>(option: T) =>
     .refine((items) => new Set(items).size === items.length, 'must not contain duplicates');
 
 // Income is community-only. Money is capped at budgetMax and head counts at guestsMax so the
-// domain's integer math cannot overflow; A5 itself only says "non-negative integers".
+// domain's integer math cannot overflow.
 const money = wholeNumber(0, brief.budgetMax);
 const headCount = wholeNumber(0, brief.guestsMax);
 const incomeSchema = z.strictObject({

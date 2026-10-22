@@ -5,8 +5,9 @@
  * plan (when storage holds one) or, inside the form's submit handler, to start a new one. Once the
  * planner is loaded it owns the page and shows the landing again whenever there is no plan.
  * Never does: import the reducer, persistence, the API client, zod or the workspace (they would
- * break the first-page budget, R66); start an AI call (only planner commands do); read the clock
- * outside `todayIso`; or render more than one `<main>` or `<h1>`.
+ * break the entry-size budget that `scripts/bundle-budget.mjs` enforces); start an AI call (only
+ * planner commands do); read the clock outside `todayIso`; or render more than one `<main>` or
+ * `<h1>`.
  */
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';

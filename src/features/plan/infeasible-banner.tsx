@@ -3,7 +3,7 @@
  * overdue tasks, naming up to five of them with their status (tasks Gemini added carry the AI
  * label), and linking to the timeline. Tasks that cannot be done in time come first, then overdue
  * ones, each group in schedule order.
- * Never does: soften a deadline or hide that a task cannot be done in time (Review Focus 1).
+ * Never does: soften a deadline or hide that a task cannot be done in time.
  */
 import { useId, type MouseEvent, type ReactElement } from 'react';
 import { isAiTask } from '../../domain/merge.js';

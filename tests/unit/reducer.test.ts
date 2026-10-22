@@ -351,7 +351,7 @@ describe('guests/changed: the zero-call edit', () => {
     expect(reconciles(next)).toBe(true);
   });
 
-  it('follows R29: a rise eats the contingency first, then shows overBy; a fall frees it', () => {
+  it('a rise eats the contingency first, then shows overBy; a fall frees it', () => {
     const up = ready(planReducer(before, { type: 'guests/changed', guests: 400 })).plan.budget;
     expect(up.contingency).toBeLessThan(before.plan.budget.contingency);
     const crowd = ready(planReducer(before, { type: 'guests/changed', guests: 5000 })).plan.budget;

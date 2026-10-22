@@ -65,7 +65,7 @@ const without = (value: Record<string, unknown>, key: string): Record<string, un
 const noIncome = without(valid, 'income');
 
 describe('option tuples', () => {
-  it('are the A5 enums, exported for the UI', () => {
+  it('are the allowed option lists, exported for the UI', () => {
     expect(EVENT_KINDS).toEqual(['community', 'wedding', 'birthday']);
     expect(SUBTYPES).toEqual({
       community: ['festival', 'fundraiser', 'cleanup_drive', 'sports_day', 'cultural_night'],

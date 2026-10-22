@@ -1,5 +1,5 @@
 /**
- * The planner store: the plan, its notices and the AI-call count, held outside React (R69).
+ * The planner store: the plan, its notices and the AI-call count, held outside React.
  * Does: runs every user action through `planReducer`, saves after each change (warning once if the
  * browser refuses), restores a saved plan, and is the ONLY place the UI's AI calls start: the
  * `submit`, `personalize` and `refreshIdeas` commands. Each call carries the plan's generation and

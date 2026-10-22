@@ -391,7 +391,7 @@ describe('rescaleGuests', () => {
     expect(frozen).toEqual(snapshot);
   });
 
-  it('keeps the R29 invariant for any budget and any target guest count', () => {
+  it('keeps lines + contingency = total + overBy for any budget and target guest count', () => {
     fc.assert(
       fc.property(briefAndHints, guestsArb, ({ b, hints }, target) => {
         const before = buildBudget(b, templateFor(b.kind), hints);

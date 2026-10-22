@@ -145,7 +145,7 @@ describe('draftToCandidate community extras', () => {
     expect(candidate.volunteersAvailable).toBe(0);
   });
 
-  it('counts blank volunteers on a community event as 0, like blank income (R68)', () => {
+  it('counts blank volunteers on a community event as 0, like blank income', () => {
     expect(draftToCandidate(community({ volunteersAvailable: ' ' })).volunteersAvailable).toBe(0);
   });
 });

@@ -1,9 +1,9 @@
 /**
  * Tests for src/domain/plan.ts, which runs every engine module for a brief.
  *
- * Does: checks a full plan for each event kind, each invalid-date reason, the event-today case
- * (Review Focus 1), a budget planned for one guest count and rescaled to another (R29), done
- * tasks, standard versus AI ideas with their fit, folded-in AI addenda, and the invariant throw.
+ * Does: checks a full plan for each event kind, each invalid-date reason, the event-today case,
+ * a budget planned for one guest count and rescaled to another, done tasks, standard versus AI
+ * ideas with their fit, folded-in AI addenda, and the invariant throw.
  * Never does: read the clock; `today` is a fixed date.
  */
 import { describe, expect, it } from 'vitest';
@@ -116,7 +116,7 @@ describe('buildPlan', () => {
     }
   });
 
-  it('plans the budget for 250 guests and rescales it to 400 (R29)', () => {
+  it('plans the budget for 250 guests and rescales it to 400', () => {
     const b = brief('community', { guests: 400 });
     const plan = planOf(b, { plannedGuests: 250 });
     const base = buildBudget({ ...b, guests: 250 }, communityTemplate);

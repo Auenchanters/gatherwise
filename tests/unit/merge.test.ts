@@ -1,5 +1,5 @@
 /**
- * Tests for src/domain/merge.ts, where untrusted model output meets the engine (Review Focus 4).
+ * Tests for src/domain/merge.ts, where untrusted model output meets the engine.
  *
  * Does: runs the brief's absurd payload, then one focused case per normalization rule, each
  * pinning the exact adjustment `kind` and `target`; checks what a merge preserves (total, guests,
@@ -93,7 +93,7 @@ const addendaOf = (over: Partial<AiSuggestions>) => {
 const linesSum = (b: Budget): number => b.lines.reduce((acc, l) => acc + l.allocated, 0);
 const codePoints = (s: string): number => Array.from(s).length;
 
-describe('the absurd payload (Review Focus 4)', () => {
+describe('the absurd payload', () => {
   const absurd: AiSuggestions = {
     summary: 'Big plans.',
     ideas: [idea({ title: 'Fireworks', estimatedCost: 1e12 }), idea({ title: '   ' })],

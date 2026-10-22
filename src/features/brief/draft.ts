@@ -124,7 +124,7 @@ export function draftFromBrief(brief: EventBrief): BriefDraft {
 
 /**
  * The object the schema validates. Weddings and birthdays get 0 volunteers and no income (the
- * form hides those fields). Blank volunteers count as 0 (R68). Income is left out when all six
+ * form hides those fields). Blank volunteers count as 0. Income is left out when all six
  * fields are blank; once any is filled, a blank one counts as 0.
  */
 export function draftToCandidate(draft: BriefDraft): Record<string, unknown> {

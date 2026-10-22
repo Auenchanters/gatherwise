@@ -3,7 +3,7 @@
  *
  * Does: pins the brief's assertions, the date window of `eventDateOf`, every status and its
  * boundary, the interval and slack arithmetic, done and inactive dependencies, cycle paths, the
- * event-today case (Review Focus 1), the post-event task, a seeded property test on random DAGs,
+ * event-today case, the post-event task, a seeded property test on random DAGs,
  * the acyclicity of every real template and the 500-task performance budget.
  * Never does: read the clock; `today` is a fixed date and the property test is seeded.
  */
@@ -132,7 +132,7 @@ describe('schedule: the brief assertions', () => {
     });
   });
 
-  it('still produces a plan when the event is today (Review Focus 1)', () => {
+  it('still produces a plan when the event is today', () => {
     expect(schedule(community.tasks, brief('community', { date: today }), today, none).ok).toBe(
       true,
     );
@@ -407,7 +407,7 @@ describe('schedule: cycles', () => {
   });
 });
 
-describe('schedule: event today or tomorrow (Review Focus 1)', () => {
+describe('schedule: event today or tomorrow', () => {
   const crunch: Record<string, EventBrief> = {
     'a typical community brief': brief('community'),
     'every condition on': brief('community', {

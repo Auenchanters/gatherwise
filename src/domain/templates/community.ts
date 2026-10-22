@@ -1,7 +1,7 @@
 /**
  * The community-event template: residents' festivals, fundraisers, clean-up drives, sports days and
  * cultural nights.
- * Does: owns domain knowledge, meaning the budget categories (spec A6 weights), the task graph with
+ * Does: owns domain knowledge, meaning the budget categories and their weights, the task graph with
  * lead times, the vendor rules and the volunteer roles.
  * Never computes dates or money. Lead times and thresholds are typical planning heuristics, not
  * rules; permit processing varies by city, so permit tasks always point to the local authority.
@@ -398,7 +398,7 @@ const vendors: readonly VendorDef[] = [
     ],
   },
   {
-    // Not in spec A6: the one vendor every community plan gets, so the vendor list is never empty.
+    // The one vendor every community plan gets, so the vendor list is never empty.
     // Booked before publicity starts, because posters have to exist before they can be put up.
     id: 'printing_signage',
     label: 'Printing & signage',

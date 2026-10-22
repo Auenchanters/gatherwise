@@ -1,5 +1,5 @@
 /**
- * Tests for src/features/plan/planner-store.ts, the one place the UI's AI calls start (R69).
+ * Tests for src/features/plan/planner-store.ts, the one place the UI's AI calls start.
  *
  * Does: drives the store through a fake client that counts `suggest` calls, so every claim in the
  * model-call budget is a count: a plan costs one call, edits cost none, a refresh costs one and is

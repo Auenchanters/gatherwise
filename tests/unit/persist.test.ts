@@ -1,5 +1,5 @@
 /**
- * Tests for src/features/plan/persist.ts, which treats localStorage as untrusted (Review Focus 5).
+ * Tests for src/features/plan/persist.ts, which treats localStorage as untrusted.
  *
  * Does: round-trips real states (including a property over arbitrary briefs), stores inputs only,
  * walks every corrupt, version, stale and missing case, tampers each envelope field, keeps the plan

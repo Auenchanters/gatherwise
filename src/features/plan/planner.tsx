@@ -1,6 +1,7 @@
 /**
  * The planner chunk's entry, loaded on demand by the app shell so the first page never carries the
- * reducer, persistence, the API client, zod or the workspace (R66/R67/R69).
+ * reducer, persistence, the API client, zod or the workspace (`scripts/bundle-budget.mjs` enforces
+ * the entry-size budget).
  * Does: create a planner store (with the real client unless a test passes one) and either start a
  * plan from a brief or restore the saved one; render the notices and either the workspace or, with
  * no plan, whatever the app shell passes as children (the landing and the form); abort the

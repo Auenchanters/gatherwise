@@ -147,7 +147,7 @@ describe('validateBrief: one human message per field', () => {
     expect(errorsOf(draftWith({ dietary: tooMany }))).toHaveLength(1);
   });
 
-  it('counts blank volunteers as 0 (R68)', () => {
+  it('counts blank volunteers as 0', () => {
     const result = validateBrief(draftWith({ volunteersAvailable: '' }), today);
     expect(result.ok && result.brief.volunteersAvailable).toBe(0);
   });

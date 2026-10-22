@@ -3,10 +3,10 @@
  * production CSP, with `/api/plan` mocked and every request counted.
  *
  * Does: a past date is refused with no request; an event six days out gets a usable plan with its
- * unmeetable tasks named as text (Review Focus 1); a 502 from the API leaves the whole
+ * unmeetable tasks named as text; a 502 from the API leaves the whole
  * deterministic plan, standard ideas and an honest notice, with no uncaught error; a prompt
  * injection in the notes shows up only as sanitized data in the prompt receipt and never runs
- * anything; a tampered saved plan is replaced by the landing and one notice, once (Review Focus 5).
+ * anything; a tampered saved plan is replaced by the landing and one notice, once.
  * Never does: reach a real model.
  */
 import { expect, test, type Page } from '@playwright/test';

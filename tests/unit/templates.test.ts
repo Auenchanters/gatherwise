@@ -2,9 +2,10 @@
  * Integrity and truth-table tests for src/domain/templates.
  *
  * Does: runs the same structural checks on every template (unique ids, resolvable references,
- * weights, checklists, reasons, schedulable lead times), pins the community values from spec A6,
- * and walks the `when` conditions across their thresholds.
- * Never does: build a schedule or detect cycles (Task 6 owns that); it only checks the data.
+ * weights, checklists, reasons, schedulable lead times), pins the community template's categories,
+ * weights and scaling, and walks the `when` conditions across their thresholds.
+ * Never does: build a schedule or detect cycles (schedule.test.ts covers that); it only checks the
+ * data.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -239,7 +240,7 @@ describe('template sizes', () => {
   });
 });
 
-describe('community template (spec A6)', () => {
+describe('community template', () => {
   it('pins the categories, weights and scaling', () => {
     expect(communityTemplate.categories.map((c) => [c.id, c.weight, c.scales])).toEqual([
       ['venue_permits', 12, 'fixed'],
@@ -300,7 +301,7 @@ describe('community template (spec A6)', () => {
     }
   });
 
-  it('leaves the 11 unconditional A6 tasks without a condition and gives the other 5 one', () => {
+  it('leaves the 11 unconditional tasks without a condition and gives the other 5 one', () => {
     const unconditional = [
       'define_goals',
       'form_committee',
@@ -327,7 +328,7 @@ describe('community template (spec A6)', () => {
     for (const id of conditional) expect(byId(communityTemplate.tasks, id).when, id).toBeDefined();
   });
 
-  it('adds exactly one always-on vendor beyond A6, printing_signage, booked before publicity', () => {
+  it('adds exactly one always-on vendor, printing_signage, booked before publicity', () => {
     const alwaysOn = communityTemplate.vendors.filter((v) => v.when === always).map((v) => v.id);
     expect(alwaysOn).toEqual(['printing_signage']);
     const forMinimal = communityTemplate.vendors.filter((v) => v.when(MINIMAL_BRIEF.community));
@@ -473,7 +474,7 @@ describe('community template (spec A6)', () => {
     expect(on({ venue: 'indoor_hall', startTime: '19:00' })).toBe(false);
   });
 
-  it('cites the guest count when explaining security_crowd (R25)', () => {
+  it('cites the guest count when explaining security_crowd', () => {
     const reason = byId(communityTemplate.vendors, 'security_crowd').reason(
       community({ guests: 250 }),
     );
