@@ -105,13 +105,13 @@ All contracts are zod schemas in `src/shared/schema.ts`, and the TypeScript type
 
 ## Bundle split
 
-From `npm run build` at this commit, as `scripts/bundle-budget.mjs` reports them (kB = 1000 bytes; Vite's own gzip column differs slightly):
+From `npm run build` at this commit, as `scripts/bundle-budget.mjs` reports them (kB = 1000 bytes; Vite's own gzip column differs slightly). Vite derives the names of shared chunks, so `format` does not describe its contents: it holds zod, its JSON Schema converter and the shared brief and AI-answer schemas.
 
 | Chunk                                                                | Loaded                              | Raw       | Gzip     |
 | -------------------------------------------------------------------- | ----------------------------------- | --------- | -------- |
-| `index` (entry: React, the app shell, landing and brief form)        | first page                          | 242.88 kB | 76.08 kB |
-| `validate` (brief validation)                                        | on submit                           | 2.96 kB   | 1.27 kB  |
-| `schema` (zod and the shared schemas)                                | with validation or the planner      | 99.47 kB  | 28.34 kB |
-| `planner` (store, engine, templates, client, persistence, workspace) | after a valid submit, or to restore | 85.32 kB  | 26.84 kB |
+| `index` (entry: React, the app shell, landing and brief form)        | first page                          | 243.47 kB | 76.30 kB |
+| `validate` (brief validation)                                        | on submit                           | 2.82 kB   | 1.21 kB  |
+| `format` (zod and the shared schemas)                                | with validation or the planner      | 99.89 kB  | 28.55 kB |
+| `planner` (store, engine, templates, client, persistence, workspace) | after a valid submit, or to restore | 85.33 kB  | 27.07 kB |
 
-The build fails if the entry chunk exceeds 250 kB raw or 80 kB gzip (`scripts/bundle-budget.mjs`). Styles are split the same way: the entry stylesheet is 8.67 kB and the planner's is 17.50 kB, raw, as Vite reports them.
+The build fails if the entry chunk exceeds 250 kB raw or 80 kB gzip (`scripts/bundle-budget.mjs`). Styles are split the same way: the entry stylesheet is 8.69 kB and the planner's is 18.03 kB, raw, as Vite reports them.
