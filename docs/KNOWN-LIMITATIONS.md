@@ -68,12 +68,6 @@ The cache of the last 8 answers lives in memory in the planner's client (`src/fe
 
 **What would lift it:** an allowlist for the three subdivision flags, and `Intl.Segmenter` to cut by grapheme.
 
-## Trusted Types are not enforced
-
-The production CSP has no `require-trusted-types-for 'script'`. It was tried and the end-to-end journeys failed under it: zod, which the browser bundles to validate the brief and the AI answer, probes for `eval` with `Function('')`, and under Trusted Types that probe is a blocked script sink that logs a console error. The app itself has no DOM-injection sinks (React renders text), and the CSP already refuses inline and `eval`'d script.
-
-**What would lift it:** zod's `jitless` mode in the browser bundle, which skips the probe, and then a full end-to-end run under the directive.
-
 ## The origin check is not authentication
 
 A request must carry an allowed `Origin`, which stops other websites from calling the API from a visitor's browser. A script can set a matching `Origin` itself, so the check does not identify who is calling. Such a caller is still held by the other limits: JSON only, 16 KB, the strict brief schema and the rate limits.

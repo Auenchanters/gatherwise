@@ -64,9 +64,11 @@ function deployment(generate?: Generate): Fetcher {
 const answering = (text = JSON.stringify(aiSuggestions)): Generate =>
   vi.fn<Generate>(() => Promise.resolve({ text, inputTokens: 300, outputTokens: 420 }));
 
+const TRUSTED_TYPES = "require-trusted-types-for 'script'";
+
 const goodHeaders = (): Headers =>
   new Headers({
-    'content-security-policy': "default-src 'self'",
+    'content-security-policy': `default-src 'self'; ${TRUSTED_TYPES}`,
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',
     'cross-origin-opener-policy': 'same-origin',
@@ -138,7 +140,7 @@ describe('runLiveSmoke against a stand-in deployment', () => {
 });
 
 describe('checkHeaders', () => {
-  it('accepts a CSP without unsafe-, nosniff, DENY and same-origin isolation', () => {
+  it('accepts a CSP with Trusted Types and no unsafe-, nosniff, DENY and same-origin isolation', () => {
     expect(checkHeaders(goodHeaders())).toEqual([]);
   });
 
@@ -147,8 +149,14 @@ describe('checkHeaders', () => {
     [
       'unsafe-inline',
       'content-security-policy',
-      "script-src 'self' 'unsafe-inline'",
+      `script-src 'self' 'unsafe-inline'; ${TRUSTED_TYPES}`,
       "Content-Security-Policy contains 'unsafe-'",
+    ],
+    [
+      'no Trusted Types',
+      'content-security-policy',
+      "default-src 'self'",
+      "Content-Security-Policy lacks require-trusted-types-for 'script'",
     ],
     ['no nosniff', 'x-content-type-options', null, 'X-Content-Type-Options is not nosniff'],
     ['a frameable page', 'x-frame-options', 'SAMEORIGIN', 'X-Frame-Options is not DENY'],

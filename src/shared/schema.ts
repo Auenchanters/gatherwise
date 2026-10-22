@@ -21,6 +21,10 @@ export {
   type Currency,
 } from './options.js';
 
+// Every module that builds or parses a schema imports this one first. Jitless keeps zod from
+// probing for `eval` with `Function('')`, which Trusted Types reports as a blocked script sink.
+z.config({ jitless: true });
+
 const brief = LIMITS.brief;
 const wholeNumber = (min: number, max: number) => z.int().min(min).max(max);
 /** A list of known options, at most `listMax` long, with no repeats. */

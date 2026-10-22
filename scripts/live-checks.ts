@@ -37,15 +37,23 @@ const planResponse = z.strictObject({
 const healthResponse = z.strictObject({ status: z.literal('ok'), ai: z.literal('configured') });
 const errorResponse = z.object({ error: z.object({ code: z.string().regex(/^[A-Z_]+$/u) }) });
 
+/** The CSP directive that makes the browser refuse a plain string at a script sink. */
+const TRUSTED_TYPES = "require-trusted-types-for 'script'";
+
 /**
- * A response's security headers: a CSP without `unsafe-`, nosniff, frame denial and same-origin
- * opener and resource policies.
+ * A response's security headers: a CSP without `unsafe-` that requires Trusted Types for script,
+ * nosniff, frame denial and same-origin opener and resource policies.
  */
 export function checkHeaders(headers: Headers): string[] {
   const failures: string[] = [];
   const csp = headers.get('content-security-policy');
   if (csp === null) failures.push('Content-Security-Policy is missing');
-  else if (csp.includes('unsafe-')) failures.push("Content-Security-Policy contains 'unsafe-'");
+  else {
+    if (csp.includes('unsafe-')) failures.push("Content-Security-Policy contains 'unsafe-'");
+    if (!csp.includes(TRUSTED_TYPES)) {
+      failures.push(`Content-Security-Policy lacks ${TRUSTED_TYPES}`);
+    }
+  }
   if (headers.get('x-content-type-options')?.toLowerCase() !== 'nosniff') {
     failures.push('X-Content-Type-Options is not nosniff');
   }
