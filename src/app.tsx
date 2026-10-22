@@ -119,6 +119,8 @@ export function App({ client, storage: given }: AppProps): ReactElement {
   /** The next time the form shows (after "New plan"), it starts blank. */
   const blankForm = (): void => {
     setSeed((current) => ({ key: current.key + 1, initial: undefined }));
+    // A sample's "Filled in…" line described the form that was just submitted, not this blank one.
+    setStatus('');
   };
 
   /** Moves focus to the planner's message saying why a brief was refused. */
@@ -182,7 +184,7 @@ export function App({ client, storage: given }: AppProps): ReactElement {
   if (restoring) {
     content = (
       <section className="welcome">
-        <h1 className="welcome__title">Welcome back</h1>
+        <h1>Welcome back</h1>
         <p className="app-status" role="status">
           Loading your saved plan…
         </p>

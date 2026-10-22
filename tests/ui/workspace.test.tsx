@@ -453,7 +453,9 @@ describe('workspace: infeasible deadlines', () => {
     expect(items.length).toBeGreaterThan(0);
     expect(items.length).toBeLessThanOrEqual(5);
     expect(banner.textContent).toMatch(/Can't be done in time|Overdue/u);
-    expect(banner.textContent).toContain('check with your local authority');
+    expect(banner.textContent).toContain(
+      'Lead times are typical planning estimates; confirm them with your vendors, and with your local authority for any permit.',
+    );
     await user.click(within(banner).getByRole('link', { name: 'See the timeline' }));
     const tab = screen.getByRole('tab', { name: 'Timeline' });
     expect(tab.getAttribute('aria-selected')).toBe('true');

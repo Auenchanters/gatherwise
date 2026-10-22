@@ -200,9 +200,9 @@ export function Timeline({ state, store }: TimelineProps): ReactElement {
         </div>
       </div>
       <p className="panel-note">
-        Lead times are typical planning heuristics; permit processing varies by city, so check with
-        your local authority. The calendar lists each task you haven&apos;t finished, on the day to
-        start by.
+        Lead times are typical planning estimates; confirm them with your vendors, and with your
+        local authority for any permit. The calendar lists each task you haven&apos;t finished, on
+        the day to start by.
       </p>
       <LiveRegion message={message} />
       {shown.length === 0 && <p className="timeline__empty">Every task is done.</p>}

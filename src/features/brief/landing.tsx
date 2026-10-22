@@ -59,7 +59,7 @@ export function Landing({ onUseSample }: LandingProps): ReactElement {
             <span className="promise__icon" aria-hidden="true">
               {promise.icon}
             </span>
-            <strong className="promise__title">{promise.title}</strong>
+            <strong>{promise.title}</strong>
             <span className="promise__text">{promise.text}</span>
           </li>
         ))}

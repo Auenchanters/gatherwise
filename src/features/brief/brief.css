@@ -127,8 +127,7 @@
 }
 
 .brief__intro,
-.brief__section-hint,
-.brief__note {
+.brief__section-hint {
   margin: 0 0 1rem;
   color: var(--color-muted);
 }
@@ -167,6 +166,7 @@
 
 .brief__note {
   margin: 0;
+  color: var(--color-muted);
   font-size: 0.9375rem;
 }
 
@@ -351,11 +351,15 @@
   font-weight: 600;
 }
 
+/* Neutral: it carries progress ("Opening your plan…") and failures as well as confirmations. */
 .app-status {
   max-width: 48rem;
   margin: 1rem auto 0;
-  color: var(--status-ok);
   font-weight: 600;
+}
+
+.app-status:empty {
+  margin: 0;
 }
 
 @media (min-width: 40rem) {

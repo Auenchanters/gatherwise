@@ -205,7 +205,9 @@ describe('timeline', () => {
     await user.click(box('Timeline', 'Book the venue'));
     expect(t.getByText(`1 of ${total} tasks done`)).toBeTruthy();
     expect(
-      t.getByText(/typical planning heuristics; permit processing varies by city/u),
+      t.getByText(
+        /Lead times are typical planning estimates; confirm them with your vendors, and with your local authority for any permit\./u,
+      ),
     ).toBeTruthy();
   });
 

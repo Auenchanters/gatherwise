@@ -137,6 +137,10 @@ describe('App planner', () => {
     await waitFor(() => {
       expect(client.suggest).toHaveBeenCalledTimes(2);
     });
+    // The sample's "Filled in…" line described a form that is gone; a blank form carries no status.
+    await user.click(screen.getByRole('button', { name: 'New plan' }));
+    expect(screen.getByRole('textbox', { name: 'Event name' })).toHaveProperty('value', '');
+    expect(appStatus().textContent).toBe('');
   });
 
   it('restores a saved plan without calling the AI', async () => {

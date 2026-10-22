@@ -46,8 +46,8 @@ export function InfeasibleBanner({
       </h2>
       <p className="banner__text">
         These tasks need more lead time than is left before your event. Start them now, scale them
-        down, or move the date. Lead times are typical planning heuristics; permit processing varies
-        by city, so check with your local authority.
+        down, or move the date. Lead times are typical planning estimates; confirm them with your
+        vendors, and with your local authority for any permit.
       </p>
       <ul className="banner__list">
         {blocked.slice(0, SHOWN).map((task) => {
