@@ -2,7 +2,7 @@
  * The planner store: the plan, its notices and the AI-call count, held outside React.
  * Does: runs every user action through `planReducer`, saves after each change (warning once if the
  * browser refuses), restores a saved plan, and is the ONLY place the UI's AI calls start: the
- * `submit`, `personalize` and `refreshIdeas` commands. Each call carries the plan's generation and
+ * `submit`, `personalize` and `adjust` commands. Each call carries the plan's generation and
  * its own AbortController, so a superseded answer is dropped twice over: aborted and ignored here,
  * and ignored again by the reducer's generation guard.
  * Never does: call the AI from an edit, a restore or a subscription; change a snapshot after
@@ -17,7 +17,7 @@ import {
 } from '../../domain/reducer.js';
 import type { TaskId } from '../../domain/templates/types.js';
 import type { VendorStatus } from '../../domain/vendors.js';
-import type { EventBrief } from '../../shared/schema.js';
+import type { AdjustRequest, EventBrief } from '../../shared/schema.js';
 import type { PlanClient } from '../client/api-client.js';
 import { clientErrorMessage } from '../client/messages.js';
 import { loadPlan, savePlan } from './persist.js';
@@ -42,8 +42,11 @@ export interface AiView {
   readonly sentBrief?: EventBrief;
   /** True when the applied answer was reused from this session's cache: no new call was made. */
   readonly cached: boolean;
-  /** Set when the latest request was an explicit Refresh ideas, which the Ideas tab announces. */
-  readonly refresh?: true;
+  /**
+   * Set when the latest request was an "Adjust with AI": the change and the earlier answer it sent,
+   * so the AI panel rebuilds that exact prompt. The Ideas tab announces what it brought.
+   */
+  readonly adjust?: AdjustRequest;
   /** The sentence for the latest failure, while the plan's AI state is `failed`. */
   readonly failure?: string;
 }
@@ -85,8 +88,11 @@ export interface PlannerStore {
   readonly submit: (brief: EventBrief) => Submission;
   /** Asks the AI for the current brief (answered from the cache if it was asked before). */
   readonly personalize: () => Promise<void>;
-  /** Asks the AI again for fresh ideas: always one call. Ignored while a request is pending. */
-  readonly refreshIdeas: () => Promise<void>;
+  /**
+   * Asks the AI to revise the current answer to satisfy `change` (empty asks for fresh ideas): always
+   * one call, never answered from the cache. Ignored while a request is pending.
+   */
+  readonly adjust: (change: string) => Promise<void>;
   readonly changeGuests: (guests: number) => void;
   readonly changeBudget: (budget: number) => void;
   readonly changeDate: (date: string) => void;
@@ -192,8 +198,11 @@ export function createPlannerStore({ client, storage, today }: PlannerDeps): Pla
 
   const withoutAiNotice = (): readonly Notice[] => snapshot.notices.filter((n) => n.id !== 'ai');
 
-  /** The one AI request path: for the current plan, aborting any request still in flight. */
-  async function ask(opts?: { readonly refresh: true }): Promise<void> {
+  /**
+   * The one AI request path: for the current plan, aborting any request still in flight. With a
+   * `change`, it is an adjustment that sends the plan's current answer, when it has one, to revise.
+   */
+  async function ask(change?: string): Promise<void> {
     const state = snapshot.plan;
     if (state.phase !== 'ready') return;
     abort();
@@ -201,12 +210,15 @@ export function createPlannerStore({ client, storage, today }: PlannerDeps): Pla
     callsBefore = client.calls();
     inFlight = controller;
     const { brief, generation } = state;
-    const sent = { sentBrief: brief, ...(opts?.refresh ? { refresh: true as const } : {}) };
+    const previous = state.ai.suggestions;
+    const adjust: AdjustRequest | undefined =
+      change === undefined ? undefined : { change, ...(previous ? { previous } : {}) };
+    const sent = { sentBrief: brief, ...(adjust ? { adjust } : {}) };
     dispatch(
       { type: 'ai/requested', generation },
       { aiView: { ...sent, cached: false }, notices: withoutAiNotice() },
     );
-    const result = await client.suggest(brief, controller.signal, opts);
+    const result = await client.suggest(brief, controller.signal, adjust ? { adjust } : undefined);
     if (inFlight === controller) inFlight = undefined;
     if (controller.signal.aborted) {
       // A newer submit, a reset or dispose took over; only the call count may have moved.
@@ -271,7 +283,7 @@ export function createPlannerStore({ client, storage, today }: PlannerDeps): Pla
       return { accepted, settled: ask() };
     },
     personalize: () => (inFlight ? idle() : ask()),
-    refreshIdeas: () => (inFlight ? idle() : ask({ refresh: true })),
+    adjust: (change) => (inFlight ? idle() : ask(change)),
     changeGuests(guests) {
       dispatch({ type: 'guests/changed', guests });
     },

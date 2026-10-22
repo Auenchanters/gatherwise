@@ -173,6 +173,7 @@ describe('LIMITS', () => {
       vendorQuestionsMax: 8,
       questionsPerVendorMax: 4,
       questionMax: 140,
+      changeMax: 200,
     });
   });
 });

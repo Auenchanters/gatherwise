@@ -274,7 +274,7 @@ describe('the AI lifecycle', () => {
     expect(next.adjustments).toEqual([]);
   });
 
-  it('keeps an earlier result when a refresh fails or is pending', () => {
+  it('keeps an earlier result when an adjustment fails or is pending', () => {
     const before = applied();
     const failed = ready(
       planReducer(before, { type: 'ai/failed', generation: 1, error: 'rate_limited' }),
@@ -325,6 +325,38 @@ describe('the AI lifecycle', () => {
     expect(next.progress.doneTasks).toEqual(['define_goals']);
     expect(statusOf(next, 'ai-task-1')).not.toBe('done');
     expect(statusOf(next, 'define_goals')).toBe('done');
+  });
+
+  it('keeps a ticked AI task ticked when the new answer has a task of the same title, at its new id', () => {
+    const ticked = inProgress();
+    const [diyas] = clean.extraTasks;
+    if (!diyas) throw new Error('fixture has an extra task');
+    // The same task comes back second, with different spacing and case, after a new one.
+    const reordered: AiSuggestions = {
+      ...clean,
+      extraTasks: [
+        { ...diyas, title: 'Book a rangoli artist' },
+        { ...diyas, title: '  ORDER   clay diyas ', leadDays: 12 },
+      ],
+    };
+    const next = ready(
+      planReducer(ticked, { type: 'ai/applied', generation: 1, suggestions: reordered, meta }),
+    );
+    expect(next.progress.doneTasks).toEqual(['define_goals', 'ai-task-2']);
+    expect(statusOf(next, 'ai-task-1')).not.toBe('done');
+    expect(statusOf(next, 'ai-task-2')).toBe('done');
+    // The state is exactly what rebuilding it from its own inputs gives.
+    const rebuilt = restorePlanState(next);
+    expect(rebuilt.ok && rebuilt.value.plan).toEqual(next.plan);
+  });
+
+  it('applies an answer without moving any tick when no AI task was ticked', () => {
+    const before = applied();
+    const next = ready(
+      planReducer(before, { type: 'ai/applied', generation: 1, suggestions: other, meta }),
+    );
+    expect(next.progress).toEqual(before.progress);
+    expect(next.ai).toEqual({ status: 'applied', suggestions: other, meta });
   });
 });
 

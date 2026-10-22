@@ -3,8 +3,8 @@
  * vendors.tsx, ideas.tsx, volunteers.tsx), through a real planner store and a fake AI client.
  *
  * Does: proves the model-call budget at the component level (ticking tasks, vendor edits, the
- * calendar download and printing never call the AI; only "Refresh ideas" does, once per click and
- * never while a request is pending); the month groups, status chips, AI labels and live
+ * calendar download and printing never call the AI; only "Adjust with AI" does, once per submit
+ * and never while a request is pending); the month groups, status chips, AI labels and live
  * announcements of the timeline; the ICS download (type, file name, content, DTSTAMP, done tasks
  * left out, a non-Latin name); the vendor cards, booking chips, status select and checklist; the
  * idea cards with their fit and source badges and the honest notice when there is no AI answer;
@@ -108,7 +108,8 @@ function captureDownloads() {
 }
 
 const DOWNLOAD = { name: 'Download calendar (.ics)' };
-const REFRESH = { name: 'Refresh ideas (1 AI call)' };
+const ADJUST = { name: 'Adjust with AI (1 call)' };
+const CHANGE = { name: 'What should change? (optional)' };
 
 describe('every new tab', () => {
   it('has one named landmark, its own section, and the vendor questions add none', async () => {
@@ -538,14 +539,28 @@ describe('ideas', () => {
     ).toBeTruthy();
   });
 
-  it('has a Refresh button that says it costs one call, and the zero-call note', async () => {
+  it('has an optional, labelled change field and a button that says it costs one call', async () => {
     await setup();
     const i = panel('Ideas');
-    expect(i.getByRole('button', REFRESH).getAttribute('aria-disabled')).toBe('false');
+    const change = i.getByRole('textbox', CHANGE);
+    expect(change.getAttribute('maxlength')).toBe('200');
+    expect(change.getAttribute('dir')).toBe('auto');
+    expect(descriptionOf(change)).toContain('Leave it blank for fresh ideas.');
+    expect(i.getByRole('button', ADJUST).getAttribute('aria-disabled')).toBe('false');
     expect(i.getByText('Edits never call the AI; only this button does.')).toBeTruthy();
   });
 
-  it('refresh is one call, aria-disabled and announced while pending, and enabled again after', async () => {
+  it('sends a blank change from Enter in the field, asking for fresh ideas in one call', async () => {
+    const { user, client } = await setup();
+    await user.click(panel('Ideas').getByRole('textbox', CHANGE));
+    await user.keyboard('{Enter}');
+    expect(client.suggest).toHaveBeenCalledTimes(2);
+    expect(client.suggest.mock.calls[1]?.[2]).toEqual({
+      adjust: { change: '', previous: aiSuggestions },
+    });
+  });
+
+  it('adjust is one call, aria-disabled and announced while pending, and enabled again after', async () => {
     const second = deferred<Answer>();
     let asked = 0;
     const client = fakeClient(() => {
@@ -554,12 +569,15 @@ describe('ideas', () => {
     });
     const { user, store } = await setup({ client });
     const i = panel('Ideas');
-    const button = i.getByRole('button', REFRESH);
+    const button = i.getByRole('button', ADJUST);
     expect(store.getState().calls).toBe(1);
 
+    await user.type(i.getByRole('textbox', CHANGE), 'More for kids');
     await user.click(button);
     expect(client.suggest).toHaveBeenCalledTimes(2);
-    expect(client.suggest.mock.calls[1]?.[2]).toEqual({ refresh: true });
+    expect(client.suggest.mock.calls[1]?.[2]).toEqual({
+      adjust: { change: 'More for kids', previous: aiSuggestions },
+    });
     expect(button.getAttribute('aria-disabled')).toBe('true');
     // The wait is announced once, by the Notices region; the Ideas region stays quiet until it ends.
     expect(i.getByRole('status').textContent).toBe('');
@@ -580,23 +598,12 @@ describe('ideas', () => {
     await settle();
     expect(button.getAttribute('aria-disabled')).toBe('false');
     expect(store.getState().calls).toBe(2);
-    expect(i.getByRole('status').textContent).toBe('Fresh ideas are in. AI calls this session: 2.');
-  });
-
-  it('says the ideas are the same when the answer was reused, not that they are fresh', async () => {
-    let asked = 0;
-    const client = fakeClient(() => {
-      asked += 1;
-      return Promise.resolve(ok({ suggestions: aiSuggestions, meta: aiMeta, cached: asked > 1 }));
-    });
-    const { user } = await setup({ client });
-    await user.click(panel('Ideas').getByRole('button', REFRESH));
-    expect(panel('Ideas').getByRole('status').textContent).toBe(
-      'Same ideas as before — reused from this session, no new AI call.',
+    expect(i.getByRole('status').textContent).toBe(
+      'Your ideas are updated. AI calls this session: 2.',
     );
   });
 
-  it("says there was nothing usable, in the callout's words, when a refresh brings no ideas", async () => {
+  it("says there was nothing usable, in the callout's words, when an adjustment brings no ideas", async () => {
     let asked = 0;
     const client = fakeClient(() => {
       asked += 1;
@@ -604,46 +611,33 @@ describe('ideas', () => {
       return Promise.resolve(ok({ suggestions, meta: aiMeta, cached: false }));
     });
     const { user } = await setup({ client });
-    await user.click(panel('Ideas').getByRole('button', REFRESH));
+    await user.click(panel('Ideas').getByRole('button', ADJUST));
     const notice = "Gemini's answer had no usable ideas, so you're seeing standard suggestions.";
     expect(panel('Ideas').getByRole('status').textContent).toBe(notice);
     expect(panel('Ideas').getByText(notice, { selector: 'p.callout' })).toBeTruthy();
   });
 
-  it('forgets a refresh when a new plan starts', async () => {
+  it('forgets an adjustment when a new plan starts', async () => {
     const { user, store } = await setup();
-    await user.click(panel('Ideas').getByRole('button', REFRESH));
-    expect(panel('Ideas').getByRole('status').textContent).toContain('Fresh ideas are in');
+    await user.click(panel('Ideas').getByRole('button', ADJUST));
+    expect(panel('Ideas').getByRole('status').textContent).toContain('Your ideas are updated');
     await act(() => store.submit({ ...festival, name: 'Green Park Mela 2' }).settled);
     expect(ready(store).generation).toBe(2);
     expect(panel('Ideas').getByRole('status').textContent).toBe('');
   });
 
-  it.each([
-    ['fresh', false, 'Fresh ideas are in. AI calls this session: 2.'],
-    ['reused', true, 'Same ideas as before — reused from this session, no new AI call.'],
-  ])(
-    'announces a refresh once, in the Ideas tab: %s ideas leave the Notices region quiet',
-    async (_name, cached, sentence) => {
-      let asked = 0;
-      const client = fakeClient(() => {
-        asked += 1;
-        return Promise.resolve(
-          ok({ suggestions: aiSuggestions, meta: aiMeta, cached: asked > 1 && cached }),
-        );
-      });
-      const { user } = await setup({ client });
-      const notices = screen.getByRole('status', { name: 'Notices' });
-      const ideas = panel('Ideas').getByRole('status');
-      // The first answer belongs to the Notices region; the Ideas tab has not been asked.
-      expect(notices.textContent).toBe('Gemini has personalized your plan.');
-      expect(ideas.textContent).toBe('');
+  it('announces an adjustment once, in the Ideas tab, leaving the Notices region quiet', async () => {
+    const { user } = await setup();
+    const notices = screen.getByRole('status', { name: 'Notices' });
+    const ideas = panel('Ideas').getByRole('status');
+    // The first answer belongs to the Notices region; the Ideas tab has not been asked.
+    expect(notices.textContent).toBe('Gemini has personalized your plan.');
+    expect(ideas.textContent).toBe('');
 
-      await user.click(panel('Ideas').getByRole('button', REFRESH));
-      expect(ideas.textContent).toBe(sentence);
-      expect(notices.textContent).toBe('');
-    },
-  );
+    await user.click(panel('Ideas').getByRole('button', ADJUST));
+    expect(ideas.textContent).toBe('Your ideas are updated. AI calls this session: 2.');
+    expect(notices.textContent).toBe('');
+  });
 
   it('shows the standard ideas with an honest notice when the AI failed', async () => {
     const client = fakeClient(() => Promise.resolve(err({ code: 'unavailable' })));
@@ -655,7 +649,7 @@ describe('ideas', () => {
     expect(card.textContent).not.toContain('Why:');
     expect(within(card).getByText('Fits Sanitation & waste budget')).toBeTruthy();
     expect(i.getByText(/couldn't personalize these ideas/u)).toBeTruthy();
-    expect(i.getByRole('button', REFRESH).getAttribute('aria-disabled')).toBe('false');
+    expect(i.getByRole('button', ADJUST).getAttribute('aria-disabled')).toBe('false');
   });
 
   it('says the ideas are standard while the first answer is pending', async () => {
@@ -663,7 +657,7 @@ describe('ideas', () => {
     await setup({ client });
     const i = panel('Ideas');
     expect(i.getByText(/standard suggestions for now/u)).toBeTruthy();
-    expect(i.getByRole('button', REFRESH).getAttribute('aria-disabled')).toBe('true');
+    expect(i.getByRole('button', ADJUST).getAttribute('aria-disabled')).toBe('true');
   });
 
   it('says so when a restored plan was never personalized, and asks only on a click', async () => {
@@ -679,8 +673,10 @@ describe('ideas', () => {
     const i = panel('Ideas');
     expect(i.getByText(/haven't been personalized yet/u)).toBeTruthy();
     expect(client.suggest).not.toHaveBeenCalled();
-    await user.click(i.getByRole('button', REFRESH));
+    await user.click(i.getByRole('button', ADJUST));
     expect(client.suggest).toHaveBeenCalledTimes(1);
+    // A plan with no answer yet sends the change alone.
+    expect(client.suggest.mock.calls[0]?.[2]).toEqual({ adjust: { change: '' } });
   });
 
   it('says so when the AI answered with no usable ideas', async () => {
@@ -693,14 +689,14 @@ describe('ideas', () => {
     expect(panel('Ideas').getAllByText('Standard suggestion').length).toBeGreaterThan(0);
   });
 
-  it('keeps the AI ideas when a later refresh fails', async () => {
+  it('keeps the AI ideas when a later adjustment fails', async () => {
     let asked = 0;
     const client = fakeClient(() => {
       asked += 1;
       return Promise.resolve(asked === 1 ? freshAnswer : err({ code: 'timeout' }));
     });
     const { user } = await setup({ client });
-    await user.click(panel('Ideas').getByRole('button', REFRESH));
+    await user.click(panel('Ideas').getByRole('button', ADJUST));
     expect(panel('Ideas').getByRole('heading', { name: 'Diya-lined walkways' })).toBeTruthy();
     expect(panel('Ideas').queryByText(/couldn't personalize these ideas/u)).toBeNull();
     expect(panel('Ideas').getByRole('status').textContent).toContain("didn't go through");

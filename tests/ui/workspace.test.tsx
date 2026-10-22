@@ -607,6 +607,20 @@ describe('workspace: AI at work', () => {
     expect(prompt.textContent).toContain('"guests": 250');
   });
 
+  it('shows the change and the earlier answer it sent after an Adjust with AI', async () => {
+    const { user } = await setup();
+    const prompt = () => screen.getByRole('region', { name: 'What we sent to Gemini' });
+    expect(prompt().textContent).not.toContain('"change": ');
+    await user.click(screen.getByRole('tab', { name: 'Ideas' }));
+    await user.type(
+      screen.getByRole('textbox', { name: 'What should change? (optional)' }),
+      'More for kids',
+    );
+    await user.click(screen.getByRole('button', { name: 'Adjust with AI (1 call)' }));
+    expect(prompt().textContent).toContain('"change": "More for kids"');
+    expect(prompt().textContent).toContain('"previous": {');
+  });
+
   it('says when nothing needed adjusting', async () => {
     const tidy = { ...aiSuggestions, ideas: aiSuggestions.ideas.slice(0, 1) };
     const client = fakeClient(() =>

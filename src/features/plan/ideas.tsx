@@ -1,22 +1,23 @@
 /**
  * The Ideas tab: a card for each idea with its category, estimated cost, whether the cost fits that
- * category's budget, and who wrote it, plus the one button in the workspace that asks the AI for
- * new ideas.
- * Does: call `store.refreshIdeas()` from that button's click; mark the button `aria-disabled` while
- * a request is pending (it keeps keyboard focus, and a click does nothing); say plainly that edits
- * never call the AI; announce what a refresh brought, truthfully (fresh, the same as before, or
- * nothing usable), and say nothing while it waits (the Notices region does); label every idea
- * "AI · personalized" (with why it was chosen) or "Standard suggestion"; when no AI ideas are
- * showing, say why.
- * A refresh is announced here and only here: the Notices region announces the answer to the first
- * request and to Personalize, and skips one that a refresh asked for.
+ * category's budget, and who wrote it, plus "Adjust with AI": an optional "what should change" and
+ * the one button in the workspace that asks the AI to revise its answer.
+ * Does: call `store.adjust(change)` when that form is submitted (blank asks for fresh ideas); mark
+ * the button `aria-disabled` while a request is pending (it keeps keyboard focus, and a submit does
+ * nothing); say plainly that edits never call the AI; announce what an adjustment brought,
+ * truthfully (updated ideas, or nothing usable), and say nothing while it waits (the Notices region
+ * does); label every idea "AI · personalized" (with why it was chosen) or "Standard suggestion";
+ * when no AI ideas are showing, say why.
+ * An adjustment is announced here and only here: the Notices region announces the answer to the
+ * first request and to Personalize, and skips one that an adjustment asked for.
  * Never does: call the AI from anywhere else, compute a fit (the engine did), or show AI text
  * unlabelled.
  */
-import { useState, type ReactElement } from 'react';
+import { useId, useState, type ReactElement } from 'react';
 import { formatMoney } from '../../domain/money.js';
 import type { Plan } from '../../domain/plan.js';
 import type { AiState, ReadyState } from '../../domain/reducer.js';
+import { LIMITS } from '../../shared/limits.js';
 import { AiBadge, StandardBadge, StatusChip } from './chips.js';
 import { categoryLabel, formatCount } from './format.js';
 import { LiveRegion, Panel } from './panel.js';
@@ -36,18 +37,18 @@ const STANDARD_NOTICE: Readonly<Record<AiStatus, string>> = {
 };
 
 /**
- * What the refresh the user asked for has done, as one polite sentence. Silent while the request
- * is pending (and before any): the Notices region already announces the wait.
+ * What the adjustment the user asked for has done, as one polite sentence. Silent while the
+ * request is pending (and before any): the Notices region already announces the wait. An
+ * adjustment always makes a new call, so there is no reused answer to report.
  */
-function refreshMessage(
+function adjustMessage(
   status: AiStatus,
-  answer: { readonly hasAiIdeas: boolean; readonly cached: boolean; readonly calls: number },
+  answer: { readonly hasAiIdeas: boolean; readonly calls: number },
 ): string {
-  if (status === 'failed') return "The refresh didn't go through, so your ideas are unchanged.";
+  if (status === 'failed') return "The adjustment didn't go through, so your ideas are unchanged.";
   if (status === 'idle' || status === 'pending') return '';
   if (!answer.hasAiIdeas) return STANDARD_NOTICE.applied;
-  if (answer.cached) return 'Same ideas as before — reused from this session, no new AI call.';
-  return `Fresh ideas are in. AI calls this session: ${formatCount(answer.calls)}.`;
+  return `Your ideas are updated. AI calls this session: ${formatCount(answer.calls)}.`;
 }
 
 /** One idea. */
@@ -103,17 +104,17 @@ function IdeaCard({
 /** Props for {@link Ideas}. */
 export interface IdeasProps {
   readonly state: ReadyState;
-  /** Real AI calls this session, for the refresh's announcement. */
+  /** Real AI calls this session, for the adjustment's announcement. */
   readonly calls: number;
-  /** True when the latest answer was reused from this session's cache rather than fetched. */
-  readonly cached: boolean;
   readonly store: PlannerStore;
 }
 
-/** The idea cards and the refresh button. */
-export function Ideas({ state, calls, cached, store }: IdeasProps): ReactElement {
-  // The generation the user refreshed for: a new plan is a new generation, so it starts unasked.
+/** The idea cards and the Adjust with AI form. */
+export function Ideas({ state, calls, store }: IdeasProps): ReactElement {
+  // The generation the user adjusted for: a new plan is a new generation, so it starts unasked.
   const [askedFor, setAskedFor] = useState<number | undefined>(undefined);
+  const [change, setChange] = useState('');
+  const ids = useId();
   const { ideas } = state.plan;
   const { status } = state.ai;
   const hasAiIdeas = ideas.some((idea) => idea.source === 'ai');
@@ -121,26 +122,47 @@ export function Ideas({ state, calls, cached, store }: IdeasProps): ReactElement
   const asked = askedFor === state.generation;
   return (
     <Panel title="Ideas">
-      <div className="ideas__bar">
+      <form
+        className="ideas__bar"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (pending) return;
+          setAskedFor(state.generation);
+          void store.adjust(change);
+        }}
+      >
+        <div className="field ideas__change">
+          <label className="field__label" htmlFor={`${ids}-change`}>
+            What should change? (optional)
+          </label>
+          <p className="field__hint" id={`${ids}-hint`}>
+            For example “cheaper”, “more for kids” or “an indoor backup”. Leave it blank for fresh
+            ideas.
+          </p>
+          <input
+            className="field__input"
+            id={`${ids}-change`}
+            type="text"
+            dir="auto"
+            autoComplete="off"
+            maxLength={LIMITS.ai.changeMax}
+            aria-describedby={`${ids}-hint`}
+            value={change}
+            onChange={(event) => {
+              setChange(event.currentTarget.value);
+            }}
+          />
+        </div>
         {/* aria-disabled, not disabled: the button keeps keyboard focus while it waits. */}
-        <button
-          className="button button--primary"
-          type="button"
-          aria-disabled={pending}
-          onClick={() => {
-            if (pending) return;
-            setAskedFor(state.generation);
-            void store.refreshIdeas();
-          }}
-        >
-          Refresh ideas (1 AI call)
+        <button className="button button--primary" type="submit" aria-disabled={pending}>
+          Adjust with AI (1 call)
         </button>
         <p className="ideas__note">Edits never call the AI; only this button does.</p>
-      </div>
-      <LiveRegion message={asked ? refreshMessage(status, { hasAiIdeas, cached, calls }) : ''} />
+      </form>
+      <LiveRegion message={asked ? adjustMessage(status, { hasAiIdeas, calls }) : ''} />
       {asked && pending && (
         <p className="ideas__pending" aria-hidden="true">
-          <span className="spinner" /> Asking Gemini for fresh ideas…
+          <span className="spinner" /> Asking Gemini to adjust your ideas…
         </p>
       )}
       {!hasAiIdeas && <p className="callout callout--info">{STANDARD_NOTICE[status]}</p>}

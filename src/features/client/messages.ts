@@ -2,7 +2,7 @@
  * The one catalog of copy for client-side AI failures.
  * Does: turn a `ClientError` into one short, honest sentence that says what happened and that the
  * deterministic plan (budget, timeline, vendors) still works, with the standard suggestions, or
- * with the AI ideas from an earlier answer when a refresh failed and they stay.
+ * with the AI ideas from an earlier answer when an adjustment failed and they stay.
  * Never does: show a server message, a status code or any detail of the failure, or promise that
  * trying again will work.
  */
@@ -26,11 +26,11 @@ export function clientErrorMessage(error: ClientError, ideasKept = false): strin
     : 'your plan is ready with standard suggestions';
   switch (error.code) {
     case 'network':
-      return `Can't reach the AI service — check your connection. ${outcome.replace(/^./u, (c) => c.toUpperCase())}; try “Refresh ideas” once you're back online.`;
+      return `Can't reach the AI service — check your connection. ${outcome.replace(/^./u, (c) => c.toUpperCase())}; try “Adjust with AI” once you're back online.`;
     case 'timeout':
       return `The AI took too long to reply — ${outcome}. You can try again.`;
     case 'rate_limited':
-      return `The AI service is busy right now — ${outcome}. Try “Refresh ideas” in ${waitPhrase(error.retryAfterSeconds)}.`;
+      return `The AI service is busy right now — ${outcome}. Try “Adjust with AI” in ${waitPhrase(error.retryAfterSeconds)}.`;
     case 'unavailable':
       return "AI ideas aren't available right now — the budget, timeline and vendors are fully usable.";
     case 'invalid':

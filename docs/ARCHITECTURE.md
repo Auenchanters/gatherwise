@@ -36,7 +36,7 @@ flowchart TD
   reducer --> engine
   engine --> tabs
   store -->|save and restore| storage
-  store -->|create, refresh, personalize| client
+  store -->|create, adjust, personalize| client
   client -->|POST /api/plan| gate
   gate --> plan --> prompt --> capacity --> provider --> gemini
   gemini --> parse
@@ -63,8 +63,8 @@ The first page loads only the entry chunk. Focusing or pressing **Generate my pl
 Key files:
 
 - **Engine:** `src/domain/money.ts` (integer minor units and largest-remainder allocation), `src/domain/budget.ts` (contingency and guest rescaling), `src/domain/break-even.ts`, `src/domain/schedule.ts` (backward critical path and statuses), `src/domain/vendors.ts`, `src/domain/volunteers.ts`, `src/domain/ideas.ts`, `src/domain/plan.ts` (assembly), `src/domain/merge.ts` (AI normalization), `src/domain/reducer.ts` (edits), `src/domain/ics.ts` (calendar export) and the templates in `src/domain/templates/`.
-- **Shared:** `src/shared/schema.ts`, `src/shared/limits.ts`, `src/shared/options.ts`, `src/shared/result.ts`, `src/shared/prompt.ts` and `src/shared/sanitize-text.ts`.
-- **Server:** `server/handler.ts` (routing and the log line), `server/request.ts` (the gate), `server/rate-limit.ts`, `server/capacity.ts`, `server/provider.ts` (Gemini), `server/answer.ts` and `server/sanitize.ts` (reading the answer), `server/errors.ts` (the catalog) and `server/log.ts`.
+- **Shared:** `src/shared/schema.ts`, `src/shared/limits.ts`, `src/shared/options.ts`, `src/shared/result.ts`, `src/shared/prompt.ts`, `src/shared/sanitize-text.ts` and `src/shared/sanitize-suggestions.ts` (bounding an AI answer, on the server and in the prompt).
+- **Server:** `server/handler.ts` (routing and the log line), `server/request.ts` (the gate), `server/rate-limit.ts`, `server/capacity.ts`, `server/provider.ts` (Gemini), `server/answer.ts` (reading the answer), `server/errors.ts` (the catalog) and `server/log.ts`.
 - **Browser:** `src/features/client/api-client.ts`, `src/features/client/messages.ts`, `src/features/plan/planner-store.ts`, `src/features/plan/persist.ts`, `src/features/plan/today.ts`.
 - **Function entry points:** `api/plan.ts` and `api/health.ts`.
 
@@ -95,11 +95,12 @@ Key files:
 All contracts are zod schemas in `src/shared/schema.ts`, and the TypeScript types are inferred from them.
 
 - **`eventBriefSchema`**: the user's brief, a strict union on `kind` (`community`, `wedding`, `birthday`). Unknown keys are rejected, text is trimmed and capped, numbers are whole and bounded by `LIMITS.brief`, option lists come from `src/shared/options.ts` with no repeats, and `income` exists only on community briefs. `language` (the language Gemini writes in) defaults to English, so a brief saved or sent before it existed still parses. The date is checked for format here; its range needs today, so `eventDateOf` in `src/domain/schedule.ts` checks it.
-- **`aiSuggestionsSchema(ids)`**: Gemini's answer, built from one template's category, task and vendor ids, so every id field is an enum of ids that exist. It is strict on shape and ids and deliberately lenient on numbers and lengths. Gemini is given a stricter copy (`aiResponseJsonSchema`) with the string and number caps from `LIMITS.ai` as `maxLength`, `minimum` and `maximum`, and the list caps as descriptions. The server reads each section and list item on its own, drops what fails and bounds the rest (`server/answer.ts`, `server/sanitize.ts`); the engine enforces the caps again in `src/domain/merge.ts`, so one absurd value is clamped and listed instead of costing the whole answer.
+- **`aiSuggestionsSchema(ids)`**: Gemini's answer, built from one template's category, task and vendor ids, so every id field is an enum of ids that exist. It is strict on shape and ids and deliberately lenient on numbers and lengths. Gemini is given a stricter copy (`aiResponseJsonSchema`) with the string and number caps from `LIMITS.ai` as `maxLength`, `minimum` and `maximum`, and the list caps as descriptions. The server reads each section and list item on its own, drops what fails and bounds the rest (`server/answer.ts`, `src/shared/sanitize-suggestions.ts`); the engine enforces the caps again in `src/domain/merge.ts`, so one absurd value is clamped and listed instead of costing the whole answer.
 - **`aiMetaSchema`**: the call's model id, latency, token counts and request id. The server checks it before answering and the client checks it again.
+- **The API request** is `{ brief }`, or `{ brief, adjust: { change, previous? } }` for **Adjust with AI**: `change` is at most 200 code points (blank asks for fresh ideas) and `previous` is the plan's current validated answer, checked against the brief's template schema. A bad `adjust` is 400 `INVALID_ADJUSTMENT`. The body cap is 64 KB.
 - **The API response** is `{ suggestions, meta }`, and every error is `{ error: { code, message } }`, with `fields` for a bad brief (`server/errors.ts`).
 
-**One prompt builder.** `buildPrompt(plan)` in `src/shared/prompt.ts` is the only code that builds a prompt. The server calls it on the plan it rebuilt from the brief; the browser calls it on the same brief to show "What we sent to Gemini" in the **AI at work** panel. The prompt is never sent back over the wire. Brief text in it is cleaned by `sanitizeText` (`src/shared/sanitize-text.ts`), the same function the server uses on the answer.
+**One prompt builder.** `buildPrompt(plan, adjust?)` in `src/shared/prompt.ts` is the only code that builds a prompt. The server calls it on the plan it rebuilt from the brief; the browser calls it on the same brief (and the same adjustment) to show "What we sent to Gemini" in the **AI at work** panel. For an adjustment it adds `previous`, bounded by `sanitizeSuggestions` (`src/shared/sanitize-suggestions.ts`), and `change`, sanitized, to the same JSON data message; the fixed system instruction says to revise `previous` to satisfy `change` and that `change` never overrides its rules. The prompt is never sent back over the wire. Brief text in it is cleaned by `sanitizeText` (`src/shared/sanitize-text.ts`), the same function the server uses on the answer.
 
 **One normalization chokepoint.** An answer from the network and an answer restored from `localStorage` both reach the plan only through `mergeSuggestions` in `src/domain/merge.ts`, called from `restorePlanState` in `src/domain/reducer.ts`.
 

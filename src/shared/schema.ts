@@ -186,6 +186,16 @@ export const aiSuggestionsSchema = (ids: TemplateIds): AiSuggestionsSchema =>
 export const aiResponseJsonSchema = (ids: TemplateIds): z.core.JSONSchema.BaseSchema =>
   z.toJSONSchema(buildAiSchema(ids, true));
 
+/**
+ * An "Adjust with AI" request: what the organizer wants changed (empty asks for fresh ideas, at most
+ * `LIMITS.ai.changeMax` code points) and the answer it revises, when the plan has one. Both travel
+ * to the model as data, never as instructions.
+ */
+export interface AdjustRequest {
+  readonly change: string;
+  readonly previous?: AiSuggestions | undefined;
+}
+
 /** What the server reports about one model call, shown in the "AI at work" panel and kept with the plan. */
 export const aiMetaSchema = z.strictObject({
   model: z.string().min(1).max(80),

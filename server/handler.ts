@@ -1,7 +1,8 @@
 /**
  * The planning API's one Fetch handler, shared by the Vercel functions and the local dev server.
  * Does: route `POST /api/plan` and `GET /api/health`; run the request gate (method, content type,
- * origin, rate limit, size, JSON, schema, date); build the engine plan; make exactly one model
+ * origin, rate limit, size, JSON, schema, adjustment, date); build the engine plan and the prompt
+ * (with the organizer's change and earlier answer when adjusting); make exactly one model
  * call inside the concurrency gate; answer with sanitized suggestions and call metadata; write
  * one log line per request.
  * Never does: retry a model call, return a provider message, log brief or model text, or cache.
@@ -17,7 +18,7 @@ import { AppError, errorResponse, type ErrorCode } from './errors.js';
 import { logRequest } from './log.js';
 import { createGeminiGenerator, type Generate, type Generation } from './provider.js';
 import { clientId, createRateLimiter, type RateLimiter } from './rate-limit.js';
-import { planFor, readBrief, validateTransport } from './request.js';
+import { planFor, readPlanRequest, validateTransport } from './request.js';
 
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 /** Each route and the one method it accepts. */
@@ -100,12 +101,12 @@ export function createHandler(
   async function planRoute(request: Request, requestId: string, trace: Trace): Promise<Response> {
     validateTransport(request, origin);
     rateLimit(clientId(request), now().getTime());
-    const brief = await readBrief(request);
+    const { brief, adjust } = await readPlanRequest(request);
     trace.eventKind = brief.kind;
     const plan = planFor(brief, now());
     if (!generate) throw new AppError('AI_NOT_CONFIGURED');
     request.signal.throwIfAborted();
-    const prompt = buildPrompt(plan);
+    const prompt = buildPrompt(plan, adjust);
     const started = performance.now();
     const generation = await withCapacity(() => callModel(generate, prompt, request.signal));
     const latencyMs = Math.round(performance.now() - started);

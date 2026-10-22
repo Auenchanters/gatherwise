@@ -16,7 +16,7 @@ import type { Adjustment } from '../../domain/merge.js';
 import { buildPlan } from '../../domain/plan.js';
 import type { ReadyState } from '../../domain/reducer.js';
 import { buildPrompt } from '../../shared/prompt.js';
-import type { EventBrief } from '../../shared/schema.js';
+import type { AdjustRequest, EventBrief } from '../../shared/schema.js';
 import { callCount, formatCount } from './format.js';
 import type { AiView } from './planner-store.js';
 import './ai-panel.css';
@@ -32,13 +32,18 @@ const IDLE_TEXT =
 const FAILED_FALLBACK = "The AI request didn't go through.";
 
 /**
- * The prompt for `brief` as the server builds it: the fixed system instruction, then the JSON
- * data block pretty-printed. Undefined when the brief can no longer be planned (its date passed).
+ * The prompt for `brief` (and `adjust`, when it was an adjustment) as the server builds it: the
+ * fixed system instruction, then the JSON data block pretty-printed. Undefined when the brief can
+ * no longer be planned (its date passed).
  */
-function promptText(brief: EventBrief, today: IsoDate): string | undefined {
+function promptText(
+  brief: EventBrief,
+  today: IsoDate,
+  adjust: AdjustRequest | undefined,
+): string | undefined {
   const plan = buildPlan(brief, today);
   if (!plan.ok) return undefined;
-  const { system, user } = buildPrompt(plan.value);
+  const { system, user } = buildPrompt(plan.value, adjust);
   const data: unknown = JSON.parse(user);
   return [
     '// System instruction (fixed for every request)',
@@ -93,7 +98,7 @@ function AiStatus({ state, aiView, onPersonalize }: Omit<AiPanelProps, 'calls'>)
   if (pending) label = 'Personalizing…';
   else if (failed) label = 'Try again';
   // One element tree for idle, pending and failed, so the button a click lands on is the same
-  // button while it waits. `aria-disabled`, not `disabled`: it keeps focus (as Refresh ideas does).
+  // button while it waits. `aria-disabled`, not `disabled`: it keeps focus (as Adjust with AI does).
   return (
     <div className={failed ? 'ai-panel__status ai-panel__status--failed' : 'ai-panel__status'}>
       {pending ? (
@@ -149,7 +154,11 @@ export function AiPanel({ state, aiView, calls, onPersonalize }: AiPanelProps): 
   const sent = aiView.sentBrief;
   // Keyed on the brief the prompt is for: once one was sent, edits do not rebuild it.
   const source = sent ?? state.brief;
-  const prompt = useMemo(() => promptText(source, state.today), [source, state.today]);
+  const { adjust } = aiView;
+  const prompt = useMemo(
+    () => promptText(source, state.today, adjust),
+    [source, state.today, adjust],
+  );
   const answerJson = useMemo(
     () => (suggestions ? JSON.stringify(suggestions, null, 2) : undefined),
     [suggestions],

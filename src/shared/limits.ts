@@ -38,5 +38,7 @@ export const LIMITS = {
     vendorQuestionsMax: 8,
     questionsPerVendorMax: 4,
     questionMax: 140,
+    /** "Adjust with AI": the organizer's "what should change", in code points. */
+    changeMax: 200,
   },
 } as const;

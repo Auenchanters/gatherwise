@@ -1,12 +1,13 @@
 /**
  * The browser's client for `POST /api/plan`, with its cache and its AI-call counter.
- * Does: send one brief; validate everything that comes back against the shared schemas; map every
+ * Does: send one brief, with the organizer's change and the earlier answer when adjusting; validate
+ * everything that comes back against the shared schemas; map every
  * failure to one of five `ClientError` codes; remember the last `cacheSize` successes, keyed by the
  * SHA-256 of the brief's canonical JSON; count real network requests, which the UI shows as
  * "AI calls this session: N".
  * Never does: retry automatically; return unvalidated network data; cache a failure or an abort;
  * count a cache hit as a call; read the clock; log. Creating a plan costs one call, an edit costs
- * none (edits never reach this client), an explicit refresh costs one, an identical brief costs none.
+ * none (edits never reach this client), an "Adjust with AI" costs one, an identical brief costs none.
  */
 import { z } from 'zod';
 import type { AiErrorCode } from '../../domain/reducer.js';
@@ -14,6 +15,7 @@ import { suggestionsSchemaFor } from '../../shared/prompt.js';
 import { err, ok, type Result } from '../../shared/result.js';
 import {
   aiMetaSchema,
+  type AdjustRequest,
   type AiMeta,
   type AiSuggestions,
   type EventBrief,
@@ -56,14 +58,15 @@ export interface PlanClientOptions {
 export interface PlanClient {
   /**
    * Asks for suggestions for `brief`. A remembered answer for an identical brief is returned with
-   * no request; `refresh: true` skips that lookup, always asks, and replaces the remembered answer.
+   * no request. `adjust` (Adjust with AI) skips that lookup, always asks once with the organizer's
+   * change and the earlier answer, and replaces the remembered answer for the brief.
    * Resolves, never rejects. `signal` is the caller's cancel; the client's own timeout is separate.
    * Callers should not start the same brief twice at once: concurrent requests are not merged.
    */
   suggest(
     brief: EventBrief,
     signal: AbortSignal,
-    opts?: { readonly refresh?: boolean },
+    opts?: { readonly adjust?: AdjustRequest },
   ): Promise<Result<SuggestResponse, ClientError>>;
   /** How many network requests this client has issued: the session's real AI-call count. */
   calls(): number;
@@ -84,6 +87,7 @@ const BY_SERVER_CODE = new Map<string, ClientErrorCode>([
   ['AI_UNAVAILABLE', 'unavailable'],
   ['INVALID_RESPONSE', 'invalid'],
   ['INVALID_BRIEF', 'invalid'],
+  ['INVALID_ADJUSTMENT', 'invalid'],
   ['INVALID_JSON', 'invalid'],
 ]);
 
@@ -219,7 +223,7 @@ export function createPlanClient(options: PlanClientOptions = {}): PlanClient {
    * signal API) is built first, so it resolves as `network` without ticking the counter.
    */
   async function exchange(
-    brief: EventBrief,
+    body: { readonly brief: EventBrief; readonly adjust?: AdjustRequest },
     signal: AbortSignal,
   ): Promise<Result<Reply, ClientError>> {
     let timeout: AbortSignal | undefined;
@@ -228,7 +232,7 @@ export function createPlanClient(options: PlanClientOptions = {}): PlanClient {
       const init = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brief }),
+        body: JSON.stringify(body),
         signal: anySignal([signal, timeout]),
       };
       calls += 1;
@@ -249,14 +253,15 @@ export function createPlanClient(options: PlanClientOptions = {}): PlanClient {
       const text = canonicalJson(brief);
       // Without crypto.subtle (an insecure page) the canonical text itself is just a longer key.
       const key = await sha256Hex(text).catch(() => text);
-      const hit = opts.refresh === true ? undefined : cache.get(key);
+      const { adjust } = opts;
+      const hit = adjust ? undefined : cache.get(key);
       if (hit) {
         remember(key, hit);
         return ok({ ...hit, cached: true });
       }
       // After the cache and before the count: a request that was never sent is not a call.
       if (signal.aborted) return err({ code: 'network' });
-      const reply = await exchange(brief, signal);
+      const reply = await exchange(adjust ? { brief, adjust } : { brief }, signal);
       if (!reply.ok) return reply;
       const result = interpret(brief, reply.value);
       if (result.ok) remember(key, result.value);

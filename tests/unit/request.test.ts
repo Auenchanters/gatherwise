@@ -1,11 +1,22 @@
 /**
  * The request gate, step by step: transport (content type, origin, declared size), the streamed
- * body (size, JSON, strict schema) and the server-side date window.
+ * body (size, JSON, strict schema, the "Adjust with AI" part) and the server-side date window.
  */
 import { describe, expect, it } from 'vitest';
-import { MAX_BODY_BYTES, planFor, readBrief, validateTransport } from '../../server/request.js';
+import {
+  MAX_BODY_BYTES,
+  planFor,
+  readPlanRequest,
+  validateTransport,
+} from '../../server/request.js';
+import { templateFor, templateIds } from '../../src/domain/templates/index.js';
 import { LIMITS } from '../../src/shared/limits.js';
-import { brief } from '../support/fixtures.js';
+import {
+  ACCESSIBILITY_OPTIONS,
+  DIETARY_OPTIONS,
+  type AiSuggestions,
+} from '../../src/shared/schema.js';
+import { aiSuggestions, brief } from '../support/fixtures.js';
 
 const URL_ = 'https://gatherwise.example/api/plan';
 const OWN = { origin: 'https://gatherwise.example' };
@@ -102,33 +113,32 @@ describe('validateTransport', () => {
   });
 });
 
-describe('readBrief', () => {
+describe('readPlanRequest', () => {
   it('returns the parsed, trimmed brief', async () => {
     const b = brief('wedding', { name: '  Asha and Rohan  ' });
-    await expect(readBrief(post(JSON.stringify({ brief: b })))).resolves.toEqual({
-      ...b,
-      name: 'Asha and Rohan',
+    await expect(readPlanRequest(post(JSON.stringify({ brief: b })))).resolves.toEqual({
+      brief: { ...b, name: 'Asha and Rohan' },
     });
   });
 
   it('counts streamed bytes, so a body with no Content-Length cannot exceed the cap', async () => {
-    expect(MAX_BODY_BYTES).toBe(16_384);
-    const over = new Request(URL_, streamInit(streamed(17, 1024)));
+    expect(MAX_BODY_BYTES).toBe(65_536);
+    const over = new Request(URL_, streamInit(streamed(65, 1024)));
     expect(over.headers.get('content-length')).toBeNull();
-    expect(await failure(() => readBrief(over))).toMatchObject({
+    expect(await failure(() => readPlanRequest(over))).toMatchObject({
       status: 413,
       code: 'BODY_TOO_LARGE',
     });
     // Exactly at the cap is read in full (and then fails as JSON, not as size).
-    const atCap = new Request(URL_, streamInit(streamed(16, 1024)));
-    expect(await failure(() => readBrief(atCap))).toMatchObject({ code: 'INVALID_JSON' });
+    const atCap = new Request(URL_, streamInit(streamed(64, 1024)));
+    expect(await failure(() => readPlanRequest(atCap))).toMatchObject({ code: 'INVALID_JSON' });
   });
 
   it.each([
     ['broken JSON', '{"brief":'],
     ['an empty body', ''],
   ])('rejects %s as INVALID_JSON', async (_name, body) => {
-    expect(await failure(() => readBrief(post(body)))).toMatchObject({
+    expect(await failure(() => readPlanRequest(post(body)))).toMatchObject({
       status: 400,
       code: 'INVALID_JSON',
     });
@@ -136,7 +146,7 @@ describe('readBrief', () => {
 
   it('rejects a missing body as INVALID_JSON', async () => {
     const empty = new Request(URL_, { method: 'POST' });
-    expect(await failure(() => readBrief(empty))).toMatchObject({ code: 'INVALID_JSON' });
+    expect(await failure(() => readPlanRequest(empty))).toMatchObject({ code: 'INVALID_JSON' });
   });
 
   it.each([
@@ -152,7 +162,7 @@ describe('readBrief', () => {
     ['no brief at all', {}, ['brief']],
     ['a non-object', [1, 2], ['brief']],
   ])('rejects %s as INVALID_BRIEF with the field paths', async (_name, body, fields) => {
-    expect(await failure(() => readBrief(post(JSON.stringify(body))))).toMatchObject({
+    expect(await failure(() => readPlanRequest(post(JSON.stringify(body))))).toMatchObject({
       status: 400,
       code: 'INVALID_BRIEF',
       detail: { fields },
@@ -162,11 +172,137 @@ describe('readBrief', () => {
   it('names at most ten fields', async () => {
     const nulls = Object.fromEntries(Object.keys(brief('community')).map((key) => [key, null]));
     const wrong = { ...nulls, kind: 'community' };
-    const error = await failure(() => readBrief(post(JSON.stringify({ brief: wrong }))));
+    const error = await failure(() => readPlanRequest(post(JSON.stringify({ brief: wrong }))));
     expect(error).toMatchObject({ code: 'INVALID_BRIEF' });
     expect(error).toHaveProperty('detail.fields.length', 10);
   });
 });
+
+describe('readPlanRequest: Adjust with AI', () => {
+  const body = (adjust: unknown) => post(JSON.stringify({ brief: brief('community'), adjust }));
+
+  it('returns the change and the earlier answer it revises; the answer is optional', async () => {
+    const adjust = { change: 'Make it cheaper', previous: aiSuggestions };
+    await expect(readPlanRequest(body(adjust))).resolves.toEqual({
+      brief: brief('community'),
+      adjust,
+    });
+    await expect(readPlanRequest(body({ change: '' }))).resolves.toMatchObject({
+      adjust: { change: '' },
+    });
+  });
+
+  it('takes a change at the cap counted in code points, four-byte ones included', async () => {
+    const change = '🎉'.repeat(LIMITS.ai.changeMax);
+    await expect(readPlanRequest(body({ change }))).resolves.toMatchObject({ adjust: { change } });
+  });
+
+  it.each([
+    ['a change one code point too long', { change: 'x'.repeat(LIMITS.ai.changeMax + 1) }],
+    ['no change', { previous: aiSuggestions }],
+    ['a change that is not text', { change: 5 }],
+    ['an earlier answer from another template', { change: '', previous: weddingAnswer() }],
+    ['an earlier answer of the wrong shape', { change: '', previous: { summary: 'x' } }],
+    ['an unknown key', { change: '', admin: true }],
+    ['a list instead of an object', ['cheaper']],
+    ['null', null],
+  ])('rejects %s as INVALID_ADJUSTMENT, naming nothing', async (_name, adjust) => {
+    const error = await failure(() => readPlanRequest(body(adjust)));
+    expect(error).toMatchObject({ status: 400, code: 'INVALID_ADJUSTMENT', detail: {} });
+  });
+
+  it('reports a bad brief first, whatever the adjustment holds', async () => {
+    const both = { brief: brief('community', { guests: 0 }), adjust: { change: 7 } };
+    expect(await failure(() => readPlanRequest(post(JSON.stringify(both))))).toMatchObject({
+      code: 'INVALID_BRIEF',
+      detail: { fields: ['guests'] },
+    });
+  });
+
+  it('fits the largest possible brief, change and earlier answer within the body cap', async () => {
+    const ai = LIMITS.ai;
+    // Brief text is capped in UTF-16 units, where a three-byte character is the densest; the
+    // answer and the change are capped in code points, where a four-byte emoji is.
+    const dense = (n: number) => 'आ'.repeat(n);
+    const wide = (n: number) => '🎉'.repeat(n);
+    const ids = templateIds(templateFor('community'));
+    const longest = (list: readonly string[]) =>
+      list.reduce((a, b) => (b.length > a.length ? b : a));
+    const many = <T>(n: number, item: T): T[] => Array.from({ length: n }, () => item);
+    // A double whose JSON text is about as long as one in range can be.
+    const longNumber = 1.234567890123456e-7;
+    const previous: AiSuggestions = {
+      summary: wide(ai.summaryMax),
+      ideas: many(ai.ideasMax, {
+        title: wide(ai.ideaTitleMax),
+        description: wide(ai.ideaDescriptionMax),
+        categoryId: longest(ids.categories),
+        estimatedCost: longNumber,
+        personalization: wide(ai.personalizationMax),
+      }),
+      extraTasks: many(ai.extraTasksMax, {
+        title: wide(ai.taskTitleMax),
+        categoryId: longest(ids.categories),
+        durationDays: longNumber,
+        leadDays: longNumber,
+        after: many(ai.afterMax, longest(ids.tasks)),
+      }),
+      vendorQuestions: many(ai.vendorQuestionsMax, {
+        vendorId: longest(ids.vendors),
+        questions: many(ai.questionsPerVendorMax, wide(ai.questionMax)),
+      }),
+    };
+    const caps = LIMITS.brief;
+    const fullBrief = brief('community', {
+      name: dense(caps.nameMax),
+      city: dense(caps.cityMax),
+      vibe: dense(caps.vibeMax),
+      notes: dense(caps.notesMax),
+      guests: caps.guestsMax,
+      budget: caps.budgetMax,
+      volunteersAvailable: caps.volunteersMax,
+      dietary: [...DIETARY_OPTIONS],
+      accessibility: [...ACCESSIBILITY_OPTIONS],
+      language: 'Bengali',
+      income: {
+        ticketPrice: caps.budgetMax,
+        expectedPaidAttendance: caps.guestsMax,
+        sponsors: caps.budgetMax,
+        donations: caps.budgetMax,
+        stallCount: caps.guestsMax,
+        stallFee: caps.budgetMax,
+      },
+    });
+    const largest = JSON.stringify({
+      brief: fullBrief,
+      adjust: { change: wide(ai.changeMax), previous },
+    });
+    const bytes = new TextEncoder().encode(largest).length;
+    expect(bytes).toBeGreaterThan(40_000);
+    expect(bytes).toBeLessThanOrEqual(MAX_BODY_BYTES);
+    await expect(readPlanRequest(post(largest))).resolves.toMatchObject({
+      adjust: { previous: { summary: previous.summary } },
+    });
+  });
+});
+
+/** A valid answer for the wedding template, whose category ids the community template lacks. */
+function weddingAnswer(): AiSuggestions {
+  return {
+    summary: 'A warm wedding.',
+    ideas: [
+      {
+        title: 'Shehnai at the gate',
+        description: 'Live music as guests arrive.',
+        categoryId: 'catering',
+        estimatedCost: 20_000,
+        personalization: 'traditional',
+      },
+    ],
+    extraTasks: [],
+    vendorQuestions: [],
+  };
+}
 
 describe('planFor', () => {
   const now = new Date('2026-10-21T23:30:00Z');

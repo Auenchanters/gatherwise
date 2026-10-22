@@ -614,12 +614,12 @@ describe('mergeSuggestions', () => {
       ...(first.addenda ? { addenda: first.addenda } : {}),
       doneTasks: new Set(['ai-task-1', 'define_goals']),
     });
-    const refreshed = mergeSuggestions(ticked, {
+    const next = mergeSuggestions(ticked, {
       ...clean,
       extraTasks: [extra({ title: 'Hire a rangoli artist' })],
     }).plan;
-    const status = (id: string) => refreshed.schedule.tasks.find((t) => t.id === id)?.status;
-    expect(refreshed.addenda?.extraTasks.map((t) => t.title)).toEqual(['Hire a rangoli artist']);
+    const status = (id: string) => next.schedule.tasks.find((t) => t.id === id)?.status;
+    expect(next.addenda?.extraTasks.map((t) => t.title)).toEqual(['Hire a rangoli artist']);
     expect(status('ai-task-1')).not.toBe('done');
     expect(status('define_goals')).toBe('done');
   });

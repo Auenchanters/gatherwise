@@ -12,7 +12,7 @@ import type { EventKind } from '../src/domain/templates/types.js';
 import { suggestionsSchemaFor } from '../src/shared/prompt.js';
 import type { AiSuggestions } from '../src/shared/schema.js';
 import { AppError } from './errors.js';
-import { sanitizeSuggestions } from './sanitize.js';
+import { sanitizeSuggestions } from '../src/shared/sanitize-suggestions.js';
 
 /** An answer as read: what was kept, sanitized, and how many items were left out. */
 export interface ReadAnswer {

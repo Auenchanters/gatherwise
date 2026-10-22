@@ -1,8 +1,8 @@
 /**
  * The browser's planning client: the cache, the AI-call counter, request shape and error mapping.
  * Does: drives `createPlanClient` through an injected fake `fetch`, so every claim in the model-call
- * budget is a count of real `fetch` calls: one per new brief, none for a repeat, one per explicit
- * refresh, and failures and aborts never stored.
+ * budget is a count of real `fetch` calls: one per new brief, none for a repeat, one per "Adjust
+ * with AI", and failures and aborts never stored.
  * Never calls the network or the real clock (the timeout tests use a few milliseconds).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -38,6 +38,8 @@ const META = {
   requestId: '0b0c1f2e-7d4a-4c1e-9a55-3f0f6a3c2d10',
 };
 const GOOD = { suggestions: SUGGESTIONS, meta: META };
+/** An "Adjust with AI" request revising the answer above. */
+const ADJUST = { change: 'Make it cheaper', previous: SUGGESTIONS };
 
 /** A fresh `Response` per call (a body can be read once), so one fake can answer many times. */
 const json = (body: unknown, init?: ResponseInit): Promise<Response> =>
@@ -121,25 +123,25 @@ describe('the model-call budget', () => {
     expect(reused.suggestions).toBe(first.suggestions);
     expect(reused.meta).toBe(first.meta);
     expect(succeeded(await planner.suggest(community(), never)).cached).toBe(true);
-    // A refresh is a new request: fresh again, and the next reuse is flagged again.
-    expect(succeeded(await planner.suggest(community(), never, { refresh: true })).cached).toBe(
+    // An adjustment is a new request: fresh again, and the next reuse is flagged again.
+    expect(succeeded(await planner.suggest(community(), never, { adjust: ADJUST })).cached).toBe(
       false,
     );
     expect(succeeded(await planner.suggest(community(), never)).cached).toBe(true);
     expect(first.cached).toBe(false);
   });
 
-  it('leaves the old entry intact when a refresh fails', async () => {
+  it('leaves the old entry intact when an adjustment fails', async () => {
     const fetchImpl = serving();
     const planner = client(fetchImpl);
     const first = succeeded(await planner.suggest(community(), never));
 
     fetchImpl.mockImplementation(() => failure('AI_UNAVAILABLE', 502));
-    expect(failed(await planner.suggest(community(), never, { refresh: true })).code).toBe(
+    expect(failed(await planner.suggest(community(), never, { adjust: ADJUST })).code).toBe(
       'unavailable',
     );
     fetchImpl.mockImplementation(() => Promise.reject(new TypeError('Failed to fetch')));
-    expect(failed(await planner.suggest(community(), never, { refresh: true })).code).toBe(
+    expect(failed(await planner.suggest(community(), never, { adjust: ADJUST })).code).toBe(
       'network',
     );
     expect(planner.calls()).toBe(3);
@@ -161,7 +163,7 @@ describe('the model-call budget', () => {
     expect(planner.calls()).toBe(2);
   });
 
-  it('costs exactly one call per explicit refresh, and refreshing replaces the stored value', async () => {
+  it('costs exactly one call per adjustment, and an adjustment replaces the stored value', async () => {
     let version = 0;
     const fetchImpl = serving(() => {
       version += 1;
@@ -170,8 +172,8 @@ describe('the model-call budget', () => {
     const planner = client(fetchImpl);
 
     expect(succeeded(await planner.suggest(community(), never)).suggestions.summary).toBe('v1');
-    const refreshed = await planner.suggest(community(), never, { refresh: true });
-    expect(succeeded(refreshed).suggestions.summary).toBe('v2');
+    const adjusted = await planner.suggest(community(), never, { adjust: ADJUST });
+    expect(succeeded(adjusted).suggestions.summary).toBe('v2');
     expect(planner.calls()).toBe(2);
 
     const afterwards = await planner.suggest(community(), never);
@@ -179,12 +181,12 @@ describe('the model-call budget', () => {
     expect(planner.calls()).toBe(2);
   });
 
-  it('stores the result of a refresh even when nothing was cached, and ignores refresh: false', async () => {
+  it('stores the result of an adjustment even when nothing was cached', async () => {
     const fetchImpl = serving();
     const planner = client(fetchImpl);
-    await planner.suggest(community(), never, { refresh: true });
-    await planner.suggest(community(), never, { refresh: false });
+    await planner.suggest(community(), never, { adjust: { change: '' } });
     await planner.suggest(community(), never, {});
+    await planner.suggest(community(), never);
     expect(planner.calls()).toBe(1);
   });
 
@@ -325,10 +327,10 @@ describe('the LRU', () => {
     expect(planner.calls()).toBe(3);
   });
 
-  it('a refresh makes its entry the newest', async () => {
+  it('an adjustment makes its entry the newest', async () => {
     const planner = client(serving());
     await fill(planner, 8);
-    await planner.suggest(community(100), never, { refresh: true }); // call 9, 100 is newest
+    await planner.suggest(community(100), never, { adjust: ADJUST }); // call 9, 100 is newest
     await planner.suggest(community(999), never); // call 10, evicts 101
     await planner.suggest(community(100), never);
     expect(planner.calls()).toBe(10);
@@ -349,6 +351,14 @@ describe('the request', () => {
       body: JSON.stringify({ brief: b }),
     });
     expect(signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('sends the change and the earlier answer beside the brief when adjusting', async () => {
+    const fetchImpl = serving();
+    const b = community();
+    await client(fetchImpl).suggest(b, never, { adjust: ADJUST });
+    const [, init] = fetchImpl.mock.calls[0] ?? [];
+    expect(init?.body).toBe(JSON.stringify({ brief: b, adjust: ADJUST }));
   });
 
   it('uses a 25 s timeout by default and the given one when set', async () => {

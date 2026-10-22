@@ -4,9 +4,9 @@
  *
  * Does: goes from the landing to a finished plan and its tabs with Tab, Shift+Tab, the arrow keys,
  * Enter and Space alone: skip link, the three samples, Generate, every tab and its heading, a
- * ticked task, a vendor's status, "Refresh ideas". Checks that every stop shows a focus ring
+ * ticked task, a vendor's status, "Adjust with AI". Checks that every stop shows a focus ring
  * (`:focus-visible` with a drawn outline), that a page-wide listener never saw a pointer, and the
- * model-call count: 1 to create the plan, 2 after Refresh ideas.
+ * model-call count: 1 to create the plan, 2 after Adjust with AI.
  * Never does: use the mouse, or reach a real model.
  */
 import { expect, test, type Locator, type Page } from '@playwright/test';
@@ -135,14 +135,15 @@ test('the whole journey works with the keyboard alone', async ({ page }) => {
   await expect(page.getByText("Marked 'Tent / shamiana' as quoted")).toBeAttached();
   expect(requests).toHaveLength(1);
 
-  // Ideas: Enter on Refresh ideas is the second and last AI call.
+  // Ideas: type what should change, then Enter is the second and last AI call.
   await pressUntil(page, 'Shift+Tab', tab('Vendors'));
   await page.keyboard.press('ArrowRight');
   await expect(tab('Ideas')).toBeFocused();
-  const refresh = page.getByRole('button', { name: 'Refresh ideas (1 AI call)' });
-  await pressUntil(page, 'Tab', refresh);
+  const change = page.getByRole('textbox', { name: 'What should change? (optional)' });
+  await pressUntil(page, 'Tab', change);
+  await page.keyboard.type('cheaper');
   await page.keyboard.press('Enter');
-  await expect(page.getByText('Fresh ideas are in. AI calls this session: 2.')).toBeAttached();
+  await expect(page.getByText('Your ideas are updated. AI calls this session: 2.')).toBeAttached();
   expect(requests).toHaveLength(2);
 
   expect(await page.evaluate(() => Reflect.has(window, 'pointerUsed'))).toBe(false);

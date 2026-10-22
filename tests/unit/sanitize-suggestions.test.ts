@@ -1,10 +1,10 @@
 /**
- * Bounding of the model's answer before it leaves the server.
+ * Bounding of an AI answer: the model's on the server, and an earlier one sent back to adjust.
  * Does: checks that every string is cleaned and capped, every number clamped and every list cut,
  * while ids pass through untouched. The text rules themselves are pinned in sanitize-text.test.ts.
  */
 import { describe, expect, it } from 'vitest';
-import { sanitizeSuggestions } from '../../server/sanitize.js';
+import { sanitizeSuggestions } from '../../src/shared/sanitize-suggestions.js';
 import { LIMITS } from '../../src/shared/limits.js';
 import type { AiSuggestions } from '../../src/shared/schema.js';
 
@@ -61,6 +61,11 @@ describe('sanitizeSuggestions', () => {
       durationDays: 2.5,
       leadDays: LIMITS.ai.leadMin,
     });
+  });
+
+  it('changes nothing more when applied twice, so a bounded answer passes through as it is', () => {
+    const once = sanitizeSuggestions(dirty);
+    expect(sanitizeSuggestions(once)).toEqual(once);
   });
 
   it('keeps only the first items of every list', () => {

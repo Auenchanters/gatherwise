@@ -51,6 +51,22 @@ describe('client to handler round trip', () => {
     expect(answer.suggestions.ideas[1]?.estimatedCost).toBe(100_000_000);
   });
 
+  it('adjusts: the change and the earlier answer cross the wire and reach the model as data', async () => {
+    const generate = vi.fn<Generate>(() =>
+      Promise.resolve({ text: JSON.stringify(aiSuggestions), inputTokens: 10, outputTokens: 20 }),
+    );
+    const { client, fetchImpl } = wired(generate);
+    const signal = new AbortController().signal;
+    const first = succeeded(await client.suggest(brief('community'), signal));
+    const adjust = { change: 'Make it cheaper', previous: first.suggestions };
+    const second = succeeded(await client.suggest(brief('community'), signal, { adjust }));
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(second.cached).toBe(false);
+    const [prompt] = generate.mock.calls[1] ?? [];
+    expect(prompt?.user).toContain('"change":"Make it cheaper"');
+    expect(prompt?.user).toContain(JSON.stringify(first.suggestions.summary));
+  });
+
   it('turns an unusable answer into the client error code for it', async () => {
     const generate = vi.fn<Generate>(() =>
       Promise.resolve({ text: 'not json', inputTokens: 1, outputTokens: 1 }),

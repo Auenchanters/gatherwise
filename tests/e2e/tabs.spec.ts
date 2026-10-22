@@ -6,7 +6,7 @@
  * WCAG 2.1 AA on each new tab with no sideways scroll; downloads the calendar and checks it is an
  * iCalendar file; checks that printing shows every tab and no buttons; and counts requests through
  * the model-call budget journey: generating is 1 request, five edits (guests, budget, date, a
- * ticked task, a vendor status) leave it at 1, and "Refresh ideas" makes it 2.
+ * ticked task, a vendor status) leave it at 1, and "Adjust with AI" makes it 2.
  * Never does: reach a real model.
  */
 import { readFile } from 'node:fs/promises';
@@ -110,12 +110,13 @@ test('printing shows every tab, and no buttons or menus', async ({ page }) => {
   }
   await expect(page.getByRole('tablist')).toBeHidden();
   await expect(page.getByRole('button', { name: 'Print plan' })).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Refresh ideas (1 AI call)' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Adjust with AI (1 call)' })).toBeHidden();
+  await expect(page.getByRole('textbox', { name: 'What should change? (optional)' })).toBeHidden();
   await expect(page.getByRole('combobox', { name: 'Status for Tent / shamiana' })).toBeHidden();
   await expect(page.getByText('Status: To contact').first()).toBeVisible();
 });
 
-test('the model-call budget: 1 to generate, none for five edits, 1 for Refresh ideas', async ({
+test('the model-call budget: 1 to generate, none for five edits, 1 for Adjust with AI', async ({
   page,
 }) => {
   const { requests, errors } = await prepare(page);
@@ -151,21 +152,27 @@ test('the model-call budget: 1 to generate, none for five edits, 1 for Refresh i
   await page.getByRole('tab', { name: 'Overview' }).click();
   await expect(page.locator('.ai-panel__calls dd')).toHaveText('1');
 
-  // Refresh ideas is the only thing that asks again, and it asks once.
+  // Adjust with AI is the only thing that asks again, and it asks once.
   await page.getByRole('tab', { name: 'Ideas' }).click();
   await expect(page.getByText('Edits never call the AI; only this button does.')).toBeVisible();
-  await page.getByRole('button', { name: 'Refresh ideas (1 AI call)' }).click();
-  await expect(page.getByText('Fresh ideas are in. AI calls this session: 2.')).toBeAttached();
+  await page.getByRole('textbox', { name: 'What should change? (optional)' }).fill('More for kids');
+  await page.getByRole('button', { name: 'Adjust with AI (1 call)' }).click();
+  await expect(page.getByText('Your ideas are updated. AI calls this session: 2.')).toBeAttached();
   expect(requests).toHaveLength(2);
-  // It asks about the plan as edited, not as first generated.
+  // It asks about the plan as edited, not as first generated, with the change and the answer
+  // it revises.
   expect(requests[1]).toEqual({
     brief: expect.objectContaining({
       name: SAMPLE_NAME,
       guests: 300,
       budget: 200_000,
     }),
+    adjust: {
+      change: 'More for kids',
+      previous: expect.objectContaining({ ideas: expect.any(Array) }),
+    },
   });
-  await expect(page.getByRole('button', { name: 'Refresh ideas (1 AI call)' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Adjust with AI (1 call)' })).toBeEnabled();
   await page.getByRole('tab', { name: 'Overview' }).click();
   await expect(page.locator('.ai-panel__calls dd')).toHaveText('2');
   expect(await axeViolations(page)).toEqual([]);

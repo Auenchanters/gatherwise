@@ -117,18 +117,18 @@ describe('request matrix', () => {
     expect((await errorOf(response)).code).toBe('JSON_REQUIRED');
   });
 
-  it('413 for a declared Content-Length over 16 KB', async () => {
+  it('413 for a declared Content-Length over 64 KB', async () => {
     const response = await handlerWith({ generate: answering() })(
-      post(undefined, { 'content-length': '17000' }),
+      post(undefined, { 'content-length': '70000' }),
     );
     expect(response.status).toBe(413);
     expect((await errorOf(response)).code).toBe('BODY_TOO_LARGE');
   });
 
-  it('413 for a 17 KB streamed body with no Content-Length', async () => {
+  it('413 for a 70 KB streamed body with no Content-Length', async () => {
     const generate = answering();
     const big = new TextEncoder().encode(
-      JSON.stringify({ brief: { ...brief('community'), notes: 'n'.repeat(17_000) } }),
+      JSON.stringify({ brief: { ...brief('community'), notes: 'n'.repeat(70_000) } }),
     );
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
@@ -444,6 +444,27 @@ describe('request matrix', () => {
       expect(JSON.stringify(sent)).toBe(JSON.stringify(buildPrompt(plan.value)));
     },
   );
+
+  it('sends the generator exactly the shared prompt for an adjustment, byte for byte', async () => {
+    const generate = answering();
+    const adjust = { change: 'Make it cheaper', previous: SUGGESTIONS };
+    const response = await handlerWith({ generate })(post({ brief: brief('community'), adjust }));
+    expect(response.status).toBe(200);
+    const plan = buildPlan(eventBriefSchema.parse(brief('community')), TODAY);
+    if (!plan.ok) throw new Error('fixture brief must plan');
+    const [sent] = generate.mock.calls[0] ?? [];
+    expect(JSON.stringify(sent)).toBe(JSON.stringify(buildPrompt(plan.value, adjust)));
+    expect(sent?.user).toContain('"change":"Make it cheaper"');
+  });
+
+  it('400 INVALID_ADJUSTMENT, before any model call, for a change over 200 characters', async () => {
+    const generate = answering();
+    const adjust = { change: 'x'.repeat(201) };
+    const response = await handlerWith({ generate })(post({ brief: brief('community'), adjust }));
+    expect(response.status).toBe(400);
+    expect((await errorOf(response)).code).toBe('INVALID_ADJUSTMENT');
+    expect(generate).not.toHaveBeenCalled();
+  });
 
   it('502 INVALID_RESPONSE if the metadata would break its own contract', async () => {
     for (const model of ['', 'm'.repeat(81)]) {

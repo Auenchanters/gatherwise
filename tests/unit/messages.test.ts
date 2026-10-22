@@ -24,7 +24,7 @@ describe('clientErrorMessage', () => {
 
   it('says what happened in plain words', () => {
     expect(clientErrorMessage({ code: 'rate_limited' })).toBe(
-      'The AI service is busy right now \u2014 your plan is ready with standard suggestions. Try \u201CRefresh ideas\u201D in a minute.',
+      'The AI service is busy right now \u2014 your plan is ready with standard suggestions. Try \u201CAdjust with AI\u201D in a minute.',
     );
     expect(clientErrorMessage({ code: 'unavailable' })).toBe(
       "AI ideas aren't available right now \u2014 the budget, timeline and vendors are fully usable.",
@@ -58,13 +58,13 @@ describe('clientErrorMessage', () => {
 
   it('says the current ideas are unchanged, never "standard suggestions", when earlier AI ideas stay', () => {
     expect(clientErrorMessage({ code: 'network' }, true)).toBe(
-      "Can't reach the AI service — check your connection. Your current ideas are unchanged; try “Refresh ideas” once you're back online.",
+      "Can't reach the AI service — check your connection. Your current ideas are unchanged; try “Adjust with AI” once you're back online.",
     );
     expect(clientErrorMessage({ code: 'timeout' }, true)).toBe(
       'The AI took too long to reply — your current ideas are unchanged. You can try again.',
     );
     expect(clientErrorMessage({ code: 'rate_limited', retryAfterSeconds: 120 }, true)).toBe(
-      'The AI service is busy right now — your current ideas are unchanged. Try “Refresh ideas” in 2 minutes.',
+      'The AI service is busy right now — your current ideas are unchanged. Try “Adjust with AI” in 2 minutes.',
     );
     for (const code of CODES) expect(clientErrorMessage({ code }, true)).not.toMatch(/standard/u);
   });

@@ -149,7 +149,7 @@ h1 {
 }
 
 /* Busy: every `aria-disabled` primary button, which keeps keyboard focus while it waits. That is
-   Generate while the checker loads and Refresh ideas while pending. A visibly different, still
+   Generate while the checker loads and Adjust with AI while pending. A visibly different, still
    AA-contrast state, :hover included. The doubled class out-ranks the waiting rule above. */
 .button.button--primary[aria-disabled='true'],
 .button.button--primary[aria-disabled='true']:hover {

@@ -2,8 +2,8 @@
  * Tests for src/features/plan/planner-store.ts, the one place the UI's AI calls start.
  *
  * Does: drives the store through a fake client that counts `suggest` calls, so every claim in the
- * model-call budget is a count: a plan costs one call, edits cost none, a refresh costs one and is
- * ignored while one is pending, a restored plan never calls until asked. Also covers aborts and
+ * model-call budget is a count: a plan costs one call, edits cost none, an "Adjust with AI" costs
+ * one and is ignored while one is pending, a restored plan never calls until asked. Also covers aborts and
  * stale answers, every restore outcome, the storage notice, clearing data and the day changing.
  * Never does: call the network, touch a real localStorage or read the clock.
  */
@@ -112,14 +112,14 @@ describe('submit', () => {
     expect(state.aiView.failure).toContain('standard suggestions');
   });
 
-  it('a failed refresh that keeps earlier AI ideas does not claim standard suggestions', async () => {
+  it('a failed adjustment that keeps earlier AI ideas does not claim standard suggestions', async () => {
     const failure: ClientError = { code: 'timeout' };
     const answers: Answer[] = [fresh, err(failure)];
     const { store } = setup({
       client: fakeClient(() => Promise.resolve(answers.shift() ?? fresh)),
     });
     await store.submit(festival).settled;
-    await store.refreshIdeas();
+    await store.adjust('');
     const state = store.getState();
     expect(ready(state).ai.status).toBe('failed');
     expect(ready(state).ai.suggestions).toBeDefined();
@@ -228,7 +228,7 @@ describe('submit', () => {
   });
 });
 
-describe('personalize and refreshIdeas', () => {
+describe('personalize and adjust', () => {
   it('personalize asks once for the current brief and uses the cache', async () => {
     const { store, client } = setup({ storage: savedStorage(planned(festival)) });
     store.hydrate();
@@ -238,33 +238,46 @@ describe('personalize and refreshIdeas', () => {
     expect(client.suggest.mock.calls[0]?.[2]).toBeUndefined();
     expect(ready(store.getState()).ai.status).toBe('applied');
     expect(store.getState().calls).toBe(1);
-    expect(store.getState().aiView.refresh).toBeUndefined();
+    expect(store.getState().aiView.adjust).toBeUndefined();
   });
 
-  it('refreshIdeas costs one call, skips the cache, and is ignored while pending', async () => {
+  it('adjust costs one call with the change and the current answer, and is ignored while pending', async () => {
     const answers = [Promise.resolve(fresh)];
-    const refresh = deferred<Answer>();
+    const adjusting = deferred<Answer>();
     const { store, client } = setup({
-      client: fakeClient(() => answers.shift() ?? refresh.promise),
+      client: fakeClient(() => answers.shift() ?? adjusting.promise),
     });
     await store.submit(festival).settled;
-    const first = store.refreshIdeas();
-    const second = store.refreshIdeas();
+    const first = store.adjust('Make it cheaper');
+    const second = store.adjust('ignored');
     void store.personalize();
     expect(client.suggest).toHaveBeenCalledTimes(2);
-    expect(client.suggest.mock.calls[1]?.[2]).toEqual({ refresh: true });
-    refresh.resolve(fresh);
+    const adjust = { change: 'Make it cheaper', previous: aiSuggestions };
+    expect(client.suggest.mock.calls[1]?.[2]).toEqual({ adjust });
+    adjusting.resolve(fresh);
     await Promise.all([first, second]);
     expect(store.getState().calls).toBe(2);
     expect(ready(store.getState()).ai.status).toBe('applied');
-    // The Ideas tab announces this answer, so the view marks it as a refresh's.
-    expect(store.getState().aiView.refresh).toBe(true);
+    // The Ideas tab announces this answer and the AI panel rebuilds its prompt from the view.
+    expect(store.getState().aiView).toEqual({ sentBrief: festival, adjust, cached: false });
+  });
+
+  it('adjusts a plan with no AI answer yet by sending the change alone', async () => {
+    const answers: Answer[] = [err({ code: 'timeout' }), fresh];
+    const { store, client } = setup({
+      client: fakeClient(() => Promise.resolve(answers.shift() ?? fresh)),
+    });
+    await store.submit(festival).settled;
+    expect(ready(store.getState()).ai.suggestions).toBeUndefined();
+    await store.adjust('More for kids');
+    expect(client.suggest.mock.calls[1]?.[2]).toEqual({ adjust: { change: 'More for kids' } });
+    expect(ready(store.getState()).ai.status).toBe('applied');
   });
 
   it('does nothing without a plan', async () => {
     const { store, client } = setup();
     await store.personalize();
-    await store.refreshIdeas();
+    await store.adjust('cheaper');
     expect(client.suggest).not.toHaveBeenCalled();
     expect(store.getState().plan).toBe(initialPlanState);
   });

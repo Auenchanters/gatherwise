@@ -7,23 +7,47 @@
  * 5. the per-client rate limit, 429 (the handler);
  * 6. streamed body size within the cap, 413;
  * 7. JSON syntax, 400;
- * 8. the strict brief schema, 400;
- * 9. the event date against the server's clock, 400.
+ * 8. the strict brief schema, 400 `INVALID_BRIEF`;
+ * 9. an "Adjust with AI" part, when present, against the brief's template, 400 `INVALID_ADJUSTMENT`;
+ * 10. the event date against the server's clock, 400.
  * Never does: read more than `MAX_BODY_BYTES`, echo input back in an error, or trust the client's
  * idea of today beyond one day either side of UTC.
  */
 import { z } from 'zod';
 import { addDays, daysBetween, isoDate, parseIsoDate } from '../src/domain/dates.js';
 import { buildPlan, type Plan } from '../src/domain/plan.js';
+import type { EventKind } from '../src/domain/templates/types.js';
 import { LIMITS } from '../src/shared/limits.js';
-import { eventBriefSchema, type EventBrief } from '../src/shared/schema.js';
+import { suggestionsSchemaFor } from '../src/shared/prompt.js';
+import { eventBriefSchema, type AdjustRequest, type EventBrief } from '../src/shared/schema.js';
 import { AppError } from './errors.js';
 
-/** The most body bytes the API will read: a full brief is about 2 KB. */
-export const MAX_BODY_BYTES = 16_384;
+/**
+ * The most body bytes the API will read. A full brief is about 2 KB; an "Adjust with AI" request
+ * also carries the earlier answer, which at every cap, in four-byte characters, is about 45 KB
+ * with the brief (tests/unit/request.test.ts builds that request and checks that it fits).
+ */
+export const MAX_BODY_BYTES = 65_536;
 const MAX_FIELDS = 10;
 
-const planRequestSchema = z.strictObject({ brief: eventBriefSchema });
+const planRequestSchema = z.strictObject({
+  brief: eventBriefSchema,
+  // Checked on its own once the brief is known: the earlier answer must use its template's ids.
+  adjust: z.unknown().optional(),
+});
+
+/** The "Adjust with AI" part for a brief of `kind`. */
+const adjustSchemaFor = (kind: EventKind) =>
+  z.strictObject({
+    change: z.string().refine((text) => Array.from(text).length <= LIMITS.ai.changeMax),
+    previous: suggestionsSchemaFor(kind).optional(),
+  });
+
+/** A valid plan request: the brief, and what to change when the organizer is adjusting. */
+export interface PlanRequest {
+  readonly brief: EventBrief;
+  readonly adjust?: AdjustRequest;
+}
 
 /**
  * Steps 2 to 4: rejects a non-JSON content type (415), an `Origin` that is absent, empty, opaque
@@ -71,10 +95,12 @@ const fieldOf = (path: readonly PropertyKey[]): string =>
   path.slice(1).map(String).join('.') || 'brief';
 
 /**
- * Steps 6 to 8: reads at most `MAX_BODY_BYTES` (413), parses JSON (400 `INVALID_JSON`) and
- * validates `{ brief }` strictly (400 `INVALID_BRIEF` with up to 10 field paths).
+ * Steps 6 to 9: reads at most `MAX_BODY_BYTES` (413), parses JSON (400 `INVALID_JSON`), validates
+ * `{ brief, adjust? }` strictly (400 `INVALID_BRIEF` with up to 10 field paths), then `adjust`:
+ * `change` of at most `LIMITS.ai.changeMax` code points and, when present, a `previous` answer
+ * that fits the brief's template (400 `INVALID_ADJUSTMENT`, which names nothing).
  */
-export async function readBrief(request: Request): Promise<EventBrief> {
+export async function readPlanRequest(request: Request): Promise<PlanRequest> {
   const text = await readBoundedText(request);
   let input: unknown;
   try {
@@ -87,11 +113,15 @@ export async function readBrief(request: Request): Promise<EventBrief> {
     const fields = [...new Set(parsed.error.issues.map((issue) => fieldOf(issue.path)))];
     throw new AppError('INVALID_BRIEF', { fields: fields.slice(0, MAX_FIELDS) });
   }
-  return parsed.data.brief;
+  const { brief } = parsed.data;
+  if (parsed.data.adjust === undefined) return { brief };
+  const adjust = adjustSchemaFor(brief.kind).safeParse(parsed.data.adjust);
+  if (!adjust.success) throw new AppError('INVALID_ADJUSTMENT');
+  return { brief, adjust: adjust.data };
 }
 
 /**
- * Step 9: builds the engine plan for `brief`, checking its date against today in UTC. The browser
+ * Step 10: builds the engine plan for `brief`, checking its date against today in UTC. The browser
  * picked the date in its own zone, which may be a day ahead of or behind UTC, so the window is
  * widened by one day each side: the plan is built from the day nearest the event within one day
  * of UTC today, and the engine rejects anything still out of range.

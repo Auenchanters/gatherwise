@@ -1,15 +1,16 @@
 /**
- * Bounding of the model's answer before it leaves the server.
- * Does: clean and cap every string with `sanitizeText` (shared with the prompt builder), keep the
- * first `LIMITS.ai` items of every list, and clamp every number into its `LIMITS.ai` range (an
- * idea's cost into 0 to the largest budget a brief allows), so what the browser receives and stores
- * is bounded whatever the model sent.
+ * Bounding of an AI answer wherever it crosses the model boundary: the server bounds the model's
+ * answer before it leaves, and the prompt builder bounds the earlier answer an "Adjust with AI"
+ * request sends back, so the browser and the server put the same bytes in that prompt.
+ * Does: clean and cap every string with `sanitizeText`, keep the first `LIMITS.ai` items of every
+ * list, and clamp every number into its `LIMITS.ai` range (an idea's cost into 0 to the largest
+ * budget a brief allows). Applying it twice changes nothing more.
  * Never does: touch ids (the schema checks them) or round numbers; the engine still rounds, clamps
  * a cost to the brief's own budget, and lists each change it makes.
  */
-import { LIMITS } from '../src/shared/limits.js';
-import { sanitizeText } from '../src/shared/sanitize-text.js';
-import type { AiSuggestions } from '../src/shared/schema.js';
+import { LIMITS } from './limits.js';
+import { sanitizeText } from './sanitize-text.js';
+import type { AiSuggestions } from './schema.js';
 
 const ai = LIMITS.ai;
 const clamp = (n: number, min: number, max: number): number => Math.min(max, Math.max(min, n));

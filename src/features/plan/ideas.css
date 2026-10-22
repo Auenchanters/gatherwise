@@ -1,4 +1,4 @@
-/* The Ideas tab: the refresh bar and what each idea card adds to the shared card. */
+/* The Ideas tab: the Adjust with AI form and what each idea card adds to the shared card. */
 
 .ideas__bar {
   display: flex;
@@ -6,6 +6,11 @@
   align-items: center;
   gap: 0.5rem 1rem;
   margin-bottom: 1rem;
+}
+
+.ideas__change {
+  flex: 1 1 100%;
+  margin-bottom: 0;
 }
 
 .ideas__note {

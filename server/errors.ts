@@ -24,6 +24,10 @@ const CATALOG = {
     status: 400,
     message: 'Some event details are missing or out of range. Check the highlighted fields.',
   },
+  INVALID_ADJUSTMENT: {
+    status: 400,
+    message: 'The change could not be read. Keep it to 200 characters and try again.',
+  },
   RATE_LIMITED: {
     status: 429,
     message: 'Too many plans in a short time. Wait a minute and try again.',

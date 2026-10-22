@@ -80,9 +80,7 @@ export function Workspace({ state, snapshot, store }: WorkspaceProps): ReactElem
     {
       id: 'ideas',
       label: 'Ideas',
-      panel: (
-        <Ideas state={state} calls={snapshot.calls} cached={snapshot.aiView.cached} store={store} />
-      ),
+      panel: <Ideas state={state} calls={snapshot.calls} store={store} />,
     },
   ];
   if (state.brief.kind === 'community') {

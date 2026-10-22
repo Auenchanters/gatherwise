@@ -130,22 +130,55 @@ const isWhole = (n: number, min: number, max: number): boolean =>
   Number.isInteger(n) && n >= min && n <= max;
 
 /** The state with `error` set and nothing else changed. */
-const refuse = (state: PlanState, error: PlanStateError): PlanState => ({ ...state, error });
+const refuse = <S extends PlanState>(state: S, error: PlanStateError): S => ({ ...state, error });
 
 /** Re-derives `state` with some inputs replaced; if that cannot be planned, refuses with why. */
 function change(
   state: ReadyState,
   patch: Partial<Pick<ReadyState, 'brief' | 'today' | 'plannedGuests' | 'progress' | 'ai'>>,
-): PlanState {
+): ReadyState {
   const next = restorePlanState({ ...state, ...patch });
   return next.ok ? next.value : refuse(state, next.error);
+}
+
+/** A task title as compared across answers: case, width and spacing do not matter. */
+const sameTitle = (title: string): string =>
+  title.normalize('NFKC').replace(/\s+/gu, ' ').trim().toLowerCase();
+
+/**
+ * Applies a new AI answer. Ids `ai-task-N` follow each answer's order, so a tick on one cannot
+ * carry over by id. Instead, a ticked AI task stays ticked when the new answer has a task with the
+ * same title: the tick moves to that task's new id. Every other AI tick is dropped.
+ */
+function applyAnswer(
+  state: ReadyState,
+  ai: Required<Pick<AiState, 'suggestions' | 'meta'>>,
+): ReadyState {
+  const { progress, plan } = state;
+  const ticked = new Set(progress.doneTasks);
+  const doneTitles = new Set(
+    plan.schedule.tasks
+      .filter((task) => isAiTask(task.id) && ticked.has(task.id))
+      .map((task) => sameTitle(task.title)),
+  );
+  const next = change(state, {
+    ai: { status: 'applied', ...ai },
+    progress: { ...progress, doneTasks: progress.doneTasks.filter((id) => !isAiTask(id)) },
+  });
+  if (doneTitles.size === 0) return next;
+  const kept = next.plan.schedule.tasks
+    .filter((task) => isAiTask(task.id) && doneTitles.has(sameTitle(task.title)))
+    .map((task) => task.id);
+  if (kept.length === 0) return next;
+  const { doneTasks } = next.progress;
+  return change(next, { progress: { ...next.progress, doneTasks: [...doneTasks, ...kept] } });
 }
 
 /** `items` with `item` added, or taken out if it was there. */
 const toggled = (items: readonly string[], item: string): readonly string[] =>
   items.includes(item) ? items.filter((i) => i !== item) : [...items, item];
 
-/** The result an AI state holds, so a pending or failed refresh does not lose the last good one. */
+/** The result an AI state holds, so a pending or failed request does not lose the last good one. */
 const keepResult = ({ suggestions, meta }: AiState): Pick<AiState, 'suggestions' | 'meta'> => ({
   ...(suggestions ? { suggestions } : {}),
   ...(meta ? { meta } : {}),
@@ -184,8 +217,8 @@ function submit(state: PlanState, brief: EventBrief, today: IsoDate): PlanState 
  * change `brief.guests` but not `plannedGuests`, so the budget rescales; a new budget re-plans at
  * the current guest count. Actions that need a plan do nothing on an empty state, `ai/*` actions do
  * nothing when their `generation` is not the current one, and a task, vendor or checklist id the
- * plan does not have is ignored (progress stays bounded). A new response replaces the old, so ticks
- * on `ai-task-N` ids are cleared: the same id could be a different task now.
+ * plan does not have is ignored (progress stays bounded). A new response replaces the old; a tick
+ * on an `ai-task-N` id moves to the new answer's task with the same title, or is cleared.
  */
 export function planReducer(state: PlanState, action: PlanAction): PlanState {
   if (action.type === 'plan/reset') return { phase: 'empty', generation: state.generation };
@@ -199,13 +232,7 @@ export function planReducer(state: PlanState, action: PlanAction): PlanState {
       return change(state, { ai: { status: 'pending', ...keepResult(ai) } });
     case 'ai/applied':
       if (action.generation !== state.generation) return state;
-      return change(state, {
-        ai: { status: 'applied', suggestions: action.suggestions, meta: action.meta },
-        progress: {
-          ...progress,
-          doneTasks: progress.doneTasks.filter((id) => !isAiTask(id)),
-        },
-      });
+      return applyAnswer(state, { suggestions: action.suggestions, meta: action.meta });
     case 'ai/failed':
       if (action.generation !== state.generation) return state;
       return change(state, { ai: { status: 'failed', ...keepResult(ai), error: action.error } });
