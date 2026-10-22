@@ -167,6 +167,20 @@ describe('request matrix', () => {
     expect((await handler(post(undefined, { origin: 'https://evil.example' }))).status).toBe(403);
   });
 
+  it('403 for a request with no Origin header', async () => {
+    const generate = answering();
+    // Built by hand: `post()` always sets an Origin.
+    const request = new Request(`${ORIGIN}/api/plan`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ brief: brief('community') }),
+    });
+    const response = await handlerWith({ generate })(request);
+    expect(response.status).toBe(403);
+    expect((await errorOf(response)).code).toBe('ORIGIN_REJECTED');
+    expect(generate).not.toHaveBeenCalled();
+  });
+
   it('403 for an empty Origin header', async () => {
     const generate = answering();
     const response = await handlerWith({ generate })(post(undefined, { origin: '' }));

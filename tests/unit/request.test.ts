@@ -8,6 +8,7 @@ import { LIMITS } from '../../src/shared/limits.js';
 import { brief } from '../support/fixtures.js';
 
 const URL_ = 'https://gatherwise.example/api/plan';
+const OWN = { origin: 'https://gatherwise.example' };
 const post = (body: BodyInit | null, headers: Record<string, string> = {}) =>
   new Request(URL_, {
     method: 'POST',
@@ -46,11 +47,11 @@ function streamInit(body: ReadableStream<Uint8Array>): RequestInit {
 }
 
 describe('validateTransport', () => {
-  it('accepts JSON (any case, with a charset) from this origin or with no Origin at all', () => {
-    expect(() => validateTransport(post('{}'), undefined)).not.toThrow();
-    const sameOrigin = { origin: 'https://gatherwise.example', 'sec-fetch-site': 'same-origin' };
+  it('accepts JSON (any case, with a charset) from this origin', () => {
+    expect(() => validateTransport(post('{}', OWN), undefined)).not.toThrow();
+    const sameOrigin = { ...OWN, 'sec-fetch-site': 'same-origin' };
     expect(() => validateTransport(post('{}', sameOrigin), undefined)).not.toThrow();
-    const charset = { 'content-type': 'Application/JSON; charset=utf-8' };
+    const charset = { ...OWN, 'content-type': 'Application/JSON; charset=utf-8' };
     expect(() => validateTransport(post('{}', charset), undefined)).not.toThrow();
   });
 
@@ -64,8 +65,9 @@ describe('validateTransport', () => {
     expect(await failure(() => validateTransport(none, undefined))).toMatchObject({ status: 415 });
   });
 
-  it('rejects a foreign, empty or opaque Origin and any cross-site fetch with 403', async () => {
+  it('rejects an absent, foreign, empty or opaque Origin and any cross-site fetch with 403', async () => {
     for (const headers of [
+      {},
       { origin: 'https://evil.example' },
       { origin: '' },
       { origin: 'null' },
@@ -92,7 +94,7 @@ describe('validateTransport', () => {
   });
 
   it('rejects a declared Content-Length over the cap before reading anything', async () => {
-    const big = post('{}', { 'content-length': String(MAX_BODY_BYTES + 1) });
+    const big = post('{}', { ...OWN, 'content-length': String(MAX_BODY_BYTES + 1) });
     expect(await failure(() => validateTransport(big, undefined))).toMatchObject({
       status: 413,
       code: 'BODY_TOO_LARGE',

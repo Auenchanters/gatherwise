@@ -68,8 +68,8 @@ The cache of the last 8 answers lives in memory in the planner's client (`src/fe
 
 **What would lift it:** an allowlist for the three subdivision flags, and `Intl.Segmenter` to cut by grapheme.
 
-## The API accepts calls without a browser
+## The origin check is not authentication
 
-A request with no `Origin` header (curl, a script) passes the origin check and is held only by the other limits: JSON only, 16 KB, the strict brief schema and the rate limits. Browsers always send `Origin` on a cross-site POST, so other websites cannot call the API from a visitor's browser.
+A request must carry an allowed `Origin`, which stops other websites from calling the API from a visitor's browser. A script can set a matching `Origin` itself, so the check does not identify who is calling. Such a caller is still held by the other limits: JSON only, 16 KB, the strict brief schema and the rate limits.
 
 **What would lift it:** a signed per-session token issued with the page, or bot protection at the platform edge.
