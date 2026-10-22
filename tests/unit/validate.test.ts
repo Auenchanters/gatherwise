@@ -8,14 +8,14 @@
  * values the typed draft cannot hold, so the defensive messages are covered too.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { addDays, isoDate } from '../../src/domain/dates.js';
+import { addDays } from '../../src/domain/dates.js';
 import { draftFromBrief, type BriefDraft } from '../../src/features/brief/draft.js';
 import { sampleBrief } from '../../src/features/brief/samples.js';
 import { validateBrief, type FieldError } from '../../src/features/brief/validate.js';
 import { LIMITS } from '../../src/shared/limits.js';
 import { eventBriefSchema } from '../../src/shared/schema.js';
+import { TODAY as today } from '../support/fixtures.js';
 
-const today = isoDate('2026-10-21');
 const valid = draftFromBrief(sampleBrief('community', today));
 const blankIncome = draftFromBrief(sampleBrief('birthday', today)).income;
 const draftWith = (overrides: Partial<BriefDraft>): BriefDraft => ({ ...valid, ...overrides });

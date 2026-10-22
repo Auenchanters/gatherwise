@@ -15,15 +15,21 @@ import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { addDays } from '../../src/domain/dates.js';
 import { formatMoney } from '../../src/domain/money.js';
-import { initialPlanState, planReducer, type ReadyState } from '../../src/domain/reducer.js';
+import type { ReadyState } from '../../src/domain/reducer.js';
 import { sampleBrief } from '../../src/features/brief/samples.js';
-import { savePlan } from '../../src/features/plan/persist.js';
 import type { PlannerStore } from '../../src/features/plan/planner-store.js';
-import { STORAGE_KEY } from '../../src/features/plan/storage-key.js';
 import { err, ok } from '../../src/shared/result.js';
-import { deferred, fakeClient, freshAnswer, memoryStorage, type Answer } from '../support/fakes.js';
-import { aiMeta, aiSuggestions } from '../support/fixtures.js';
-import { festival, settle, setup, today } from '../support/planner-ui.js';
+import { descriptionOf } from '../support/dom.js';
+import {
+  deferred,
+  fakeClient,
+  freshAnswer,
+  planned,
+  savedStorage,
+  type Answer,
+} from '../support/fakes.js';
+import { aiMeta, aiSuggestions, TODAY as today } from '../support/fixtures.js';
+import { festival, settle, setup } from '../support/planner-ui.js';
 
 /** The blob-URL statics jsdom lacks, as they were before a test stubbed them. */
 const urlStatics = new Map<'createObjectURL' | 'revokeObjectURL', PropertyDescriptor | undefined>();
@@ -71,12 +77,6 @@ function itemOf(element: HTMLElement): HTMLElement {
   const item = element.closest('li');
   if (!item) throw new Error('not in a list item');
   return item;
-}
-
-/** The text of every element an input's aria-describedby points at. */
-function descriptionOf(element: HTMLElement): string {
-  const ids = element.getAttribute('aria-describedby')?.split(' ') ?? [];
-  return ids.map((id) => document.getElementById(id)?.textContent ?? '').join(' ');
 }
 
 /** A vendor's card, by the vendor's label. */
@@ -631,17 +631,10 @@ describe('ideas', () => {
   });
 
   it('says so when a restored plan was never personalized, and asks only on a click', async () => {
-    const saved = planReducer(initialPlanState, {
-      type: 'brief/submitted',
-      brief: festival,
-      today,
-    });
-    const seed = memoryStorage();
-    savePlan(seed, saved);
     const client = fakeClient();
     const { user, store } = await setup({
       client,
-      storage: memoryStorage(seed.getItem(STORAGE_KEY) ?? ''),
+      storage: savedStorage(planned(festival)),
       start: null,
     });
     act(() => {

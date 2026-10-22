@@ -28,10 +28,9 @@ import {
   STORAGE_KEY,
 } from '../../src/features/plan/persist.js';
 import type { AiMeta, AiSuggestions, EventBrief } from '../../src/shared/schema.js';
-import { brief, briefArb } from '../support/fixtures.js';
+import { brief, briefArb, TODAY as today } from '../support/fixtures.js';
 
 const SEED = { seed: 20_261_025, numRuns: 100 };
-const today = isoDate('2026-10-21');
 
 /** A store that remembers what was written and what was removed. */
 function memoryStore(initial?: string) {

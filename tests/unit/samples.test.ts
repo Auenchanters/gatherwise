@@ -12,8 +12,8 @@ import { buildPlan } from '../../src/domain/plan.js';
 import { eventDateOf } from '../../src/domain/schedule.js';
 import { sampleBrief } from '../../src/features/brief/samples.js';
 import { eventBriefSchema } from '../../src/shared/schema.js';
+import { TODAY as today } from '../support/fixtures.js';
 
-const today = isoDate('2026-10-21');
 const todayArb = fc.integer({ min: 0, max: 30_000 }).map((n) => addDays(isoDate('2000-01-01'), n));
 
 describe('sampleBrief', () => {

@@ -13,12 +13,13 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { addDays, isoDate } from '../../src/domain/dates.js';
+import { addDays } from '../../src/domain/dates.js';
 import { BriefForm } from '../../src/features/brief/brief-form.js';
 import { sampleBrief } from '../../src/features/brief/samples.js';
 import { eventBriefSchema, type EventBrief } from '../../src/shared/schema.js';
+import { descriptionOf } from '../support/dom.js';
+import { TODAY as today } from '../support/fixtures.js';
 
-const today = isoDate('2026-10-21');
 const VALIDATE = '../../src/features/brief/validate.js';
 const FAILED_LOAD =
   "We couldn't check your details — check your connection, then try again or reload the page.";
@@ -73,12 +74,6 @@ function gateChecker() {
     return original;
   });
   return { release, loaded };
-}
-
-/** The text of every element an input's aria-describedby points at. */
-function descriptionOf(element: HTMLElement): string {
-  const ids = element.getAttribute('aria-describedby')?.split(' ') ?? [];
-  return ids.map((id) => document.getElementById(id)?.textContent ?? `#${id} missing`).join(' | ');
 }
 
 /** The polite live region that announces a field's character count, found by its id. */

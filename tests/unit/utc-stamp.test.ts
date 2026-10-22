@@ -12,7 +12,7 @@ import { toIcs } from '../../src/domain/ics.js';
 import { schedule } from '../../src/domain/schedule.js';
 import { templateFor } from '../../src/domain/templates/index.js';
 import { utcStamp } from '../../src/features/plan/utc-stamp.js';
-import { brief } from '../support/fixtures.js';
+import { brief, TODAY } from '../support/fixtures.js';
 
 describe('utcStamp', () => {
   it('formats a fixed instant exactly', () => {
@@ -42,8 +42,7 @@ describe('utcStamp', () => {
 
   it('is accepted by toIcs', () => {
     const b = brief('community', { date: '2026-12-12' });
-    const today = isoDate('2026-10-21');
-    const result = schedule(templateFor('community').tasks, b, today, new Set());
+    const result = schedule(templateFor('community').tasks, b, TODAY, new Set());
     if (!result.ok) throw new Error('expected a schedule');
     const text = toIcs(result.value, b, isoDate('2026-12-12'), utcStamp(new Date(0)));
     expect(text).toContain('DTSTAMP:19700101T000000Z');

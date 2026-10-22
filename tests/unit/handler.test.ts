@@ -6,11 +6,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { createHandler, type HandlerOptions } from '../../server/handler.js';
 import type { Generate } from '../../server/provider.js';
-import { isoDate } from '../../src/domain/dates.js';
 import { buildPlan } from '../../src/domain/plan.js';
 import { buildPrompt } from '../../src/shared/prompt.js';
 import { aiMetaSchema, eventBriefSchema, type EventBrief } from '../../src/shared/schema.js';
-import { brief } from '../support/fixtures.js';
+import { brief, TODAY } from '../support/fixtures.js';
 
 // Only `handleRequest` (built from the environment) reaches the SDK; every other test injects
 // `generate`. The mock keeps that path offline too.
@@ -369,7 +368,7 @@ describe('request matrix', () => {
       // this pins that what it shows is what the server really sent.
       const generate = answering();
       await handlerWith({ generate })(post({ brief: brief(kind) }));
-      const plan = buildPlan(eventBriefSchema.parse(brief(kind)), isoDate('2026-10-21'));
+      const plan = buildPlan(eventBriefSchema.parse(brief(kind)), TODAY);
       if (!plan.ok) throw new Error('fixture brief must plan');
       const [sent] = generate.mock.calls[0] ?? [];
       expect(sent).toStrictEqual(buildPrompt(plan.value));

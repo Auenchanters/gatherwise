@@ -20,12 +20,10 @@ import {
 } from '../../scripts/live-checks.js';
 import { createHandler } from '../../server/handler.js';
 import type { Generate } from '../../server/provider.js';
-import { isoDate } from '../../src/domain/dates.js';
-import { aiMeta, aiSuggestions } from '../support/fixtures.js';
+import { aiMeta, aiSuggestions, TODAY } from '../support/fixtures.js';
 
 const ORIGIN = 'https://gatherwise.example';
 const NOW = new Date('2026-10-21T10:00:00Z');
-const TODAY = isoDate('2026-10-21');
 
 const html = readFileSync('index.html', 'utf8');
 const vercel = z

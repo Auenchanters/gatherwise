@@ -9,16 +9,13 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { AppError } from '../../server/errors.js';
 import { parseSuggestions } from '../../server/prompt.js';
-import { isoDate } from '../../src/domain/dates.js';
 import { buildPlan, type Plan } from '../../src/domain/plan.js';
 import { templateFor } from '../../src/domain/templates/index.js';
 import { LIMITS } from '../../src/shared/limits.js';
 import { buildPrompt, buildUserPrompt, SYSTEM_INSTRUCTION } from '../../src/shared/prompt.js';
 import { sanitizeText } from '../../src/shared/sanitize-text.js';
 import { eventBriefSchema, type EventBrief } from '../../src/shared/schema.js';
-import { brief } from '../support/fixtures.js';
-
-const TODAY = isoDate('2026-10-21');
+import { brief, TODAY } from '../support/fixtures.js';
 
 function planOf(b: EventBrief): Plan {
   const plan = buildPlan(eventBriefSchema.parse(b), TODAY);

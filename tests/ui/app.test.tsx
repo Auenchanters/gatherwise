@@ -13,15 +13,18 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../src/app.js';
-import { isoDate } from '../../src/domain/dates.js';
-import { initialPlanState, planReducer } from '../../src/domain/reducer.js';
 import { sampleBrief } from '../../src/features/brief/samples.js';
-import { savePlan } from '../../src/features/plan/persist.js';
 import { PLAN_ERROR_ID, STORAGE_KEY } from '../../src/features/plan/storage-key.js';
-import { fakeClient, memoryStorage, type MemoryStorage } from '../support/fakes.js';
+import {
+  fakeClient,
+  memoryStorage,
+  planned,
+  savedStorage,
+  type MemoryStorage,
+} from '../support/fakes.js';
+import { TODAY as today } from '../support/fixtures.js';
 
 const PLANNER = '../../src/features/plan/planner.js';
-const today = isoDate('2026-10-21');
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
@@ -38,18 +41,6 @@ function setup(storage: MemoryStorage = memoryStorage()) {
   const user = userEvent.setup();
   render(<App client={client} storage={storage} />);
   return { client, storage, user };
-}
-
-/** Storage holding a saved community sample plan, without its AI answer. */
-function savedSample(): MemoryStorage {
-  const state = planReducer(initialPlanState, {
-    type: 'brief/submitted',
-    brief: sampleBrief('community', today),
-    today,
-  });
-  const storage = memoryStorage();
-  savePlan(storage, state);
-  return memoryStorage(storage.getItem(STORAGE_KEY) ?? '');
 }
 
 const appStatus = (): HTMLElement => {
@@ -148,7 +139,7 @@ describe('App planner', () => {
   });
 
   it('restores a saved plan without calling the AI', async () => {
-    const { client } = setup(savedSample());
+    const { client } = setup(savedStorage(planned(sampleBrief('community', today))));
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Welcome back');
     expect(screen.getByRole('status').textContent).toBe('Loading your saved plan…');
     await screen.findByRole('heading', { level: 1, name: 'Green Park Diwali Mela' });
@@ -222,7 +213,7 @@ describe('App planner', () => {
     vi.doMock(PLANNER, () => {
       throw new Error('Failed to fetch dynamically imported module');
     });
-    setup(savedSample());
+    setup(savedStorage(planned(sampleBrief('community', today))));
     await waitFor(() => {
       expect(appStatus().textContent).toContain("We couldn't load your saved plan");
     });

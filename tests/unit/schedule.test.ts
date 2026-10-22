@@ -9,7 +9,7 @@
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { addDays, daysBetween, isoDate, type IsoDate } from '../../src/domain/dates.js';
+import { addDays, daysBetween, type IsoDate } from '../../src/domain/dates.js';
 import {
   AT_RISK_SLACK_DAYS,
   DUE_SOON_DAYS,
@@ -28,10 +28,9 @@ import { weddingTemplate } from '../../src/domain/templates/wedding.js';
 import { LIMITS } from '../../src/shared/limits.js';
 import type { Result } from '../../src/shared/result.js';
 import type { EventBrief } from '../../src/shared/schema.js';
-import { brief, briefArb, dagArb } from '../support/fixtures.js';
+import { brief, briefArb, dagArb, TODAY as today } from '../support/fixtures.js';
 
 const SEED = 20_261_021;
-const today = isoDate('2026-10-21');
 const none: ReadonlySet<TaskId> = new Set();
 const community = communityTemplate;
 

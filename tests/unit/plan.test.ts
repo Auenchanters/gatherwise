@@ -25,9 +25,7 @@ import { requiredVendors } from '../../src/domain/vendors.js';
 import { planShifts } from '../../src/domain/volunteers.js';
 import type { Result } from '../../src/shared/result.js';
 import { EVENT_KINDS, type EventBrief } from '../../src/shared/schema.js';
-import { brief } from '../support/fixtures.js';
-
-const today = isoDate('2026-10-21');
+import { brief, TODAY as today } from '../support/fixtures.js';
 
 function planned(result: Result<Plan, PlanError>): Plan {
   if (!result.ok) throw new Error(`expected a plan, got ${JSON.stringify(result.error)}`);

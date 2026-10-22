@@ -8,26 +8,25 @@
  * Never does: call the network, touch a real localStorage or read the clock.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { addDays, isoDate, type IsoDate } from '../../src/domain/dates.js';
-import { initialPlanState, planReducer, type ReadyState } from '../../src/domain/reducer.js';
+import { addDays, type IsoDate } from '../../src/domain/dates.js';
+import { initialPlanState, type ReadyState } from '../../src/domain/reducer.js';
 import type { ClientError } from '../../src/features/client/api-client.js';
 import { clientErrorMessage } from '../../src/features/client/messages.js';
-import { savePlan } from '../../src/features/plan/persist.js';
 import { createPlannerStore, type PlannerSnapshot } from '../../src/features/plan/planner-store.js';
 import { STORAGE_KEY } from '../../src/features/plan/storage-key.js';
 import { err, ok } from '../../src/shared/result.js';
-import type { EventBrief } from '../../src/shared/schema.js';
 import {
   deferred,
   fakeClient,
   freshAnswer as fresh,
   memoryStorage,
+  planned,
+  savedStorage,
   type Answer,
   type MemoryStorage,
 } from '../support/fakes.js';
-import { aiMeta, aiSuggestions, brief } from '../support/fixtures.js';
+import { aiMeta, aiSuggestions, brief, TODAY as today } from '../support/fixtures.js';
 
-const today = isoDate('2026-10-21');
 const festival = brief('community', { date: addDays(today, 40) });
 
 function setup({
@@ -46,22 +45,6 @@ function setup({
 function ready(snapshot: PlannerSnapshot): ReadyState {
   if (snapshot.plan.phase !== 'ready') throw new Error('expected a ready plan');
   return snapshot.plan;
-}
-
-/** The stored text of a plan for `b` made on `day`, with or without its AI answer. */
-function savedPlan(b: EventBrief, { withAi = false, day = today } = {}): string {
-  let state = planReducer(initialPlanState, { type: 'brief/submitted', brief: b, today: day });
-  if (withAi) {
-    state = planReducer(state, {
-      type: 'ai/applied',
-      generation: 1,
-      suggestions: aiSuggestions,
-      meta: aiMeta,
-    });
-  }
-  const storage = memoryStorage();
-  savePlan(storage, state);
-  return storage.getItem(STORAGE_KEY) ?? '';
 }
 
 const texts = (snapshot: PlannerSnapshot): string[] => snapshot.notices.map((n) => n.text);
@@ -229,7 +212,7 @@ describe('submit', () => {
 
 describe('personalize and refreshIdeas', () => {
   it('personalize asks once for the current brief and uses the cache', async () => {
-    const { store, client } = setup({ storage: memoryStorage(savedPlan(festival)) });
+    const { store, client } = setup({ storage: savedStorage(planned(festival)) });
     store.hydrate();
     expect(ready(store.getState()).ai.status).toBe('idle');
     await store.personalize();
@@ -269,7 +252,7 @@ describe('personalize and refreshIdeas', () => {
 describe('hydrate', () => {
   it('restores a saved plan with its AI answer and never calls', () => {
     const { store, client, storage } = setup({
-      storage: memoryStorage(savedPlan(festival, { withAi: true })),
+      storage: savedStorage(planned(festival, { withAi: true })),
     });
     store.hydrate();
     const state = store.getState();
@@ -303,7 +286,7 @@ describe('hydrate', () => {
 
   it('removes a plan whose event date has passed and says so', () => {
     const { store, storage } = setup({
-      storage: memoryStorage(savedPlan(festival)),
+      storage: savedStorage(planned(festival)),
       day: () => addDays(today, 41),
     });
     store.hydrate();

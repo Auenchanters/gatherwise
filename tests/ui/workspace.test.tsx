@@ -14,29 +14,22 @@ import { StrictMode } from 'react';
 import { describe, expect, it } from 'vitest';
 import { addDays } from '../../src/domain/dates.js';
 import { formatMoney } from '../../src/domain/money.js';
-import { initialPlanState, planReducer } from '../../src/domain/reducer.js';
 import type { ScheduledTask, Status } from '../../src/domain/schedule.js';
 import { sampleBrief } from '../../src/features/brief/samples.js';
 import { clientErrorMessage } from '../../src/features/client/messages.js';
-import { savePlan } from '../../src/features/plan/persist.js';
 import { InfeasibleBanner } from '../../src/features/plan/infeasible-banner.js';
 import { Planner } from '../../src/features/plan/planner.js';
 import { createPlannerStore } from '../../src/features/plan/planner-store.js';
 import { PLAN_ERROR_ID, STORAGE_KEY } from '../../src/features/plan/storage-key.js';
 import { SYSTEM_INSTRUCTION } from '../../src/shared/prompt.js';
 import { err, ok } from '../../src/shared/result.js';
-import { fakeClient, memoryStorage, type Answer } from '../support/fakes.js';
-import { aiMeta, aiSuggestions } from '../support/fixtures.js';
-import { festival, settle, setup, today } from '../support/planner-ui.js';
+import { descriptionOf } from '../support/dom.js';
+import { fakeClient, planned, savedStorage, type Answer } from '../support/fakes.js';
+import { aiSuggestions, aiMeta, TODAY as today } from '../support/fixtures.js';
+import { festival, settle, setup } from '../support/planner-ui.js';
 
 /** The planner's polite region, by its name (the tabs have status regions of their own). */
 const statusRegion = (): HTMLElement => screen.getByRole('status', { name: 'Notices' });
-
-/** The text of every element an input's aria-describedby points at. */
-function descriptionOf(element: HTMLElement): string {
-  const ids = element.getAttribute('aria-describedby')?.split(' ') ?? [];
-  return ids.map((id) => document.getElementById(id)?.textContent ?? '').join(' ');
-}
 
 /** The Allocated cell of a budget row, by category label. */
 const allocated = (label: string): string =>
@@ -90,7 +83,8 @@ describe('workspace: zero-call edits', () => {
     const state = store.getState().plan;
     if (state.phase !== 'ready') throw new Error('expected a plan');
     const line = state.plan.budget.lines.find((l) => l.categoryId === 'food_beverage');
-    expect(line && allocated('Food & beverage')).toBe(line && formatMoney(line.allocated, 'INR'));
+    if (!line) throw new Error('the community budget has a food line');
+    expect(allocated('Food & beverage')).toBe(formatMoney(line.allocated, 'INR'));
     expect(allocated('Food & beverage')).not.toBe(food);
     expect(allocated('Décor')).toBe(decor);
     expect(state.brief.guests).toBe(400);
@@ -390,25 +384,13 @@ describe('workspace: AI at work', () => {
 });
 
 describe('workspace: a restored plan', () => {
-  /** Storage holding a plan for `festival`, with or without its AI answer. */
-  function saved(withAi: boolean) {
-    let state = planReducer(initialPlanState, { type: 'brief/submitted', brief: festival, today });
-    if (withAi) {
-      state = planReducer(state, {
-        type: 'ai/applied',
-        generation: 1,
-        suggestions: aiSuggestions,
-        meta: aiMeta,
-      });
-    }
-    const storage = memoryStorage();
-    savePlan(storage, state);
-    return memoryStorage(storage.getItem(STORAGE_KEY) ?? '');
-  }
-
   it('without AI offers one call and makes it only when asked', async () => {
     const client = fakeClient();
-    const { user, store } = await setup({ client, storage: saved(false), start: null });
+    const { user, store } = await setup({
+      client,
+      storage: savedStorage(planned(festival)),
+      start: null,
+    });
     act(() => {
       store.hydrate();
     });
@@ -422,7 +404,10 @@ describe('workspace: a restored plan', () => {
   });
 
   it('with AI says the answer came with the saved plan', async () => {
-    const { store } = await setup({ storage: saved(true), start: null });
+    const { store } = await setup({
+      storage: savedStorage(planned(festival, { withAi: true })),
+      start: null,
+    });
     act(() => {
       store.hydrate();
     });
@@ -470,7 +455,6 @@ describe('workspace: tabs', () => {
     await setup({ start: birthday });
     expect(screen.queryByRole('tab', { name: 'Volunteers' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Volunteers' })).toBeNull();
-    expect(screen.queryByText('Coming in the next step.')).toBeNull();
   });
 });
 

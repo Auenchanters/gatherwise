@@ -21,10 +21,9 @@ import {
   type VendorItem,
   type VendorStatus,
 } from '../../src/domain/vendors.js';
-import { brief, briefArb } from '../support/fixtures.js';
+import { brief, briefArb, TODAY as today } from '../support/fixtures.js';
 
 const SEED = { seed: 20261021, numRuns: 300 };
-const today = isoDate('2026-10-21');
 
 /** The vendors for a brief, using its own template and its own date (always valid in fixtures). */
 const vendorsFor = (b: EventBrief): VendorItem[] =>

@@ -1,24 +1,21 @@
 /**
  * Rendering helpers for the plan workspace's UI tests: a real planner store with a fake AI client,
  * opened on a brief, rendered the way the app shell renders it.
- * Does: share one `setup` between the workspace and tab test files, with today fixed at
- * 2026-10-21 so every date in a test is stable.
+ * Does: share one `setup` between the workspace and tab test files, with today fixed at `TODAY`
+ * so every date in a test is stable.
  * Never does: call the network or read the clock.
  */
 import { act, render } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { isoDate } from '../../src/domain/dates.js';
 import { sampleBrief } from '../../src/features/brief/samples.js';
 import { Planner } from '../../src/features/plan/planner.js';
 import { createPlannerStore, type PlannerStore } from '../../src/features/plan/planner-store.js';
 import type { EventBrief } from '../../src/shared/schema.js';
 import { fakeClient, memoryStorage, type MemoryStorage } from './fakes.js';
-
-/** The date every UI test treats as today. */
-export const today = isoDate('2026-10-21');
+import { TODAY } from './fixtures.js';
 
 /** The community sample: a festival 75 days out, so its timeline is mostly on track. */
-export const festival = sampleBrief('community', today);
+export const festival = sampleBrief('community', TODAY);
 
 /** Lets every answer the fake has already given land, and React render it. */
 export const settle = (): Promise<void> =>
@@ -45,7 +42,7 @@ export async function setup({
   start?: EventBrief | null;
 } = {}): Promise<Rendered> {
   const user = userEvent.setup();
-  const store = createPlannerStore({ client, storage, today: () => today });
+  const store = createPlannerStore({ client, storage, today: () => TODAY });
   // Not awaited: a fake that never answers leaves the plan pending, as a slow model would.
   if (start) store.submit(start);
   render(

@@ -24,10 +24,9 @@ import { communityTemplate } from '../../src/domain/templates/community.js';
 import type { EventKind } from '../../src/domain/templates/types.js';
 import { LIMITS } from '../../src/shared/limits.js';
 import type { AiSuggestions, EventBrief } from '../../src/shared/schema.js';
-import { brief, briefArb } from '../support/fixtures.js';
+import { brief, briefArb, TODAY as today } from '../support/fixtures.js';
 
 const SEED = { seed: 20_261_023, numRuns: 150 };
-const today = isoDate('2026-10-21');
 const ai = LIMITS.ai;
 
 function planOf(b: EventBrief, opts?: Parameters<typeof buildPlan>[2], day = today): Plan {

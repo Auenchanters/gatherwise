@@ -25,10 +25,9 @@ import {
   type ReadyState,
 } from '../../src/domain/reducer.js';
 import type { AiMeta, AiSuggestions, EventBrief } from '../../src/shared/schema.js';
-import { brief } from '../support/fixtures.js';
+import { brief, TODAY as today } from '../support/fixtures.js';
 
 const SEED = { seed: 20_261_024, numRuns: 100 };
-const today = isoDate('2026-10-21');
 const community = brief('community');
 
 const meta: AiMeta = {

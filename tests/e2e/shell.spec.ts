@@ -5,9 +5,8 @@
  * the empty page, the sample-filled form and the error summary, and a clean console under the CSP.
  * Never does: generate a plan; tests/e2e/planner.spec.ts covers that, with the API mocked.
  */
-import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
-import { axeViolations, openSampleForm } from './helpers.js';
+import { axeViolations, CSP, openSampleForm, prepare } from './helpers.js';
 
 test.describe('app shell', () => {
   test('has one main landmark, one h1 and the brand in the banner', async ({ page }) => {
@@ -33,21 +32,8 @@ test.describe('app shell', () => {
   });
 
   test('renders under the production CSP with no console errors', async ({ page }) => {
-    const csp = /"Content-Security-Policy",\s*"value":\s*"([^"]+)"/u.exec(
-      readFileSync('vercel.json', 'utf8'),
-    )?.[1];
-    expect(csp).toBeTruthy();
-    const errors: string[] = [];
-    page.on('console', (message) => {
-      if (message.type() === 'error') errors.push(message.text());
-    });
-    await page.route('**/*', async (route) => {
-      const response = await route.fetch();
-      await route.fulfill({
-        response,
-        headers: { ...response.headers(), 'content-security-policy': csp ?? '' },
-      });
-    });
+    expect(CSP).toBeTruthy();
+    const { errors } = await prepare(page);
     await page.goto('/');
     await expect(page.locator('h1')).toBeVisible();
     expect(errors).toEqual([]);

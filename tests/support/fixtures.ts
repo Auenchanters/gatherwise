@@ -2,11 +2,13 @@
  * Shared test fixtures: ready-made valid briefs and a fast-check generator of schema-valid briefs.
  * Does: gives every test file one place to get an `EventBrief` from, so contracts are not copied
  * into each test. tests/unit/fixtures.test.ts keeps both exports honest against `eventBriefSchema`.
- * Also holds `dagArb`, random acyclic task lists for the scheduler tests, and `aiSuggestions` /
- * `aiMeta`, one community answer shaped as `/api/plan` returns it (unit, UI and E2E tests share it).
+ * Also holds `TODAY`, the date every test treats as today; `dagArb`, random acyclic task lists for
+ * the scheduler tests; and `aiSuggestions` / `aiMeta`, one community answer shaped as `/api/plan`
+ * returns it (unit, UI and E2E tests share it).
  * Never does: read the clock (the date is a fixed string) or produce anything the schema rejects.
  */
 import fc from 'fast-check';
+import { isoDate } from '../../src/domain/dates.js';
 import type { EventKind, TaskDef } from '../../src/domain/templates/types.js';
 import { LIMITS } from '../../src/shared/limits.js';
 import {
@@ -22,6 +24,9 @@ import {
 
 /** The variant of `EventBrief` for one kind. */
 type BriefOf<K extends EventKind> = Extract<EventBrief, { kind: K }>;
+
+/** The date every test treats as today, so no test depends on the real clock. */
+export const TODAY = isoDate('2026-10-21');
 
 /** A date well after the fixtures were written; the schema checks its format only. */
 const FIXED_DATE = '2026-12-12';
