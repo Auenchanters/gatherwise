@@ -171,7 +171,7 @@ describe('validateBrief: the event date window', () => {
       addDays(today, LIMITS.brief.horizonDays + 1),
       'Choose a date within the next two years',
     ],
-    ['invalid', '2026-02-30', 'Enter a real calendar date'],
+    ['invalid', '2026-02-30', 'Enter the event date as a real calendar date'],
   ])('maps %s to a human message', (_reason, date, message) => {
     expect(errorsOf(draftWith({ date }))).toEqual([{ field: 'date', message }]);
   });

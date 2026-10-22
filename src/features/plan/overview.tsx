@@ -8,8 +8,9 @@
  */
 import type { ReactElement } from 'react';
 import { formatMoney, minor } from '../../domain/money.js';
-import { vendorView, type ReadyState } from '../../domain/reducer.js';
+import type { ReadyState } from '../../domain/reducer.js';
 import type { Status } from '../../domain/schedule.js';
+import type { VendorItem } from '../../domain/vendors.js';
 import { KIND_LABELS, SUBTYPE_LABELS } from '../brief/labels.js';
 import { AiPanel } from './ai-panel.js';
 import { AiBadge } from './chips.js';
@@ -23,6 +24,8 @@ const NEEDS_ATTENTION: ReadonlySet<Status> = new Set(['at_risk', 'infeasible', '
 /** Props for {@link Overview}. */
 export interface OverviewProps {
   readonly state: ReadyState;
+  /** The plan's vendors with the organizer's status laid over them (`vendorView`). */
+  readonly vendors: readonly VendorItem[];
   readonly snapshot: PlannerSnapshot;
   readonly onPersonalize: () => void;
 }
@@ -44,13 +47,12 @@ function Tile(props: {
 }
 
 /** Summary, stat tiles and the AI panel. */
-export function Overview({ state, snapshot, onPersonalize }: OverviewProps): ReactElement {
+export function Overview({ state, vendors, snapshot, onPersonalize }: OverviewProps): ReactElement {
   const { brief, plan } = state;
   const { budget, breakEven, schedule } = plan;
   const money = (amount: number): string => formatMoney(minor(amount), brief.currency);
   const summary = plan.addenda?.summary;
   const attention = schedule.tasks.filter((t) => NEEDS_ATTENTION.has(t.status)).length;
-  const vendors = vendorView(state);
   const toBook = vendors.filter((v) => v.status !== 'booked').length;
   const shortfall = breakEven.surplus < 0;
 

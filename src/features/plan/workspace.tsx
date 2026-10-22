@@ -7,9 +7,9 @@
  * Never does: call the AI from an effect, or keep plan state of its own (only which tab is open
  * and whether the form is showing).
  */
-import { useEffect, useRef, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { flushSync } from 'react-dom';
-import type { ReadyState } from '../../domain/reducer.js';
+import { vendorView, type ReadyState } from '../../domain/reducer.js';
 import { BriefForm } from '../brief/brief-form.js';
 import { Budget } from './budget.js';
 import { Header } from './header.js';
@@ -40,6 +40,11 @@ export function Workspace({ state, snapshot, store }: WorkspaceProps): ReactElem
   const headingRef = useRef<HTMLHeadingElement>(null);
   const formHeadingRef = useRef<HTMLHeadingElement>(null);
 
+  // The Overview tile and the Vendors tab both need the vendors with the organizer's progress laid
+  // over them. Keyed on the state, not `state.plan`: a status or tick leaves the plan object as it
+  // was. All tabs stay mounted for print, so this runs once per state, not once per tab per render.
+  const vendors = useMemo(() => vendorView(state), [state]);
+
   // Each submitted brief is a new generation: a plan has opened, so the event name takes focus.
   useEffect(() => {
     headingRef.current?.focus();
@@ -59,6 +64,7 @@ export function Workspace({ state, snapshot, store }: WorkspaceProps): ReactElem
       panel: (
         <Overview
           state={state}
+          vendors={vendors}
           snapshot={snapshot}
           onPersonalize={() => void store.personalize()}
         />
@@ -66,7 +72,11 @@ export function Workspace({ state, snapshot, store }: WorkspaceProps): ReactElem
     },
     { id: 'budget', label: 'Budget', panel: <Budget state={state} store={store} /> },
     { id: 'timeline', label: 'Timeline', panel: <Timeline state={state} store={store} /> },
-    { id: 'vendors', label: 'Vendors', panel: <Vendors state={state} store={store} /> },
+    {
+      id: 'vendors',
+      label: 'Vendors',
+      panel: <Vendors state={state} vendors={vendors} store={store} />,
+    },
     {
       id: 'ideas',
       label: 'Ideas',

@@ -149,6 +149,10 @@ export function AiPanel({ state, aiView, calls, onPersonalize }: AiPanelProps): 
   // Keyed on the brief the prompt is for: once one was sent, edits do not rebuild it.
   const source = sent ?? state.brief;
   const prompt = useMemo(() => promptText(source, state.today), [source, state.today]);
+  const answerJson = useMemo(
+    () => (suggestions ? JSON.stringify(suggestions, null, 2) : undefined),
+    [suggestions],
+  );
   return (
     <details className="ai-panel" open>
       <summary className="ai-panel__summary">
@@ -206,7 +210,7 @@ export function AiPanel({ state, aiView, calls, onPersonalize }: AiPanelProps): 
           </section>
         )}
 
-        {suggestions && (
+        {answerJson !== undefined && (
           <>
             <section className="ai-panel__section">
               <h3 className="ai-panel__heading" id={`${ids}-answer`}>
@@ -222,7 +226,7 @@ export function AiPanel({ state, aiView, calls, onPersonalize }: AiPanelProps): 
                 aria-labelledby={`${ids}-answer`}
                 dir="auto"
               >
-                {JSON.stringify(suggestions, null, 2)}
+                {answerJson}
               </pre>
             </section>
             <section className="ai-panel__section" aria-labelledby={`${ids}-adjust`}>

@@ -2,7 +2,8 @@
  * The workspace's two live regions: a polite one for progress and notices (the AI at work, an AI
  * failure, a restore or storage problem, cleared data) and an assertive one for a brief or an edit
  * the plan refused. It stays mounted while the plan opens and closes, so changes are always
- * announced. Also the one catalog of refused-value copy, which the Budget fields repeat inline.
+ * announced. Also the catalog of refused-value copy, which the Budget fields repeat inline: the
+ * date sentences are shared with the brief form (`DATE_COPY`), the guest and budget ones are its own.
  * Does: keep focus when a notice is dismissed: it moves to the next notice's Dismiss button, or to
  * the plan's heading (to `<main>` when no plan is open) once none is left.
  * Never does: decide what a notice says (the store does), or start anything.
@@ -10,6 +11,7 @@
 import { useRef, type ReactElement } from 'react';
 import type { PlanStateError } from '../../domain/reducer.js';
 import { LIMITS } from '../../shared/limits.js';
+import { DATE_COPY } from '../brief/labels.js';
 import { formatCount } from './format.js';
 import { PLAN_HEADING_ID } from './header.js';
 import type { Notice, PlannerSnapshot } from './planner-store.js';
@@ -23,9 +25,7 @@ type DateReason = Extract<PlanStateError, { kind: 'invalid_date' }>['reason'];
 const ERROR_COPY: Record<Exclude<PlanStateError['kind'], 'invalid_date'> | DateReason, string> = {
   invalid_guests: `Guests must be a whole number from ${formatCount(guestsMin)} to ${formatCount(guestsMax)}`,
   invalid_budget: `The budget must be a whole number from ${formatCount(budgetMin)} to ${formatCount(budgetMax)}`,
-  invalid: 'Enter the event date as a real calendar date',
-  past: 'Choose a date from today onwards',
-  too_far: 'Choose a date within the next two years',
+  ...DATE_COPY,
 };
 
 /** What a plan keeps instead of the refused value. */

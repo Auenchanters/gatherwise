@@ -2,15 +2,14 @@
  * The Vendors tab: a card for each vendor the plan recommends, with why, how urgent it is to book,
  * a status the organizer sets, a checklist to tick off and, once Gemini has answered, questions to
  * ask that vendor.
- * Does: lay the organizer's status and ticks over the plan's vendors with `vendorView`, recomputed
- * whenever the state changes (a vendor edit keeps the plan object, so the plan alone is no key);
- * label every checkbox with its item and every select with its vendor; announce each change
+ * Does: show the plan's vendors with the organizer's status and ticks already laid over them (the
+ * workspace computes that once, with `vendorView`); label every checkbox with its item and every select with its vendor; announce each change
  * politely; label the AI questions "AI · personalized".
  * Never does: call the AI, decide how urgent a booking is (`bookingStatus` does), or show a status
  * by colour alone.
  */
-import { useId, useMemo, useState, type ReactElement } from 'react';
-import { vendorView, type ReadyState } from '../../domain/reducer.js';
+import { useId, useState, type ReactElement } from 'react';
+import type { ReadyState } from '../../domain/reducer.js';
 import type { IsoDate } from '../../domain/dates.js';
 import { AI_LABEL } from '../../domain/merge.js';
 import {
@@ -132,14 +131,14 @@ function VendorCard(props: {
 /** Props for {@link Vendors}. */
 export interface VendorsProps {
   readonly state: ReadyState;
+  /** The plan's vendors with the organizer's status and ticks laid over them (`vendorView`). */
+  readonly vendors: readonly VendorItem[];
   readonly store: PlannerStore;
 }
 
 /** The vendor cards. */
-export function Vendors({ state, store }: VendorsProps): ReactElement {
+export function Vendors({ state, vendors, store }: VendorsProps): ReactElement {
   const [message, setMessage] = useState('');
-  // The state, not `state.plan`: a status or tick leaves the plan object as it was.
-  const vendors = useMemo(() => vendorView(state), [state]);
   const questions = state.plan.addenda?.vendorQuestions;
   return (
     <Panel title="Vendors">

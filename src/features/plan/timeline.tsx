@@ -9,7 +9,7 @@
  * Never does: compute a date or status (the engine's), call the AI, or leave a task's state to
  * colour alone (every status is an icon and words too).
  */
-import { useEffect, useId, useRef, useState, type ReactElement, type Ref } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactElement } from 'react';
 import type { ReadyState } from '../../domain/reducer.js';
 import { toIcs } from '../../domain/ics.js';
 import { isAiTask } from '../../domain/merge.js';
@@ -43,18 +43,29 @@ function byMonth(
 function TaskRow(props: {
   readonly task: ScheduledTask;
   readonly category: string;
-  readonly inputRef: Ref<HTMLInputElement>;
+  /** Where the row lists its checkbox, so a neighbour can take focus when this task is hidden. */
+  readonly inputs: Map<string, HTMLInputElement>;
   readonly onToggle: (task: ScheduledTask) => void;
 }): ReactElement {
-  const { task, category, inputRef, onToggle } = props;
+  const { task, category, inputs, onToggle } = props;
   const id = useId();
   const ui = STATUS_UI.task[task.status];
+  // Stable between renders, so React does not detach and re-attach every row's ref each time.
+  const listInput = useCallback(
+    (input: HTMLInputElement) => {
+      inputs.set(task.id, input);
+      return () => {
+        inputs.delete(task.id);
+      };
+    },
+    [inputs, task.id],
+  );
   return (
     <li className="task">
       <input
         className="task__input"
         id={id}
-        ref={inputRef}
+        ref={listInput}
         type="checkbox"
         checked={task.status === 'done'}
         aria-describedby={`${id}-details`}
@@ -97,7 +108,7 @@ export function Timeline({ state, store }: TimelineProps): ReactElement {
   const [message, setMessage] = useState('');
   const filterRef = useRef<HTMLInputElement>(null);
   /** Each shown task's checkbox, for moving focus when a ticked task leaves the list. */
-  const inputs = useRef(new Map<string, HTMLInputElement>());
+  const [inputs] = useState(() => new Map<string, HTMLInputElement>());
   /** Lets go of the last download's address now; set while one is waiting to be released. */
   const release = useRef<(() => void) | undefined>(undefined);
   const { brief, plan } = state;
@@ -119,7 +130,7 @@ export function Timeline({ state, store }: TimelineProps): ReactElement {
     if (hideDone && becomesDone) {
       const at = shown.findIndex((t) => t.id === task.id);
       const next = shown[at + 1] ?? shown[at - 1];
-      const input = next ? inputs.current.get(next.id) : undefined;
+      const input = next ? inputs.get(next.id) : undefined;
       (input ?? filterRef.current)?.focus();
     }
     store.toggleTask(task.id);
@@ -204,10 +215,7 @@ export function Timeline({ state, store }: TimelineProps): ReactElement {
                 key={task.id}
                 task={task}
                 category={categoryLabel(plan.budget, task.categoryId)}
-                inputRef={(input) => {
-                  if (input) inputs.current.set(task.id, input);
-                  else inputs.current.delete(task.id);
-                }}
+                inputs={inputs}
                 onToggle={toggle}
               />
             ))}

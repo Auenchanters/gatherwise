@@ -13,7 +13,9 @@ import type { IsoDate } from '../../domain/dates.js';
 import { eventDateOf } from '../../domain/schedule.js';
 import { LIMITS } from '../../shared/limits.js';
 import { eventBriefSchema, type EventBrief } from '../../shared/schema.js';
+import { formatCount } from '../plan/format.js';
 import { draftToCandidate, type BriefDraft } from './draft.js';
+import { DATE_COPY } from './labels.js';
 
 /** A form field that can carry an error: a draft key, or `income.<key>` for an income field. */
 export type FieldKey = Exclude<keyof BriefDraft, 'income'> | `income.${keyof BriefDraft['income']}`;
@@ -41,11 +43,10 @@ interface Copy {
 }
 
 const { brief: caps } = LIMITS;
-const n = (value: number): string => value.toLocaleString('en-IN');
 const whole = (label: string, min: number, max: number): string =>
-  `${label} must be a whole number from ${n(min)} to ${n(max)}`;
+  `${label} must be a whole number from ${formatCount(min)} to ${formatCount(max)}`;
 const longest = (label: string, max: number): string =>
-  `${label} must be ${n(max)} characters or fewer`;
+  `${label} must be ${formatCount(max)} characters or fewer`;
 const MONEY_DIGITS = 'Enter the amount as digits only, like 150000';
 const COUNT_DIGITS = 'Enter digits only, like 12';
 /** Shown when the schema rejects something no message covers, so a submit never fails silently. */
@@ -61,7 +62,7 @@ const COPY = {
   durationHours: {
     digits: COUNT_DIGITS,
     empty: 'Enter how many hours the event lasts',
-    invalid: `Duration must be a whole number of hours from ${n(caps.durationHoursMin)} to ${n(caps.durationHoursMax)}`,
+    invalid: `Duration must be a whole number of hours from ${formatCount(caps.durationHoursMin)} to ${formatCount(caps.durationHoursMax)}`,
   },
   city: { invalid: longest('City', caps.cityMax) },
   venue: { invalid: 'Choose a type of venue' },
@@ -72,13 +73,15 @@ const COPY = {
   },
   budget: {
     digits: MONEY_DIGITS,
-    empty: `Enter a budget of at least ${n(caps.budgetMin)}`,
-    tooSmall: `Enter a budget of at least ${n(caps.budgetMin)}`,
+    empty: `Enter a budget of at least ${formatCount(caps.budgetMin)}`,
+    tooSmall: `Enter a budget of at least ${formatCount(caps.budgetMin)}`,
     invalid: whole('Budget', caps.budgetMin, caps.budgetMax),
   },
   currency: { invalid: 'Choose a currency' },
-  dietary: { invalid: `Choose each dietary need once, up to ${n(caps.listMax)}` },
-  accessibility: { invalid: `Choose each accessibility need once, up to ${n(caps.listMax)}` },
+  dietary: { invalid: `Choose each dietary need once, up to ${formatCount(caps.listMax)}` },
+  accessibility: {
+    invalid: `Choose each accessibility need once, up to ${formatCount(caps.listMax)}`,
+  },
   amplifiedSound: { invalid: 'Say whether there will be amplified sound' },
   servesFood: { invalid: 'Say whether you will serve food' },
   servesAlcohol: { invalid: 'Say whether you will serve alcohol' },
@@ -108,13 +111,6 @@ const COPY = {
 const isFieldKey = (key: string): key is FieldKey => Object.hasOwn(COPY, key);
 /** Every field, in form order; errors are listed in this order. */
 const FIELD_KEYS: readonly FieldKey[] = Object.keys(COPY).filter(isFieldKey);
-
-/** Messages for the reasons `eventDateOf` rejects a date. */
-const DATE_COPY = {
-  invalid: 'Enter a real calendar date',
-  past: 'Choose a date from today onwards',
-  too_far: 'Choose a date within the next two years',
-} as const;
 
 /** The field an issue belongs to, as a FieldKey-shaped string (`income.sponsors`, `dietary`...). */
 const keyOf = (path: readonly PropertyKey[]): string =>

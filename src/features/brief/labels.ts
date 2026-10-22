@@ -1,6 +1,7 @@
 /**
  * The words people see for each option code in the brief: one lookup per option list, so the form
- * and the plan header name things the same way.
+ * and the plan header name things the same way. Also the sentences for a refused event date, which
+ * the form's checker and the plan's notices both say.
  * Never does: show a raw code such as `outdoor_public` to anyone.
  */
 import type {
@@ -11,6 +12,16 @@ import type {
   SUBTYPES,
   VENUES,
 } from '../../shared/options.js';
+
+/**
+ * Why a date was refused, by `eventDateOf`'s reason. The brief form's checker and the workspace's
+ * notices and Budget field use these same sentences; neither adds a full stop (the notices do).
+ */
+export const DATE_COPY = {
+  invalid: 'Enter the event date as a real calendar date',
+  past: 'Choose a date from today onwards',
+  too_far: 'Choose a date within the next two years',
+} as const;
 
 /** Labels for event kinds. */
 export const KIND_LABELS: Record<(typeof EVENT_KINDS)[number], string> = {

@@ -1,5 +1,6 @@
 /**
- * The client's one clock read: today's calendar date where the user is.
+ * The client's one read of today's date: the calendar date where the user is. (The calendar
+ * download also reads the clock, once, for its DTSTAMP; that is a moment, not a date.)
  * Does: builds `YYYY-MM-DD` from the local date parts, so an organizer in India at 01:00 is already
  * planning from the new day.
  * Never does: use UTC parts (that would lag or lead the user's own calendar by up to a day).

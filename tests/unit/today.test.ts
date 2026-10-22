@@ -1,5 +1,5 @@
 /**
- * Tests for src/features/plan/today.ts, the client's only clock read.
+ * Tests for src/features/plan/today.ts, the client's one read of today's date.
  *
  * Does: pins that the date comes from local parts (the suite runs in America/New_York, so a late
  * evening there is already tomorrow in UTC), zero-padding, and the default argument.
