@@ -9,3 +9,9 @@ description = "Google API credential using the AQ prefix"
 regex = '''(AQ\.[A-Za-z0-9_-]{30,})'''
 secretGroup = 1
 keywords = ["AQ."]
+
+# The browser storage key name ("gatherwise.plan.v1") matches the generic key rule by shape and
+# entropy, but it is an identifier, not a credential.
+[[allowlists]]
+description = "localStorage key name"
+regexes = ['''^gatherwise\.plan\.v\d+$''']
