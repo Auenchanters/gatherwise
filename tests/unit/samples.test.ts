@@ -2,8 +2,8 @@
  * Tests for src/features/brief/samples.ts, the demo briefs behind the landing's sample buttons.
  *
  * Does: proves every sample is schema-valid and inside the planning window for any `today`, that
- * none opens with a task that is overdue or cannot be done in time, and pins the demo content that
- * the demo video relies on.
+ * none opens with a task that is overdue or cannot be done in time, and pins the content the sample
+ * buttons promise.
  * Never does: read the clock; `today` is a parameter.
  */
 import fc from 'fast-check';

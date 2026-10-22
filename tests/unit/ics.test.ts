@@ -128,7 +128,7 @@ const unescapeText = (v: string): string =>
 
 /**
  * What escaping must keep of a string: every line break as one LF, a tab as a space, and nothing
- * that is not text (C0 and C1 controls, DEL, lone surrogates, U+2028 and U+2029). Judged by code
+ * that is not text (C0 and C1 controls, DEL, lone surrogates, U+2028 and U+2029). Checked by code
  * point range, not by the regex the implementation uses.
  */
 const sanitized = (s: string): string =>

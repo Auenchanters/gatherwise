@@ -1,6 +1,6 @@
 version: 2
 updates:
-  # Event rule: keep exactly one branch; alerts remain enabled without bot PRs.
+  # A limit of 0 turns off version-update pull requests. Security updates have their own limit.
   - package-ecosystem: npm
     directory: /
     schedule:

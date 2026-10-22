@@ -1,5 +1,5 @@
 /**
- * Verify the public-submission size, branch, file-hygiene and documentation gates before publishing.
+ * Verify the size, branch, file-hygiene and documentation gates before publishing.
  * The Markdown checks are pure functions in doc-checks.ts (unit-tested), which Node runs directly.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -16,7 +16,7 @@ process.chdir(git('rev-parse', '--show-toplevel').trim());
 // non-ASCII paths unquoted.
 const tracked = split(git('ls-files', '-z'), '\0');
 if (tracked.length === 0) {
-  throw new Error('No tracked project files. Stage the submission before preflight.');
+  throw new Error('No tracked project files. Stage the project files before preflight.');
 }
 
 const checks = [];

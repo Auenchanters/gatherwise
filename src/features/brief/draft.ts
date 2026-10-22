@@ -2,9 +2,9 @@
  * The brief form's draft: every field as the browser holds it (text inputs give strings), plus the
  * conversions to and from an `EventBrief`.
  * Does: turns a brief into strings for the inputs, and turns a draft into a plain candidate object
- * for `eventBriefSchema` to judge. Numbers must be plain decimals (no hex, exponents or grouping)
- * and go through `Number`; a blank required number, date or time becomes a missing value so the
- * schema reports it. Volunteers and income are optional (blank means 0) and count only for
+ * for `eventBriefSchema` to validate. Numbers must be plain decimals (no hex, exponents or
+ * grouping) and go through `Number`; a blank required number, date or time becomes a missing value
+ * so the schema reports it. Volunteers and income are optional (blank means 0) and count only for
  * community events.
  * Also builds `DraftApi`, the typed, functional-update bindings the form's sections edit through.
  * Never does: validate (that is validate.ts and the schema), read the clock, or touch the DOM.
@@ -123,7 +123,7 @@ export function draftFromBrief(brief: EventBrief): BriefDraft {
 }
 
 /**
- * The object the schema should judge. Weddings and birthdays get 0 volunteers and no income (the
+ * The object the schema validates. Weddings and birthdays get 0 volunteers and no income (the
  * form hides those fields). Blank volunteers count as 0 (R68). Income is left out when all six
  * fields are blank; once any is filled, a blank one counts as 0.
  */

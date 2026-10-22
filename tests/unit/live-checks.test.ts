@@ -205,7 +205,8 @@ describe('checkPage', () => {
       'GET / has no <title>',
       'GET / has no <noscript> feature text',
     ]);
-    // The words outside <noscript> do not count: a judge fetching the page as text needs them there.
+    // The words outside <noscript> do not count: a crawler that reads the page as text needs them
+    // there.
     expect(checkPage(200, `${ORIGIN}/`, '<title>x</title><p>Budgets that reconcile</p>')).toEqual([
       'GET / has no <noscript> feature text',
     ]);

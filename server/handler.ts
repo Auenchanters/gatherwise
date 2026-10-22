@@ -65,7 +65,7 @@ const isTimeout = (error: unknown): boolean =>
   (error.name === 'AbortError' || error.name === 'TimeoutError');
 
 /**
- * The public code for a failed model call, judged by the error's shape. Inspecting a hostile value
+ * The public code for a failed model call, chosen by the error's shape. Inspecting a hostile value
  * (a throwing getter or Proxy trap) must not escape as a 500, so that falls back to unavailable.
  */
 function modelFailure(error: unknown): ErrorCode {

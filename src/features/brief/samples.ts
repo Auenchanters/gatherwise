@@ -1,6 +1,6 @@
 /**
- * Ready-made briefs behind the landing's "Try a sample" buttons, so a judge or a first-time visitor
- * sees a full plan in one click.
+ * Ready-made briefs behind the landing's "Try a sample" buttons, so a first-time visitor sees a
+ * full plan in one click.
  * Does: builds a community festival 75 days out, a wedding 240 days out and a kids' birthday 40
  * days out, all relative to the `today` passed in, so they always fall inside the planning window.
  * Each is dated so every lead time fits and the first plan opens calm (weddings need the longest
