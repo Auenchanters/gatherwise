@@ -221,7 +221,8 @@ export function createPlannerStore({ client, storage, today }: PlannerDeps): Pla
       );
       return;
     }
-    const failure = clientErrorMessage(result.error);
+    // A failed request keeps an earlier answer's suggestions, so the notice must not say "standard".
+    const failure = clientErrorMessage(result.error, state.ai.suggestions !== undefined);
     dispatch(
       { type: 'ai/failed', generation, error: result.error.code },
       {

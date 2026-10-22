@@ -56,6 +56,25 @@ describe('clientErrorMessage', () => {
     );
   });
 
+  it('says the current ideas are unchanged, never "standard suggestions", when earlier AI ideas stay', () => {
+    expect(clientErrorMessage({ code: 'network' }, true)).toBe(
+      "Can't reach the AI service — check your connection. Your current ideas are unchanged; try “Refresh ideas” once you're back online.",
+    );
+    expect(clientErrorMessage({ code: 'timeout' }, true)).toBe(
+      'The AI took too long to reply — your current ideas are unchanged. You can try again.',
+    );
+    expect(clientErrorMessage({ code: 'rate_limited', retryAfterSeconds: 120 }, true)).toBe(
+      'The AI service is busy right now — your current ideas are unchanged. Try “Refresh ideas” in 2 minutes.',
+    );
+    for (const code of CODES) expect(clientErrorMessage({ code }, true)).not.toMatch(/standard/u);
+  });
+
+  it('leaves the two messages that never mention the ideas as they are', () => {
+    for (const code of ['unavailable', 'invalid'] as const) {
+      expect(clientErrorMessage({ code }, true)).toBe(clientErrorMessage({ code }));
+    }
+  });
+
   it('ignores a wait on errors where waiting is not the advice', () => {
     for (const code of ['network', 'timeout', 'unavailable', 'invalid'] as const) {
       const error: ClientError = { code, retryAfterSeconds: 120 };

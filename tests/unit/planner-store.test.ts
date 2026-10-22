@@ -109,6 +109,24 @@ describe('submit', () => {
       { id: 'ai', tone: 'warning', text: clientErrorMessage(failure) },
     ]);
     expect(state.aiView.failure).toBe(clientErrorMessage(failure));
+    expect(state.aiView.failure).toContain('standard suggestions');
+  });
+
+  it('a failed refresh that keeps earlier AI ideas does not claim standard suggestions', async () => {
+    const failure: ClientError = { code: 'timeout' };
+    const answers: Answer[] = [fresh, err(failure)];
+    const { store } = setup({
+      client: fakeClient(() => Promise.resolve(answers.shift() ?? fresh)),
+    });
+    await store.submit(festival).settled;
+    await store.refreshIdeas();
+    const state = store.getState();
+    expect(ready(state).ai.status).toBe('failed');
+    expect(ready(state).ai.suggestions).toBeDefined();
+    expect(texts(state)).toEqual([clientErrorMessage(failure, true)]);
+    expect(state.aiView.failure).toBe(clientErrorMessage(failure, true));
+    expect(state.aiView.failure).toContain('your current ideas are unchanged');
+    expect(state.aiView.failure).not.toContain('standard suggestions');
   });
 
   it('a later success clears the failure notice', async () => {

@@ -704,6 +704,10 @@ describe('ideas', () => {
     expect(panel('Ideas').getByRole('heading', { name: 'Diya-lined walkways' })).toBeTruthy();
     expect(panel('Ideas').queryByText(/couldn't personalize these ideas/u)).toBeNull();
     expect(panel('Ideas').getByRole('status').textContent).toContain("didn't go through");
+    // The Notices region agrees: the earlier ideas stay, so it must not promise standard ones.
+    const notices = screen.getByRole('status', { name: 'Notices' }).textContent;
+    expect(notices).toContain('your current ideas are unchanged');
+    expect(notices).not.toContain('standard suggestions');
   });
 });
 
