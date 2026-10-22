@@ -30,7 +30,7 @@ Planning is iterative: an organizer changes the guest count, the budget and the 
 - After an edit, the ideas keep their earlier personalization; their budget-fit badges recompute, but new ideas need an explicit **Adjust with AI** (1 call).
 - An adjustment replaces the whole AI layer (summary, ideas, extra tasks and vendor questions). The model is asked to keep what the change does not affect, but nothing forces it to; a ticked AI task stays ticked only when the new answer has a task with the same title.
 - A transient failure is not recovered automatically; the user presses "Try again" or **Adjust with AI**.
-- The cache lives in memory in one tab, so a reload starts it empty (a restored plan still costs 0 calls because it is not re-requested).
+- The cache lives in memory in one tab. A reload seeds it only with the saved plan's answer (a restored plan costs 0 calls, and so does submitting its brief again); other answers from before the reload are gone.
 - The server ceilings are per instance and in memory (see `docs/KNOWN-LIMITATIONS.md`).
 
 ## Alternatives considered

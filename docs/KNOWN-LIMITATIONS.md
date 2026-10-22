@@ -58,9 +58,9 @@ The interface copy is in English (`index.html` declares `lang="en"`). The brief'
 
 ## The AI answer cache is per tab
 
-The cache of the last 8 answers lives in memory in the planner's client (`src/features/client/api-client.ts`). Another tab, or a reload, starts with an empty cache. A restored plan does not need it, because restoring never calls the API, but submitting the same brief again after a reload (through **Edit details**) makes a new call.
+The cache of the last 8 answers lives in memory in the planner's client (`src/features/client/api-client.ts`). A reload seeds it with the saved plan's answer, keyed by the restored brief, so submitting that brief again through **Edit details** costs no call. Other answers from before the reload are gone, another tab starts with an empty cache, and a plan whose guests were edited after its answer arrived seeds that answer under the edited brief (the answer the plan already shows).
 
-**What would lift it:** keeping the cache in `sessionStorage`, validated on read like the saved plan.
+**What would lift it:** keeping the whole cache in `sessionStorage`, validated on read like the saved plan.
 
 ## Text sanitizing trades a few characters for safety
 

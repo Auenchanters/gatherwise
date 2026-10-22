@@ -84,12 +84,7 @@ function succeeded(result: Result<SuggestResponse, ClientError>): SuggestRespons
 
 const nativeAny = Object.getOwnPropertyDescriptor(AbortSignal, 'any');
 /** Simulates a browser older than Chrome 116 / Safari 17.4, where `AbortSignal.any` is missing. */
-const withoutAbortSignalAny = () =>
-  Object.defineProperty(AbortSignal, 'any', {
-    value: undefined,
-    configurable: true,
-    writable: true,
-  });
+const withoutAbortSignalAny = () => Reflect.deleteProperty(AbortSignal, 'any');
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -273,15 +268,36 @@ describe('the cache key', () => {
     expect(algorithm).toBe('SHA-256');
     expect(new TextDecoder().decode(data)).toBe(JSON.stringify(sorted));
   });
+});
 
-  it('falls back to the canonical text itself where crypto.subtle is unavailable', async () => {
-    vi.stubGlobal('crypto', {});
+describe('remember', () => {
+  it('answers the same brief from a remembered answer with no call, flagged as reused', async () => {
     const fetchImpl = serving();
     const planner = client(fetchImpl);
-    await planner.suggest(community(), never);
-    await planner.suggest(community(), never);
+    await planner.remember(community(), GOOD);
+    const reused = succeeded(await planner.suggest(community(), never));
+    expect(reused).toEqual({ ...GOOD, cached: true });
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(planner.calls()).toBe(0);
+  });
+
+  it('keys it exactly as a request: another brief still asks, and an adjustment still asks', async () => {
+    const fetchImpl = serving();
+    const planner = client(fetchImpl);
+    await planner.remember(community(), GOOD);
     await planner.suggest(community(251), never);
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    await planner.suggest(community(), never, { adjust: ADJUST });
+    expect(planner.calls()).toBe(2);
+  });
+
+  it('counts as the newest entry of the LRU', async () => {
+    const planner = client(serving(), { cacheSize: 1 });
+    await planner.suggest(community(100), never);
+    await planner.remember(community(), GOOD);
+    await planner.suggest(community(), never);
+    expect(planner.calls()).toBe(1);
+    await planner.suggest(community(100), never);
+    expect(planner.calls()).toBe(2);
   });
 });
 

@@ -10,7 +10,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { addDays, type IsoDate } from '../../src/domain/dates.js';
 import { initialPlanState, type ReadyState } from '../../src/domain/reducer.js';
-import type { ClientError } from '../../src/features/client/api-client.js';
+import {
+  createPlanClient,
+  type ClientError,
+  type PlanClient,
+} from '../../src/features/client/api-client.js';
 import { clientErrorMessage } from '../../src/features/client/messages.js';
 import { createPlannerStore, type PlannerSnapshot } from '../../src/features/plan/planner-store.js';
 import { STORAGE_KEY } from '../../src/features/plan/storage-key.js';
@@ -296,6 +300,52 @@ describe('hydrate', () => {
     expect(storage?.removed).toEqual([]);
     expect(client.suggest).not.toHaveBeenCalled();
     expect(state.calls).toBe(0);
+  });
+
+  it("hands the restored answer to the client's cache under the restored brief", () => {
+    const { store, client } = setup({
+      storage: savedStorage(planned(festival, { withAi: true })),
+    });
+    store.hydrate();
+    expect(client.remember).toHaveBeenCalledOnce();
+    expect(client.remember).toHaveBeenCalledWith(festival, {
+      suggestions: aiSuggestions,
+      meta: aiMeta,
+    });
+  });
+
+  it('seeds nothing for a restored plan that has no AI answer', () => {
+    const { store, client } = setup({ storage: savedStorage(planned(festival)) });
+    store.hydrate();
+    expect(ready(store.getState()).ai.status).toBe('idle');
+    expect(client.remember).not.toHaveBeenCalled();
+  });
+
+  it('makes the same brief cost no call after a reload, with the real client', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(() => Promise.reject(new Error('no network in tests')));
+    const real = createPlanClient({ fetchImpl });
+    // The cache key is a SHA-256, so seeding settles a moment after hydrate returns (a person is
+    // slower still); the test waits for the store's own seeding to settle.
+    let seeded: Promise<void> | undefined;
+    const client: PlanClient = {
+      ...real,
+      remember: (b, answer) => {
+        seeded = real.remember(b, answer);
+        return seeded;
+      },
+    };
+    const store = createPlannerStore({
+      client,
+      storage: savedStorage(planned(festival, { withAi: true })),
+      today: () => today,
+    });
+    store.hydrate();
+    expect(seeded).toBeInstanceOf(Promise);
+    await seeded;
+    await store.submit(festival).settled;
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(store.getState().calls).toBe(0);
+    expect(store.getState().aiView).toEqual({ sentBrief: festival, cached: true });
   });
 
   it('does nothing when nothing is saved', () => {

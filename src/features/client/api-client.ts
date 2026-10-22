@@ -3,8 +3,8 @@
  * Does: send one brief, with the organizer's change and the earlier answer when adjusting; validate
  * everything that comes back against the shared schemas; map every
  * failure to one of five `ClientError` codes; remember the last `cacheSize` successes, keyed by the
- * SHA-256 of the brief's canonical JSON; count real network requests, which the UI shows as
- * "AI calls this session: N".
+ * SHA-256 of the brief's canonical JSON, and take in an answer restored with a saved plan under the
+ * same key; count real network requests, which the UI shows as "AI calls this session: N".
  * Never does: retry automatically; return unvalidated network data; cache a failure or an abort;
  * count a cache hit as a call; read the clock; log. Creating a plan costs one call, an edit costs
  * none (edits never reach this client), an "Adjust with AI" costs one, an identical brief costs none.
@@ -68,6 +68,11 @@ export interface PlanClient {
     signal: AbortSignal,
     opts?: { readonly adjust?: AdjustRequest },
   ): Promise<Result<SuggestResponse, ClientError>>;
+  /**
+   * Remembers `answer` for `brief` without a request, keyed exactly as `suggest` keys it, so asking
+   * for the same brief again costs no call: for the validated answer a saved plan restores with.
+   */
+  remember(brief: EventBrief, answer: Pick<SuggestResponse, 'suggestions' | 'meta'>): Promise<void>;
   /** How many network requests this client has issued: the session's real AI-call count. */
   calls(): number;
 }
@@ -126,17 +131,21 @@ function canonicalJson(value: unknown): string {
     return `[${value.map((item) => canonicalJson(item === undefined ? null : item)).join(',')}]`;
   }
   if (typeof value !== 'object' || value === null) return JSON.stringify(value);
-  const fields = Object.keys(value)
-    .sort()
-    .flatMap((key) => {
-      const field: unknown = Reflect.get(value, key);
-      return field === undefined ? [] : [`${JSON.stringify(key)}:${canonicalJson(field)}`];
-    });
+  const fields = Object.entries(value)
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .flatMap(([key, field]: [string, unknown]) =>
+      field === undefined ? [] : [`${JSON.stringify(key)}:${canonicalJson(field)}`],
+    );
   return `{${fields.join(',')}}`;
 }
 
-/** The lowercase hex SHA-256 of `text` as UTF-8. Rejects where `crypto.subtle` is unavailable. */
-async function sha256Hex(text: string): Promise<string> {
+/**
+ * The cache key for a brief: the lowercase hex SHA-256 of its canonical JSON. `crypto.subtle`
+ * exists in every supported browser on a secure page, which the app always is (HTTPS, or
+ * localhost in development).
+ */
+async function keyOf(brief: EventBrief): Promise<string> {
+  const text = canonicalJson(brief);
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
@@ -155,10 +164,11 @@ function parseJson(text: string): unknown {
  * that aborts as soon as either signal does.
  */
 function anySignal(signals: AbortSignal[]): AbortSignal {
-  if (typeof Reflect.get(AbortSignal, 'any') === 'function') return AbortSignal.any(signals);
+  if ('any' in AbortSignal) return AbortSignal.any(signals);
   const controller = new AbortController();
-  // ponytail: the listener stays on a long-lived caller signal until it aborts; the UI makes one
-  // signal per request, so remove it on completion if signals are ever shared.
+  // NOTE: the listener stays on the caller's signal until that signal aborts. The store makes one
+  // signal per request, so nothing piles up; removing it when the request settles would lift
+  // this if a signal were ever shared between requests.
   for (const signal of signals) {
     if (signal.aborted) controller.abort(signal.reason);
     else {
@@ -195,7 +205,8 @@ function interpret(brief: EventBrief, reply: Reply): Result<SuggestResponse, Cli
 
 /**
  * Builds a client with its own cache and counter, so two clients never share either.
- * @returns A client; `suggest` always resolves with a `Result`.
+ * @returns A client; on a secure page (where `crypto.subtle` exists) `suggest` always resolves
+ * with a `Result`.
  */
 export function createPlanClient(options: PlanClientOptions = {}): PlanClient {
   const {
@@ -250,9 +261,7 @@ export function createPlanClient(options: PlanClientOptions = {}): PlanClient {
 
   return {
     async suggest(brief, signal, opts = {}) {
-      const text = canonicalJson(brief);
-      // Without crypto.subtle (an insecure page) the canonical text itself is just a longer key.
-      const key = await sha256Hex(text).catch(() => text);
+      const key = await keyOf(brief);
       const { adjust } = opts;
       const hit = adjust ? undefined : cache.get(key);
       if (hit) {
@@ -266,6 +275,9 @@ export function createPlanClient(options: PlanClientOptions = {}): PlanClient {
       const result = interpret(brief, reply.value);
       if (result.ok) remember(key, result.value);
       return result;
+    },
+    async remember(brief, answer) {
+      remember(await keyOf(brief), { ...answer, cached: false });
     },
     calls: () => calls,
   };

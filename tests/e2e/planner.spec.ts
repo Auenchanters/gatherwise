@@ -5,9 +5,10 @@
  *
  * Does: generates the community sample and checks the model-call budget by counting requests: one
  * to create the plan, none for guests 250 → 400 (which still rescales the budget), none for a
- * reload that restores it. Checks the AI panel shows the prompt that was sent, axe at WCAG 2.1 AA
- * on Overview and Budget, no horizontal page scroll, and a clean console. Also opens the wedding
- * sample, whose plan is calm, lists the bar vendor and has no Volunteers tab.
+ * reload that restores it, and none for submitting the same brief again after that reload (the
+ * restored answer seeds the cache). Checks the AI panel shows the prompt that was sent, axe at
+ * WCAG 2.1 AA on Overview and Budget, no horizontal page scroll, and a clean console. Also opens
+ * the wedding sample, whose plan is calm, lists the bar vendor and has no Volunteers tab.
  * Never does: reach a real model.
  */
 import { expect, test, type Page } from '@playwright/test';
@@ -90,6 +91,14 @@ test('the community sample becomes a plan with one AI call, and edits and reload
   await expect(page.getByText('Restored with your saved plan — no new AI call.')).toBeVisible();
   await page.getByRole('tab', { name: 'Budget' }).click();
   await expect(page.getByRole('spinbutton', { name: 'Guests attending' })).toHaveValue('400');
+  expect(requests).toHaveLength(1);
+
+  // Submitting the same brief again after the reload reuses the restored answer: still no call.
+  await page.getByRole('button', { name: 'Edit details' }).click();
+  await page.getByRole('button', { name: 'Generate my plan' }).click();
+  await expect(
+    page.getByText('Reused the answer for this exact brief — no new AI call.'),
+  ).toBeVisible();
   expect(requests).toHaveLength(1);
   expect(errors).toEqual([]);
 });

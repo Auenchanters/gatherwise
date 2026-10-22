@@ -37,18 +37,23 @@ export function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => voi
 /**
  * A client whose `calls()` counts `suggest` calls as they start, like the real one's network
  * requests; `counting: false` stands for answers served from its cache. `answer` decides each
- * reply; by default a fresh success.
+ * reply; by default a fresh success. `remember` only records what it was given.
  */
 export function fakeClient(
   answer: (brief: EventBrief) => Promise<Answer> = () => Promise.resolve(freshAnswer),
   { counting = true } = {},
-): { suggest: Mock<PlanClient['suggest']>; calls: () => number } {
+): {
+  suggest: Mock<PlanClient['suggest']>;
+  remember: Mock<PlanClient['remember']>;
+  calls: () => number;
+} {
   let calls = 0;
   const suggest = vi.fn<PlanClient['suggest']>((b) => {
     if (counting) calls += 1;
     return answer(b);
   });
-  return { suggest, calls: () => calls };
+  const remember = vi.fn<PlanClient['remember']>(() => Promise.resolve());
+  return { suggest, remember, calls: () => calls };
 }
 
 /** Browser storage held in memory; `removed` lists every key removed, in order. */

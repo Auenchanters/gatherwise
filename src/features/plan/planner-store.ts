@@ -82,7 +82,10 @@ export interface PlannerStore {
   readonly getState: () => PlannerSnapshot;
   /** Calls `listener` after every change; returns the unsubscribe function. */
   readonly subscribe: (listener: () => void) => () => void;
-  /** Restores the saved plan, if any. Never calls the AI. */
+  /**
+   * Restores the saved plan, if any, and hands its AI answer to the client's cache under the
+   * restored brief, so submitting that brief again costs no call. Never calls the AI.
+   */
   readonly hydrate: () => void;
   /** Starts a plan for `brief`, then asks the AI once. A refused brief changes nothing else. */
   readonly submit: (brief: EventBrief) => Submission;
@@ -263,6 +266,10 @@ export function createPlannerStore({ client, storage, today }: PlannerDeps): Pla
       if (storage === null) return;
       const loaded = loadPlan(storage, today());
       if (loaded.ok) {
+        const { brief, ai } = loaded.value;
+        if (ai.suggestions && ai.meta) {
+          void client.remember(brief, { suggestions: ai.suggestions, meta: ai.meta });
+        }
         commit(loaded.value, { aiView: NO_AI });
       } else if (loaded.error !== 'missing') {
         removeSaved(storage);

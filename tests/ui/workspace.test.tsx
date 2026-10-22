@@ -638,7 +638,9 @@ describe('workspace: AI at work', () => {
       { counting: false },
     );
     await setup({ client });
-    expect(screen.getByText('Reused from this session — no new AI call.')).toBeTruthy();
+    expect(
+      screen.getByText('Reused the answer for this exact brief — no new AI call.'),
+    ).toBeTruthy();
     expect(statusRegion().textContent).toBe('Reused the AI ideas for this brief — no new AI call.');
   });
 });

@@ -81,7 +81,7 @@ function AiStatus({ state, aiView, onPersonalize }: Omit<AiPanelProps, 'calls'>)
 
   if (status === 'applied') {
     let source = `Personalized by ${meta?.model ?? 'Gemini'} in one call.`;
-    if (aiView.cached) source = 'Reused from this session — no new AI call.';
+    if (aiView.cached) source = 'Reused the answer for this exact brief — no new AI call.';
     else if (aiView.sentBrief === undefined) {
       source = 'Restored with your saved plan — no new AI call.';
     }
