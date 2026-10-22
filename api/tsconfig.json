@@ -1,0 +1,11 @@
+{
+  // Vercel compiles each function with the tsconfig nearest its entry file and does not follow a
+  // chain of `extends`, so the settings its type check needs are stated here, not only inherited.
+  "extends": "../tsconfig.node.json",
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "strict": true
+  }
+}
