@@ -33,14 +33,32 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.doUnmock(PLANNER);
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
 function setup(storage: MemoryStorage = memoryStorage()) {
   const client = fakeClient();
   const user = userEvent.setup();
-  render(<App client={client} storage={storage} />);
-  return { client, storage, user };
+  const { unmount } = render(<App client={client} storage={storage} />);
+  return { client, storage, user, unmount };
+}
+
+/** Holds the planner chunk back until the test releases it, or makes it fail to load. */
+function gatePlanner() {
+  let release = (): void => undefined;
+  let fail: (reason: Error) => void = () => undefined;
+  const gate = new Promise<void>((resolve, reject) => {
+    release = resolve;
+    fail = reject;
+  });
+  // A failure may land before the import has started waiting on the gate.
+  gate.catch(() => undefined);
+  vi.doMock(PLANNER, async (importOriginal) => {
+    await gate;
+    return importOriginal();
+  });
+  return { release, fail };
 }
 
 const appStatus = (): HTMLElement => {
@@ -48,6 +66,83 @@ const appStatus = (): HTMLElement => {
   if (!status) throw new Error('no app status');
   return status;
 };
+
+describe('App while the planner chunk loads', () => {
+  it('opens one plan, however many times the form is submitted meanwhile', async () => {
+    const gate = gatePlanner();
+    const { user, client } = setup();
+    await user.click(screen.getByRole('button', { name: 'Try a sample community event' }));
+    await user.click(screen.getByRole('button', { name: 'Generate my plan' }));
+    await waitFor(() => {
+      expect(appStatus().textContent).toBe('Opening your plan…');
+    });
+    // Enter in the name field submits again while the first plan is still being opened.
+    await user.click(screen.getByRole('textbox', { name: 'Event name' }));
+    await user.keyboard('{Enter}');
+    gate.release();
+    await screen.findByRole('heading', { level: 1, name: 'Green Park Diwali Mela' });
+    expect(client.suggest).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves a saved plan alone when the app is gone before the planner arrives', async () => {
+    const gate = gatePlanner();
+    const storage = savedStorage(planned(sampleBrief('community', today)));
+    const reads = vi.spyOn(storage, 'getItem');
+    const { client, unmount } = setup(storage);
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Welcome back');
+    unmount();
+    gate.release();
+    await vi.dynamicImportSettled();
+    // Only the shell's own check for a saved plan read storage; the planner never restored it.
+    expect(reads).toHaveBeenCalledTimes(1);
+    expect(client.suggest).not.toHaveBeenCalled();
+  });
+
+  it('ignores a planner that fails to load after the app is gone', async () => {
+    const gate = gatePlanner();
+    const { unmount } = setup(savedStorage(planned(sampleBrief('community', today))));
+    unmount();
+    gate.fail(new Error('Failed to fetch dynamically imported module'));
+    await vi.dynamicImportSettled();
+    expect(document.body.textContent).toBe('');
+  });
+});
+
+describe('App with unusable storage', () => {
+  /** What a browser that forbids storage throws. */
+  const refusal = () => new DOMException('The operation is insecure.', 'SecurityError');
+
+  it('still plans when the browser forbids localStorage, and warns that nothing is saved', async () => {
+    vi.spyOn(window, 'localStorage', 'get').mockImplementation(() => {
+      throw refusal();
+    });
+    const client = fakeClient();
+    const user = userEvent.setup();
+    render(<App client={client} />);
+    await user.click(screen.getByRole('button', { name: 'Try a sample wedding' }));
+    await user.click(screen.getByRole('button', { name: 'Generate my plan' }));
+    await screen.findByRole('heading', { level: 1, name: "Meera & Rohan's Wedding" });
+    expect(
+      screen.getByText(
+        "Your browser isn't letting us save — the plan works but won't survive a reload.",
+      ),
+    ).toBeTruthy();
+    expect(client.suggest).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats storage that throws on read as holding no saved plan', () => {
+    const storage = {
+      ...memoryStorage(),
+      getItem: () => {
+        throw refusal();
+      },
+    };
+    render(<App client={fakeClient()} storage={storage} />);
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
+      'Plan a celebration that adds up',
+    );
+  });
+});
 
 describe('App landing state', () => {
   it('has one main, one h1 that sells the plan, and the brand in the banner', () => {

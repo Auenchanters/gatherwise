@@ -64,9 +64,7 @@ export function Notices({ snapshot, onDismiss }: NoticesProps): ReactElement {
   const landed = status === 'applied' && aiView.sentBrief !== undefined;
 
   /** Dismisses one notice; focus moves off its button first, since the button is about to go. */
-  const dismiss = (index: number): void => {
-    const notice = notices[index];
-    if (!notice) return;
+  const dismiss = (notice: Notice, index: number): void => {
     const neighbour = notices[index + 1] ?? notices[index - 1];
     const main = root.current?.closest('main');
     const target = neighbour
@@ -106,7 +104,7 @@ export function Notices({ snapshot, onDismiss }: NoticesProps): ReactElement {
               type="button"
               aria-label={`Dismiss: ${notice.text}`}
               onClick={() => {
-                dismiss(index);
+                dismiss(notice, index);
               }}
             >
               <span aria-hidden="true">×</span>

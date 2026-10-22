@@ -419,6 +419,16 @@ describe('vendors', () => {
     expect(within(tent).getByText('Book by 14 Dec 2026')).toBeTruthy();
   });
 
+  it('ignores a status the select does not offer', async () => {
+    const { store } = await setup();
+    const tent = itemOf(panel('Vendors').getByRole('heading', { name: 'Tent / shamiana' }));
+    const select = within(tent).getByRole('combobox', { name: 'Status for Tent / shamiana' });
+    fireEvent.change(select, { target: { value: 'haggling' } });
+    expect(ready(store).progress.vendorStatus).toEqual({});
+    expect(select).toHaveProperty('value', 'to_contact');
+    expect(panel('Vendors').getByRole('status').textContent).toBe('');
+  });
+
   it('ticks stay put across tab switches and are announced', async () => {
     const { user, store } = await setup();
     const item = must(ready(store).plan.vendors[0]?.checklist[1]);

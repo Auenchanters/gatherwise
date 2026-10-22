@@ -15,6 +15,7 @@ import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { addDays } from '../../src/domain/dates.js';
 import { BriefForm } from '../../src/features/brief/brief-form.js';
+import { ChoiceGroup } from '../../src/features/brief/fields.js';
 import { sampleBrief } from '../../src/features/brief/samples.js';
 import { eventBriefSchema, type EventBrief } from '../../src/shared/schema.js';
 import { descriptionOf } from '../support/ui.js';
@@ -210,12 +211,47 @@ describe('BriefForm: kind-dependent fields', () => {
     );
   });
 
+  it('changes the venue and the currency from their lists', async () => {
+    const { user, submit, onSubmit } = setup(sampleBrief('birthday', today));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Venue' }), 'restaurant');
+    await user.selectOptions(screen.getByRole('combobox', { name: /^Currency/u }), 'USD');
+    await submit();
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ venue: 'restaurant', currency: 'USD' });
+  });
+
   it('keeps ticks in the options order, whatever order they were ticked in', async () => {
     const { user, submit, onSubmit } = setup(sampleBrief('birthday', today));
     await user.click(screen.getByRole('checkbox', { name: 'Vegan' }));
     await user.click(screen.getByRole('checkbox', { name: 'Halal' }));
     await submit();
     expect(onSubmit.mock.calls[0]?.[0].dietary).toEqual(['vegan', 'halal', 'nut_free']);
+  });
+});
+
+describe('ChoiceGroup', () => {
+  it('ties an error to the group, as the form does for any field it flags', () => {
+    render(
+      <ChoiceGroup
+        legend="Kind of event"
+        type="radio"
+        name="kind"
+        field="kind"
+        error="Choose the kind of event"
+        choices={[
+          {
+            id: 'kind-wedding',
+            value: 'wedding',
+            label: 'Wedding',
+            checked: false,
+            onChange: vi.fn(),
+          },
+        ]}
+      />,
+    );
+    const group = screen.getByRole('group', { name: 'Kind of event' });
+    expect(group.classList).toContain('field--error');
+    expect(descriptionOf(group)).toBe('Error: Choose the kind of event');
+    expect(within(group).getByRole('radio', { name: 'Wedding' })).toBeTruthy();
   });
 });
 
@@ -335,7 +371,7 @@ describe('BriefForm: validation on submit', () => {
 });
 
 describe('BriefForm: samples', () => {
-  it.each(['community', 'birthday'] as const)(
+  it.each(['community', 'wedding', 'birthday'] as const)(
     'the %s sample fills a valid form that submits the same brief',
     async (kind) => {
       const sample = sampleBrief(kind, today);

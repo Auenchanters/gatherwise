@@ -1,7 +1,7 @@
 /**
  * Two test projects: pure logic and the server run in Node (tests/unit), React components run in
- * jsdom (tests/ui). Coverage gates apply to all pure logic and server request paths; UI `.tsx` is
- * tested but not measured.
+ * jsdom (tests/ui). Coverage gates apply to all pure logic, the server request paths and every
+ * component (`.tsx`) except the `main.tsx` bootstrap, which only mounts `App` on the page's root.
  */
 import { coverageConfigDefaults, defineConfig } from 'vitest/config';
 
@@ -29,9 +29,20 @@ export default defineConfig({
     ],
     coverage: {
       provider: 'v8',
-      include: ['src/domain/**', 'src/shared/**', 'src/features/**/*.ts', 'server/**'],
-      // Ambient declarations compile to nothing, so there is nothing to cover.
-      exclude: [...coverageConfigDefaults.exclude, '**/*.d.ts'],
+      include: [
+        'src/domain/**',
+        'src/shared/**',
+        'src/features/**/*.ts',
+        'src/**/*.tsx',
+        'server/**',
+      ],
+      exclude: [
+        ...coverageConfigDefaults.exclude,
+        // Ambient declarations compile to nothing, so there is nothing to cover.
+        '**/*.d.ts',
+        // The bootstrap: it reads #root and mounts `App`, and would need a real page to run.
+        'src/main.tsx',
+      ],
       reporter: ['text', 'json-summary', 'html'],
       thresholds: { lines: 95, statements: 95, functions: 95, branches: 90 },
     },

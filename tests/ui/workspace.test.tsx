@@ -11,12 +11,14 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StrictMode } from 'react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { addDays } from '../../src/domain/dates.js';
 import { formatMoney } from '../../src/domain/money.js';
 import type { ScheduledTask, Status } from '../../src/domain/schedule.js';
 import { sampleBrief } from '../../src/features/brief/samples.js';
 import { clientErrorMessage } from '../../src/features/client/messages.js';
+import type { ReadyState } from '../../src/domain/reducer.js';
+import { AiPanel } from '../../src/features/plan/ai-panel.js';
 import { InfeasibleBanner } from '../../src/features/plan/infeasible-banner.js';
 import { Planner } from '../../src/features/plan/planner.js';
 import { createPlannerStore } from '../../src/features/plan/planner-store.js';
@@ -222,6 +224,13 @@ describe('workspace: zero-call edits', () => {
     expect(ledger.getByText('Tickets').nextElementSibling?.textContent).toBe(
       '₹200.00 × 300 paid guests',
     );
+  });
+
+  it('says no income was entered when a community brief has none', async () => {
+    await setup({ start: brief('community', { date: addDays(today, 75) }) });
+    const ledger = within(screen.getByRole('region', { name: 'Break-even' }));
+    expect(ledger.getByText('No income was entered for this event.')).toBeTruthy();
+    expect(ledger.queryByText('Tickets')).toBeNull();
   });
 
   it('lays out the budget table with meters, contingency, total and break-even', async () => {
@@ -687,6 +696,19 @@ describe('workspace: tabs', () => {
     expectSelected('Overview');
   });
 
+  it('fall back to Overview when an edit takes the selected Volunteers tab away', async () => {
+    const { user, store } = await setup();
+    await user.click(screen.getByRole('tab', { name: 'Volunteers' }));
+    expect(screen.getByRole('tab', { name: 'Volunteers' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    await act(() => store.submit(sampleBrief('birthday', today)).settled);
+    expect(screen.queryByRole('tab', { name: 'Volunteers' })).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+  });
+
   it('drop Volunteers outside community events', async () => {
     const birthday = sampleBrief('birthday', today);
     await setup({ start: birthday });
@@ -786,11 +808,68 @@ describe('workspace: header actions', () => {
     await act(() => moved.submit(festival).settled);
     render(<Planner store={moved}>{null}</Planner>);
     now = addDays(today, 1);
+    // Leaving the tab (hidden) changes nothing; only coming back does.
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    const before = moved.getState().plan;
+    expect(before.phase === 'ready' && before.today).toBe(today);
+    visibility.mockRestore();
     act(() => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
     const state = moved.getState().plan;
     expect(state.phase === 'ready' && state.today).toBe(now);
     expect(client.suggest).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('workspace: the AI panel with what the engine may hand it', () => {
+  /** A ready plan for the community sample, from the real reducer. */
+  function readyState(): ReadyState {
+    const state = planned(festival);
+    if (state.phase !== 'ready') throw new Error('expected a plan');
+    return state;
+  }
+  const noop = () => undefined;
+
+  it('words a failure that came without a message, and still offers to try again', () => {
+    const state = { ...readyState(), ai: { status: 'failed' as const } };
+    render(<AiPanel state={state} aiView={{ cached: false }} calls={1} onPersonalize={noop} />);
+    expect(screen.getByText("The AI request didn't go through.")).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+  });
+
+  it('names Gemini when an answer carries no model name', () => {
+    const state = {
+      ...readyState(),
+      ai: { status: 'applied' as const, suggestions: aiSuggestions },
+    };
+    const aiView = { sentBrief: festival, cached: false };
+    render(<AiPanel state={state} aiView={aiView} calls={1} onPersonalize={noop} />);
+    expect(screen.getByText('Personalized by Gemini in one call.')).toBeTruthy();
+    expect(screen.queryByText('Model')).toBeNull();
+  });
+
+  it('drops the prompt once the brief that was sent is in the past, and keeps the plan', async () => {
+    let now = today;
+    const store = createPlannerStore({ client: fakeClient(), storage: null, today: () => now });
+    // Sent for tomorrow, then moved far out: the sent brief ages out while the plan stays valid.
+    await act(() => store.submit({ ...festival, date: addDays(today, 1) }).settled);
+    act(() => {
+      store.changeDate(addDays(today, 60));
+    });
+    render(<Planner store={store}>{null}</Planner>);
+    expect(screen.getByRole('region', { name: 'What we sent to Gemini' })).toBeTruthy();
+    now = addDays(today, 2);
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(
+      screen.queryByRole('region', { name: /^What we (sent|would send) to Gemini$/u }),
+    ).toBeNull();
+    expect(screen.getByRole('region', { name: 'What came back (validated)' })).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Green Park Diwali Mela');
   });
 });
