@@ -252,7 +252,7 @@ describe('checkPlan', () => {
     const { failures } = checkPlan(200, headers, good, MAX_LATENCY_MS);
     expect(failures).toEqual([
       'POST /api/plan is not Cache-Control: no-store',
-      'POST /api/plan took 20.0 s, the limit is 20 s',
+      'POST /api/plan took 25.0 s, the limit is 25 s',
     ]);
   });
 

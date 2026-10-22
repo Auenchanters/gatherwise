@@ -377,10 +377,10 @@ describe('the request', () => {
     expect(init?.body).toBe(JSON.stringify({ brief: b, adjust: ADJUST }));
   });
 
-  it('uses a 25 s timeout by default and the given one when set', async () => {
+  it('uses a 28 s timeout by default and the given one when set', async () => {
     const timeout = vi.spyOn(AbortSignal, 'timeout');
     await client(serving()).suggest(community(), never);
-    expect(timeout).toHaveBeenLastCalledWith(25_000);
+    expect(timeout).toHaveBeenLastCalledWith(28_000);
     await createPlanClient({ fetchImpl: serving(), timeoutMs: 1234 }).suggest(community(), never);
     expect(timeout).toHaveBeenLastCalledWith(1234);
   });

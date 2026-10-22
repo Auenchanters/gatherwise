@@ -13,7 +13,7 @@
  * Never does: call the AI from anywhere else, compute a fit (the engine did), or show AI text
  * unlabelled.
  */
-import { useId, useState, type ReactElement } from 'react';
+import { useId, useRef, useState, type ReactElement } from 'react';
 import { formatMoney } from '../../domain/money.js';
 import type { Plan } from '../../domain/plan.js';
 import type { AiState, ReadyState } from '../../domain/reducer.js';
@@ -109,11 +109,21 @@ export interface IdeasProps {
   readonly store: PlannerStore;
 }
 
+/** One-tap starting points for "What should change?": a chip fills the field, it never sends. */
+const SUGGESTIONS = [
+  'More eco-friendly',
+  'Cheaper ideas',
+  'Kid-friendly',
+  'Add a rain plan',
+  'More cultural touches',
+] as const;
+
 /** The idea cards and the Adjust with AI form. */
 export function Ideas({ state, calls, store }: IdeasProps): ReactElement {
   // The generation the user adjusted for: a new plan is a new generation, so it starts unasked.
   const [askedFor, setAskedFor] = useState<number | undefined>(undefined);
   const [change, setChange] = useState('');
+  const field = useRef<HTMLInputElement>(null);
   const ids = useId();
   const { ideas } = state.plan;
   const { status } = state.ai;
@@ -142,6 +152,7 @@ export function Ideas({ state, calls, store }: IdeasProps): ReactElement {
           <input
             className="field__input"
             id={`${ids}-change`}
+            ref={field}
             type="text"
             dir="auto"
             autoComplete="off"
@@ -152,6 +163,21 @@ export function Ideas({ state, calls, store }: IdeasProps): ReactElement {
               setChange(event.currentTarget.value);
             }}
           />
+          <div className="ideas__chips" role="group" aria-label="Suggestions">
+            {SUGGESTIONS.map((suggestion) => (
+              <button
+                key={suggestion}
+                className="button button--secondary ideas__chip"
+                type="button"
+                onClick={() => {
+                  setChange(suggestion);
+                  field.current?.focus();
+                }}
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
         </div>
         {/* aria-disabled, not disabled: the button keeps keyboard focus while it waits. */}
         <button className="button button--primary" type="submit" aria-disabled={pending}>

@@ -550,6 +550,17 @@ describe('ideas', () => {
     expect(i.getByText('Edits never call the AI; only this button does.')).toBeTruthy();
   });
 
+  it('a suggestion chip fills the field and focuses it, without calling the AI', async () => {
+    const { user, client } = await setup();
+    const i = panel('Ideas');
+    const chips = i.getByRole('group', { name: 'Suggestions' });
+    await user.click(within(chips).getByRole('button', { name: 'Add a rain plan' }));
+    const change = i.getByRole('textbox', CHANGE);
+    expect(change).toHaveProperty('value', 'Add a rain plan');
+    expect(document.activeElement).toBe(change);
+    expect(client.suggest).toHaveBeenCalledTimes(1);
+  });
+
   it('sends a blank change from Enter in the field, asking for fresh ideas in one call', async () => {
     const { user, client } = await setup();
     await user.click(panel('Ideas').getByRole('textbox', CHANGE));

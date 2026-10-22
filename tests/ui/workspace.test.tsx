@@ -100,7 +100,8 @@ describe('workspace: zero-call edits', () => {
     expect(state.brief.guests).toBe(400);
     expect(client.suggest).toHaveBeenCalledTimes(1);
 
-    const live = screen.getByText(/^Budget updated for 400 guests/u);
+    // Announced once typing settles, not for every keystroke.
+    const live = await screen.findByText(/^Budget updated for 400 guests/u);
     expect(live.getAttribute('role')).toBe('status');
     expect(live.textContent).toContain('over budget by');
     expect(live.textContent).toContain('No AI call used (AI calls this session: 1).');
@@ -161,11 +162,11 @@ describe('workspace: zero-call edits', () => {
     const budget = screen.getByRole('spinbutton', { name: 'Total budget' });
     await user.clear(budget);
     await user.type(budget, '200000');
-    expect(screen.getByText(/^Budget updated to ₹2,00,000\.00/u)).toBeTruthy();
+    expect(await screen.findByText(/^Budget updated to ₹2,00,000\.00/u)).toBeTruthy();
     const date = screen.getByLabelText('Event date');
     await user.clear(date);
     await user.type(date, addDays(today, 60));
-    expect(screen.getByText(/^Plan updated for 20 Dec 2026/u)).toBeTruthy();
+    expect(await screen.findByText(/^Plan updated for 20 Dec 2026/u)).toBeTruthy();
     expect(client.suggest).toHaveBeenCalledTimes(1);
   });
 
@@ -182,7 +183,7 @@ describe('workspace: zero-call edits', () => {
     const unchanged = store.getState().plan;
     expect(unchanged.phase === 'ready' && unchanged.brief.date).toBe(festival.date);
     fireEvent.change(date, { target: { value: addDays(today, 60) } });
-    expect(screen.getByText(/^Plan updated for 20 Dec 2026/u)).toBeTruthy();
+    expect(await screen.findByText(/^Plan updated for 20 Dec 2026/u)).toBeTruthy();
     // The field is no longer a date the plan holds, so the green confirmation goes.
     fireEvent.change(date, { target: { value: '' } });
     expect(screen.queryByText(/^Plan updated for/u)).toBeNull();
@@ -190,7 +191,7 @@ describe('workspace: zero-call edits', () => {
     const budget = screen.getByRole('spinbutton', { name: 'Total budget' });
     await user.clear(budget);
     await user.type(budget, '200000');
-    expect(screen.getByText(/^Budget updated to/u)).toBeTruthy();
+    expect(await screen.findByText(/^Budget updated to/u)).toBeTruthy();
     await user.clear(budget);
     expect(screen.queryByText(/^Budget updated to/u)).toBeNull();
   });

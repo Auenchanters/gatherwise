@@ -22,8 +22,8 @@ import {
 } from '../../shared/schema.js';
 
 const ENDPOINT = '/api/plan';
-/** Longer than the server's 20 s model timeout, so the server's answer normally arrives first. */
-const DEFAULT_TIMEOUT_MS = 25_000;
+/** Longer than the server's 25 s model timeout, so the server's answer normally arrives first. */
+const DEFAULT_TIMEOUT_MS = 28_000;
 const DEFAULT_CACHE_SIZE = 8;
 /**
  * The longest wait the client will repeat to a user: a day, since a spent daily budget waits for
@@ -51,7 +51,7 @@ export interface ClientError {
 export interface PlanClientOptions {
   /** The transport; defaults to the global `fetch`. Injected by tests. */
   readonly fetchImpl?: typeof fetch;
-  /** Abort a request still unanswered after this long. Default 25 000. */
+  /** Abort a request still unanswered after this long. Default 28 000. */
   readonly timeoutMs?: number;
   /** How many successes to remember. Default 8. */
   readonly cacheSize?: number;

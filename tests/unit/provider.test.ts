@@ -34,7 +34,7 @@ describe('createGeminiGenerator', () => {
     });
   });
 
-  it('builds the client once, with a 20 s timeout and no SDK retries', async () => {
+  it('builds the client once, with a 25 s timeout and no SDK retries', async () => {
     const generate = createGeminiGenerator('test-key-not-a-secret', 'gemini-3.5-flash-lite');
     const signal = new AbortController().signal;
     await generate(prompt, signal);
@@ -42,7 +42,7 @@ describe('createGeminiGenerator', () => {
     expect(mocks.construct).toHaveBeenCalledOnce();
     expect(mocks.construct).toHaveBeenCalledWith({
       apiKey: 'test-key-not-a-secret',
-      httpOptions: { timeout: 20_000, retryOptions: { attempts: 1 } },
+      httpOptions: { timeout: 25_000, retryOptions: { attempts: 1 } },
     });
     expect(mocks.generateContent).toHaveBeenCalledTimes(2);
   });

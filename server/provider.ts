@@ -22,7 +22,7 @@ export interface Generation {
 /** One model call; injectable so every handler test runs offline. */
 export type Generate = (prompt: Prompt, signal: AbortSignal) => Promise<Generation>;
 
-const TIMEOUT_MS = 20_000;
+const TIMEOUT_MS = 25_000;
 /**
  * Room for the largest answer the schema allows (every list full, every string at its cap) with
  * margin; a typical answer uses about 1,000.

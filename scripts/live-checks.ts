@@ -4,7 +4,7 @@
  * real handler with a stand-in model.
  * Does: check a deployment's health, its landing page (not a login wall, a title and the noscript
  * feature text), its security headers, and one real plan request: 200, `no-store`, a body that
- * parses against the community response schema and metadata schema, and a latency under 20 s.
+ * parses against the community response schema and metadata schema, and a latency under 25 s.
  * Every check returns failures as plain sentences; an empty list is a pass.
  * Never does: read `process.env`, print, or put brief text, model text or a key in a message (a
  * body that fails to parse is reported by field path and issue code only).
@@ -15,8 +15,8 @@ import { sampleBrief } from '../src/features/brief/samples.js';
 import { suggestionsSchemaFor } from '../src/shared/prompt.js';
 import { aiMetaSchema } from '../src/shared/schema.js';
 
-/** A plan call slower than this fails the smoke test (the server's own model timeout is 20 s). */
-export const MAX_LATENCY_MS = 20_000;
+/** A plan call slower than this fails the smoke test (the server's own model timeout is 25 s). */
+export const MAX_LATENCY_MS = 25_000;
 /** Each request is abandoned after this long, so a hung deployment fails instead of waiting. */
 const REQUEST_TIMEOUT_MS = 30_000;
 

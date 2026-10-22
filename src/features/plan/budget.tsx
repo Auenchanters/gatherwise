@@ -2,7 +2,8 @@
  * The Budget tab: guests, budget and date controls that re-plan on every change, the reconciled
  * budget table with a native `<meter>` per line, the over-budget callout and, for community events,
  * the break-even ledger.
- * Does: announce each recompute politely, with the session's AI-call count to show it cost none;
+ * Does: announce a recompute politely once typing settles, with the session's AI-call count to show
+ * it cost none;
  * mark a refused value at its field (`aria-invalid`, an inline message, the brief form's `Field`)
  * as well as in the alert.
  * Never does: compute money (every figure is the engine's), call the AI, snap an input back while
@@ -10,7 +11,9 @@
  * leaves the field, or leave a confirmation up for a value that was not sent.
  */
 import {
+  useEffect,
   useId,
+  useRef,
   useState,
   type ChangeEvent,
   type FocusEvent,
@@ -49,6 +52,9 @@ const FIELD_OF = {
 
 type ControlKey = (typeof FIELD_OF)[PlanStateError['kind']];
 
+/** How long typing must pause before the recompute is announced, so "400" is read once, not as 4, 40, 400. */
+const SETTLE_MS = 600;
+
 /**
  * Whether the browser can read a draft: a number, or a date with a four-digit year from 1000 on.
  * Chrome fills a date input as the year is typed (`0002-…`, `0020-…`, `0202-…`), and each of those
@@ -68,6 +74,23 @@ function Controls({ state, store }: BudgetProps): ReactElement {
     date: brief.date,
   });
   const [message, setMessage] = useState('');
+  const settle = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => {
+    const timer = settle;
+    return () => {
+      clearTimeout(timer.current);
+    };
+  }, []);
+
+  /** Clears the status at once and shows `text` when typing pauses; an empty `text` stays cleared. */
+  const say = (text: string): void => {
+    clearTimeout(settle.current);
+    setMessage('');
+    if (text !== '')
+      settle.current = setTimeout(() => {
+        setMessage(text);
+      }, SETTLE_MS);
+  };
 
   /** The refused-value copy for the field the plan's error is about, beside that field. */
   const errorFor = (key: ControlKey): string | undefined =>
@@ -80,14 +103,14 @@ function Controls({ state, store }: BudgetProps): ReactElement {
   const announce = (what: (next: ReadyState) => string): void => {
     const { plan, calls } = store.getState();
     if (plan.phase !== 'ready' || plan.error) {
-      setMessage('');
+      say('');
       return;
     }
     const { overBy } = plan.plan.budget;
     const over =
       overBy === undefined ? '' : ` — over budget by ${formatMoney(overBy, plan.brief.currency)}`;
     const count = callCount(calls, plan.ai.status === 'pending');
-    setMessage(`${what(plan)}${over}. No AI call used (AI calls this session: ${count}).`);
+    say(`${what(plan)}${over}. No AI call used (AI calls this session: ${count}).`);
   };
 
   /** Sends one field's value to the plan and reports the result. */
@@ -120,7 +143,7 @@ function Controls({ state, store }: BudgetProps): ReactElement {
       setDrafts((current) => ({ ...current, [key]: value }));
       if (readable(input)) apply[key](input);
       // Nothing was sent, so the last confirmation no longer describes the field.
-      else setMessage('');
+      else say('');
     },
     onBlur: (event: FocusEvent<HTMLInputElement>) => {
       if (!readable(event.currentTarget)) apply[key](event.currentTarget);
