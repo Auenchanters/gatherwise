@@ -1,5 +1,6 @@
 /**
- * Opt-in smoke test against a real deployment: `E2E_BASE_URL=https://… npm run test:live`.
+ * Smoke test against a real deployment: `E2E_BASE_URL=https://… npm run test:live`, run daily
+ * against production by .github/workflows/live.yml.
  * Does: run the checks in scripts/live-checks.ts (health, landing page, security headers and ONE
  * real plan request, the only model call) and print one PASS line, or each failure and exit 1.
  * Never does: run as part of `verify` or `test:e2e`, guess a URL (it exits if E2E_BASE_URL is

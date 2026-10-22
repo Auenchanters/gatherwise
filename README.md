@@ -116,27 +116,27 @@ Without a key the app still works: the plan is built by the engine, and the AI r
 
 ## Scripts
 
-| Script                                    | What it does                                                                                                            |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `npm run dev`                             | Vite and the local API server (`scripts/dev-server.ts`) together.                                                       |
-| `npm run build`                           | Type-check, build the client, check the first-page budget, compile the API and run the runtime smoke test.              |
-| `npm run preview`                         | Serve the production build locally.                                                                                     |
-| `npm run lint`                            | ESLint with zero warnings allowed.                                                                                      |
-| `npm run typecheck`                       | `tsc -b`: the app, node and test projects.                                                                              |
-| `npm run format` / `npm run format:check` | Prettier write / check.                                                                                                 |
-| `npm run knip`                            | Unused files, exports and dependencies.                                                                                 |
-| `npm test`                                | Unit and component tests (Vitest).                                                                                      |
-| `npm run test:coverage`                   | The same with coverage thresholds.                                                                                      |
-| `npm run test:e2e`                        | Playwright journeys against the production build, desktop and mobile.                                                   |
-| `npm run test:bundle`                     | The first-page JS budget on an existing build.                                                                          |
-| `npm run test:runtime`                    | The emitted API modules in plain Node ESM.                                                                              |
-| `npm run test:live`                       | Opt-in smoke test of a deployment: `E2E_BASE_URL=https://… npm run test:live`.                                          |
-| `npm run preflight`                       | Pre-publish checks on the git index: size, credentials, branches and these docs.                                        |
-| `npm run verify`                          | lint, typecheck, test:coverage, knip, build and format:check in one go. CI runs it, then the E2E tests and `npm audit`. |
+| Script                                    | What it does                                                                                                                                                    |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`                             | Vite and the local API server (`scripts/dev-server.ts`) together.                                                                                               |
+| `npm run build`                           | Type-check, build the client, check the first-page budget, compile the API and run the runtime smoke test.                                                      |
+| `npm run preview`                         | Serve the production build locally.                                                                                                                             |
+| `npm run lint`                            | ESLint with zero warnings allowed.                                                                                                                              |
+| `npm run typecheck`                       | `tsc -b`: the app, node and test projects.                                                                                                                      |
+| `npm run format` / `npm run format:check` | Prettier write / check.                                                                                                                                         |
+| `npm run knip`                            | Unused files, exports and dependencies.                                                                                                                         |
+| `npm test`                                | Unit and component tests (Vitest).                                                                                                                              |
+| `npm run test:coverage`                   | The same with coverage thresholds.                                                                                                                              |
+| `npm run test:e2e`                        | Playwright journeys against the production build, desktop and mobile.                                                                                           |
+| `npm run test:bundle`                     | The first-page JS budget on an existing build.                                                                                                                  |
+| `npm run test:runtime`                    | The emitted API modules in plain Node ESM.                                                                                                                      |
+| `npm run test:live`                       | Smoke test of a deployment with one real model call: `E2E_BASE_URL=https://… npm run test:live`. `.github/workflows/live.yml` runs it daily against production. |
+| `npm run preflight`                       | Pre-publish checks on the git index: size, credentials, branches and these docs.                                                                                |
+| `npm run verify`                          | lint, typecheck, test:coverage, knip, build and format:check in one go. CI runs it, then the E2E tests and `npm audit`.                                         |
 
 ## Deploy
 
-Gatherwise deploys to Vercel as configured in `vercel.json`: the Vite framework preset, `npm run build`, the `dist` output, a 30-second limit with request cancellation for `api/*.ts`, and the security and caching headers.
+Gatherwise deploys to Vercel as configured in `vercel.json`: the Vite framework preset, `npm run build`, the `dist` output, functions in the Mumbai region (`bom1`, near the Indian organizers the samples are written for), a 30-second limit with request cancellation for `api/*.ts`, and the security and caching headers.
 
 Set these environment variables in the Vercel project:
 
