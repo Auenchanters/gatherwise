@@ -206,7 +206,9 @@ export function AiPanel({ state, aiView, calls, onPersonalize }: AiPanelProps): 
             </h3>
             <p className="ai-panel__hint">
               Rebuilt in your browser by the same code the server runs. Your notes travel as data in
-              a separate message, and the plan&apos;s totals are never sent.
+              a separate message. Your total budget figure is not sent: each category&apos;s share
+              of it is, and together they make the budget minus the 10% contingency. Income is never
+              sent.
             </p>
             <pre
               className="receipt"

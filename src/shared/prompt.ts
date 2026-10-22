@@ -8,8 +8,9 @@
  * panel can show the exact prompt by rebuilding it locally from the same plan; the server never
  * echoes the prompt over the wire, and a test pins the handler to send exactly
  * `buildPrompt(plan, adjust)`.
- * Never does: interpolate untrusted text into instructions, send the total budget or income, ask
- * the model for totals or dates, call the network, or read the clock.
+ * Never does: interpolate untrusted text into instructions, send the total budget figure (each
+ * category's share is sent, and together they make the budget minus its 10% contingency) or
+ * income, ask the model for totals or dates, call the network, or read the clock.
  */
 import { z } from 'zod';
 import { MINOR_PER_MAJOR } from '../domain/money.js';

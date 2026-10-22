@@ -24,7 +24,7 @@ describe('sanitizeSuggestions', () => {
     after: [],
   };
   const dirty: AiSuggestions = {
-    summary: '<b>Bold</b> plan',
+    summary: '<b>Bold</b> plan\u0007',
     ideas: [idea],
     extraTasks: [task],
     vendorQuestions: [{ vendorId: 'generator', questions: ['Fuel\u0000 included?', '<a>x</a>'] }],

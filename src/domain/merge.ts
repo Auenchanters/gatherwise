@@ -55,8 +55,8 @@ interface Cut {
   readonly to: number;
 }
 
-// ponytail: counts code points, not graphemes, so a cut can still split a ZWJ emoji sequence;
-// switch to Intl.Segmenter if that shows up.
+// NOTE: this counts code points, not graphemes, so a cut can still split an emoji built from
+// several code points (a family joined by ZWJ). Cutting with Intl.Segmenter would lift that.
 /** Trims `raw` and cuts it to `max` code points (never inside a surrogate pair), then trims the cut. */
 function cut(raw: string, max: number): Cut {
   const chars = Array.from(raw.trim());

@@ -20,7 +20,8 @@ const INVISIBLE = /(?![\t\n\v\f\r])[\p{Cc}\p{Cs}\u202A-\u202E\u2066-\u2069\u{E00
 const LINK = /https?:\/\/|www\.|javascript:/giu;
 const SPACE_RUN = /\s+/gu;
 
-// ponytail: caps by code point, so a cut can split a ZWJ emoji sequence; Intl.Segmenter if it matters.
+// NOTE: this caps by code point, so a cut can split an emoji built from several code points (a
+// family joined by ZWJ). Cutting with Intl.Segmenter would lift that.
 /**
  * Cleans untrusted text and cuts it to at most `max` code points.
  * Trade-off: removing tag characters also turns subdivision-flag emoji (England, Scotland, Wales)
