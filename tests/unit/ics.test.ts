@@ -19,6 +19,8 @@ import { brief } from '../support/fixtures.js';
 const SEED = 20_261_021;
 const STAMP = '20261021T120000Z';
 const EVENT = isoDate('2026-12-12');
+/** The plan part of every UID for `brief('community')`: FNV-1a of "community:Maple Court Diwali Mela". */
+const PLAN = '6c97145f';
 const CRLF = '\r\n';
 /** Next to this file, whatever directory the tests run from. */
 const GOLDEN = new URL('../fixtures/plan.ics', import.meta.url);
@@ -128,8 +130,8 @@ const unescapeText = (v: string): string =>
 
 /**
  * What escaping must keep of a string: every line break as one LF, a tab as a space, and nothing
- * that is not text (C0 and C1 controls, DEL, lone surrogates, U+2028 and U+2029). Checked by code
- * point range, not by the regex the implementation uses.
+ * that is not text (C0 and C1 controls, DEL, lone surrogates, U+2028 and U+2029, bidi controls).
+ * Checked by code point range, not by the regex the implementation uses.
  */
 const sanitized = (s: string): string =>
   Array.from(s.replace(/\r\n|\r/gu, '\n').replaceAll('\t', ' '))
@@ -140,7 +142,11 @@ const sanitized = (s: string): string =>
         (code >= 0x7f && code <= 0x9f) ||
         (code >= 0xd800 && code <= 0xdfff) ||
         code === 0x2028 ||
-        code === 0x2029;
+        code === 0x2029 ||
+        code === 0x200e ||
+        code === 0x200f ||
+        (code >= 0x202a && code <= 0x202e) ||
+        (code >= 0x2066 && code <= 0x2069);
       return ch === '\n' || !notText;
     })
     .join('');
@@ -230,7 +236,7 @@ describe('toIcs: calendar and event structure', () => {
   it('puts the event first with its own dates and description', () => {
     const block = eventBlock(render(fixtureSchedule));
     expect(block).toEqual([
-      'UID:event-2026-12-12@gatherwise',
+      `UID:event-2026-12-12-${PLAN}@gatherwise`,
       `DTSTAMP:${STAMP}`,
       'DTSTART;VALUE=DATE:20261212',
       'DTEND;VALUE=DATE:20261213',
@@ -255,13 +261,13 @@ describe('toIcs: calendar and event structure', () => {
   it('writes one all-day VEVENT per open task, in schedule order, on its latest start', () => {
     const blocks = eventsOf(render(fixtureSchedule)).slice(1);
     expect(blocks.map((b) => valueOf(b, 'UID'))).toEqual([
-      'venue_booking-2026-12-12@gatherwise',
-      'public_space_permission-2026-12-12@gatherwise',
-      'rangoli-2026-12-12@gatherwise',
-      'thank_you_notes-2026-12-12@gatherwise',
+      `venue_booking-2026-12-12-${PLAN}@gatherwise`,
+      `public_space_permission-2026-12-12-${PLAN}@gatherwise`,
+      `rangoli-2026-12-12-${PLAN}@gatherwise`,
+      `thank_you_notes-2026-12-12-${PLAN}@gatherwise`,
     ]);
     expect(blocks[0]).toEqual([
-      'UID:venue_booking-2026-12-12@gatherwise',
+      `UID:venue_booking-2026-12-12-${PLAN}@gatherwise`,
       `DTSTAMP:${STAMP}`,
       'DTSTART;VALUE=DATE:20261031',
       'DTEND;VALUE=DATE:20261101',
@@ -360,15 +366,28 @@ describe('toIcs: UIDs', () => {
     }
   });
 
-  it('differ between two plans for different dates, so importing both overwrites nothing', () => {
-    const first = uids(toIcs(fixtureSchedule, brief('community'), day('2026-12-12'), STAMP));
-    const second = uids(toIcs(fixtureSchedule, brief('community'), day('2027-01-09'), STAMP));
+  it.each([
+    ['a different date', brief('community'), day('2027-01-09')],
+    ['a different name on the same date', brief('community', { name: 'Elm Street Fair' }), EVENT],
+    [
+      'a different kind with the same name and date',
+      brief('birthday', { name: 'Maple Court Diwali Mela' }),
+      EVENT,
+    ],
+  ])('differ for a plan with %s, so importing both overwrites nothing', (_name, other, date) => {
+    const first = uids(toIcs(fixtureSchedule, brief('community'), EVENT, STAMP));
+    const second = uids(toIcs(fixtureSchedule, other, date, STAMP));
     expect(first.filter((uid) => second.includes(uid))).toEqual([]);
+  });
+
+  it('stay the same for the same plan, so importing it again updates its events', () => {
+    const again = toIcs(fixtureSchedule, brief('community', { city: 'Mumbai' }), EVENT, STAMP);
+    expect(uids(again)).toEqual(uids(render(fixtureSchedule)));
   });
 
   it('are escaped like any other text', () => {
     const block = taskBlock(render(scheduleOf(task('x\r\nATTENDEE:y'))));
-    expect(valueOf(block, 'UID')).toBe(String.raw`x\nATTENDEE:y-2026-12-12@gatherwise`);
+    expect(valueOf(block, 'UID')).toBe(String.raw`x\nATTENDEE:y-2026-12-12-${PLAN}@gatherwise`);
   });
 });
 
@@ -425,6 +444,18 @@ const corpus: [label: string, payload: string, escaped: string][] = [
   ['NEL (U+0085)', `a${String.fromCodePoint(0x85)}b`, 'ab'],
   ['a line separator (U+2028)', `a${String.fromCodePoint(0x2028)}b`, 'ab'],
   ['a paragraph separator (U+2029)', `a${String.fromCodePoint(0x2029)}b`, 'ab'],
+  [
+    'a right-to-left override that disguises a file name',
+    `invoice${String.fromCodePoint(0x202e)}gnp.exe`,
+    'invoicegnp.exe',
+  ],
+  [
+    'every bidi mark, embedding, override and isolate',
+    [0x200e, 0x200f, 0x202a, 0x202b, 0x202c, 0x202d, 0x2066, 0x2067, 0x2068, 0x2069]
+      .map((code) => `a${String.fromCodePoint(code)}`)
+      .join(''),
+    'aaaaaaaaaa',
+  ],
   [
     'an ATTENDEE smuggled by U+2028',
     `Mela${String.fromCodePoint(0x2028)}ATTENDEE:mailto:x@y`,
@@ -497,7 +528,7 @@ describe('toIcs: folding', () => {
   /** The physical lines of the task's SUMMARY property, folds included. */
   const summaryLines = (title: string): string[] => {
     const physical = render(scheduleOf(task('a', { title }))).split(CRLF);
-    const from = physical.indexOf('UID:a-2026-12-12@gatherwise');
+    const from = physical.indexOf(`UID:a-2026-12-12-${PLAN}@gatherwise`);
     const start = from + physical.slice(from).findIndex((l) => l.startsWith('SUMMARY:'));
     const rest = physical.slice(start + 1);
     return [

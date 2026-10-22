@@ -34,7 +34,7 @@ Vendors are standard types per event kind (caterer, tent, sound and lighting, ph
 
 ## Calendar export uses all-day, floating dates
 
-`src/domain/ics.ts` writes all-day events (`DTSTART;VALUE=DATE`) with no time zone: the event on its date, with the start time and duration only in the description, and each unfinished task on its "start by" day, marked free (`TRANSP:TRANSPARENT`) so it does not block the day. There are no reminders (`VALARM`), done tasks are left out, and the file is a snapshot: after edits it has to be downloaded again.
+`src/domain/ics.ts` writes all-day events (`DTSTART;VALUE=DATE`) with no time zone: the event on its date, with the start time and duration only in the description, and each unfinished task on its "start by" day, marked free (`TRANSP:TRANSPARENT`) so it does not block the day. There are no reminders (`VALARM`), done tasks are left out, and the file is a snapshot: after edits it has to be downloaded again. Event UIDs carry the event date and a fingerprint of the event's kind and name, so importing the same plan again updates its events, and two plans with the same kind, name and date would update each other's.
 
 **What would lift it:** a timed event with the browser's time zone (`TZID`), reminders, and a subscribable calendar feed that updates itself.
 

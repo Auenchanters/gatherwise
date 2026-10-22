@@ -3,9 +3,9 @@
  * Outlook calendars import.
  * Does: writes one all-day event for the event itself, then one for each task that is not done, on
  * the task's latest start. Every text value is escaped (backslash, semicolon, comma, line breaks as
- * `\n`), a tab becomes a space, and every other control character, line separator and lone
- * surrogate is dropped, so no title, note or name can end its line and start a property or an
- * event of its own. Lines over 75 octets are folded between code points, so a UTF-8 sequence or a
+ * `\n`), a tab becomes a space, and every other control character, line separator, lone surrogate
+ * and bidi control is dropped, so no title, note or name can end its line and start a property or
+ * an event of its own, or read in a calendar differently from how it runs. Lines over 75 octets are folded between code points, so a UTF-8 sequence or a
  * surrogate pair is never cut in half. Task events are marked free (`TRANSP:TRANSPARENT`) so
  * reminders do not block the user's days. A task Gemini added (see `isAiTask`) says
  * "AI · personalized" at the start of its description, so the label travels with the text into
@@ -33,9 +33,11 @@ type TextProperty = readonly [name: string, value: string];
 /**
  * Escapes a TEXT value (RFC 5545 section 3.3.11): `\`, `;` and `,` get a backslash and CRLF, LF or
  * CR become `\n`, all in one pass, so nothing is escaped twice. Then a tab becomes a space and
- * everything that is not text is dropped: C0 and C1 controls (NEL included), DEL, lone surrogates
- * and the line and paragraph separators U+2028 and U+2029. A lone surrogate would otherwise reach
- * the file as U+FFFD, and the separators end a line in some parsers.
+ * everything that is not text is dropped: C0 and C1 controls (NEL included), DEL, lone surrogates,
+ * the line and paragraph separators U+2028 and U+2029, and the bidi marks, embeddings, overrides
+ * and isolates (U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069). A lone surrogate would
+ * otherwise reach the file as U+FFFD, the separators end a line in some parsers, and a bidi
+ * override makes a title read differently from how it runs ("gnp.exe").
  */
 function escapeText(raw: string): string {
   return raw
@@ -43,7 +45,20 @@ function escapeText(raw: string): string {
       match === '\\' || match === ';' || match === ',' ? `\\${match}` : '\\n',
     )
     .replaceAll('\t', ' ')
-    .replace(/[\p{Cc}\p{Cs}\u0085\u2028\u2029]/gu, '');
+    .replace(/[\p{Cc}\p{Cs}\u0085\u2028\u2029\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu, '');
+}
+
+/**
+ * A short, stable fingerprint of `text`: 32-bit FNV-1a over its UTF-16 code units, as 8 hex
+ * digits. Pure and deterministic, for telling plans apart in a UID; not a secret or a checksum.
+ */
+function fingerprint(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, '0');
 }
 
 /**
@@ -96,8 +111,10 @@ function allDayEvent(
  * Renders `schedule` as an iCalendar file, every line ended with CRLF.
  *
  * The event itself comes first, on `eventDate`, followed by one all-day event per task that is not
- * `done`, in schedule order, on its `latestStart`. UIDs end in `-<eventDate>@gatherwise`, so
- * importing two plans never overwrites events. `schedule` and `brief` are not modified.
+ * `done`, in schedule order, on its `latestStart`. UIDs end in `-<eventDate>-<plan>@gatherwise`,
+ * where `<plan>` is a fingerprint of the event's kind and name: two plans that differ in date,
+ * kind or name never share a UID, so importing both overwrites nothing, while importing the same
+ * plan again updates its events instead of doubling them. `schedule` and `brief` are not modified.
  *
  * @param stamp The `DTSTAMP` of every event as UTC basic format (`YYYYMMDDTHHMMSSZ`). The caller
  * reads the clock; this module never does.
@@ -114,6 +131,7 @@ export function toIcs(
     throw new RangeError(`DTSTAMP must be YYYYMMDDTHHMMSSZ in UTC: ${JSON.stringify(stamp)}`);
   }
   const hours = brief.durationHours === 1 ? 'hour' : 'hours';
+  const plan = `${eventDate}-${fingerprint(`${brief.kind}:${brief.name}`)}`;
   const where = brief.city === '' ? '' : ` · ${brief.city}`;
   const lines = [
     'BEGIN:VCALENDAR',
@@ -122,14 +140,14 @@ export function toIcs(
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     `X-WR-CALNAME:${escapeText(brief.name)}`,
-    ...allDayEvent(`event-${eventDate}`, stamp, eventDate, [
+    ...allDayEvent(`event-${plan}`, stamp, eventDate, [
       ['SUMMARY', brief.name],
       ['DESCRIPTION', `Starts ${brief.startTime} · ${brief.durationHours} ${hours}${where}`],
     ]),
     ...schedule.tasks
       .filter((task) => task.status !== 'done')
       .flatMap((task) =>
-        allDayEvent(`${task.id}-${eventDate}`, stamp, task.latestStart, [
+        allDayEvent(`${task.id}-${plan}`, stamp, task.latestStart, [
           // A reminder, not an appointment. The event's own day stays busy (the default, OPAQUE).
           ['TRANSP', 'TRANSPARENT'],
           ['SUMMARY', task.title],
