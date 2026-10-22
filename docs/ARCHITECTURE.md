@@ -110,9 +110,9 @@ From `npm run build` at this commit, as `scripts/bundle-budget.mjs` reports them
 
 | Chunk                                                                | Loaded                              | Raw       | Gzip     |
 | -------------------------------------------------------------------- | ----------------------------------- | --------- | -------- |
-| `index` (entry: React, the app shell, landing and brief form)        | first page                          | 243.47 kB | 76.31 kB |
-| `validate` (brief validation)                                        | on submit                           | 2.82 kB   | 1.21 kB  |
-| `format` (zod and the shared schemas)                                | with validation or the planner      | 99.90 kB  | 28.57 kB |
-| `planner` (store, engine, templates, client, persistence, workspace) | after a valid submit, or to restore | 85.40 kB  | 27.11 kB |
+| `index` (entry: React, the app shell, landing and brief form)        | first page                          | 243.99 kB | 76.51 kB |
+| `validate` (brief validation)                                        | on submit                           | 2.86 kB   | 1.23 kB  |
+| `format` (zod and the shared schemas)                                | with validation or the planner      | 100.14 kB | 28.69 kB |
+| `planner` (store, engine, templates, client, persistence, workspace) | after a valid submit, or to restore | 87.36 kB  | 27.89 kB |
 
-The build fails if the entry chunk exceeds 250 kB raw or 80 kB gzip (`scripts/bundle-budget.mjs`). Styles are split the same way: the entry stylesheet is 8.69 kB and the planner's is 18.03 kB, raw, as Vite reports them.
+The build fails if the entry chunk exceeds 250 kB raw or 80 kB gzip (`scripts/bundle-budget.mjs`). Styles are split the same way: the entry stylesheet is 8.69 kB and the planner's is 18.07 kB, raw, as Vite reports them.
