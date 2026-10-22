@@ -37,7 +37,10 @@ const planResponse = z.strictObject({
 const healthResponse = z.strictObject({ status: z.literal('ok'), ai: z.literal('configured') });
 const errorResponse = z.object({ error: z.object({ code: z.string().regex(/^[A-Z_]+$/u) }) });
 
-/** A response's security headers: a CSP without `unsafe-`, nosniff and frame denial. */
+/**
+ * A response's security headers: a CSP without `unsafe-`, nosniff, frame denial and same-origin
+ * opener and resource policies.
+ */
 export function checkHeaders(headers: Headers): string[] {
   const failures: string[] = [];
   const csp = headers.get('content-security-policy');
@@ -48,6 +51,12 @@ export function checkHeaders(headers: Headers): string[] {
   }
   if (headers.get('x-frame-options')?.toUpperCase() !== 'DENY') {
     failures.push('X-Frame-Options is not DENY');
+  }
+  if (headers.get('cross-origin-opener-policy') !== 'same-origin') {
+    failures.push('Cross-Origin-Opener-Policy is not same-origin');
+  }
+  if (headers.get('cross-origin-resource-policy') !== 'same-origin') {
+    failures.push('Cross-Origin-Resource-Policy is not same-origin');
   }
   return failures;
 }

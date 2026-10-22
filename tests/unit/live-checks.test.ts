@@ -69,6 +69,8 @@ const goodHeaders = (): Headers =>
     'content-security-policy': "default-src 'self'",
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',
+    'cross-origin-opener-policy': 'same-origin',
+    'cross-origin-resource-policy': 'same-origin',
     'cache-control': 'no-store',
   });
 
@@ -136,7 +138,7 @@ describe('runLiveSmoke against a stand-in deployment', () => {
 });
 
 describe('checkHeaders', () => {
-  it('accepts a CSP without unsafe-, nosniff and DENY', () => {
+  it('accepts a CSP without unsafe-, nosniff, DENY and same-origin isolation', () => {
     expect(checkHeaders(goodHeaders())).toEqual([]);
   });
 
@@ -150,6 +152,18 @@ describe('checkHeaders', () => {
     ],
     ['no nosniff', 'x-content-type-options', null, 'X-Content-Type-Options is not nosniff'],
     ['a frameable page', 'x-frame-options', 'SAMEORIGIN', 'X-Frame-Options is not DENY'],
+    [
+      'no opener isolation',
+      'cross-origin-opener-policy',
+      null,
+      'Cross-Origin-Opener-Policy is not same-origin',
+    ],
+    [
+      'a cross-origin-readable resource',
+      'cross-origin-resource-policy',
+      'cross-origin',
+      'Cross-Origin-Resource-Policy is not same-origin',
+    ],
   ])('fails %s', (_name, header, value, failure) => {
     const headers = goodHeaders();
     if (value === null) headers.delete(header);
