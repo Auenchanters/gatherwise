@@ -3,7 +3,7 @@
  * Does: serve every response under the production CSP, answer `/api/plan` with the fixed answer
  * (shaped like the real API) or, when a test passes one, a failure, while recording each request
  * body and console error; run axe at WCAG 2.1 A and AA; check for sideways page scroll; fill the
- * form from the community sample; and open the sample's plan.
+ * form from a landing sample; and open the community sample's plan.
  * Never does: reach a real model.
  */
 import { readFileSync } from 'node:fs';
@@ -13,6 +13,20 @@ import { aiMeta, aiSuggestions } from '../support/fixtures.js';
 
 /** The community sample's event name, which becomes the plan's h1. */
 export const SAMPLE_NAME = 'Green Park Diwali Mela';
+
+/** A landing sample: the button that fills the form and the event name it fills in. */
+interface Sample {
+  readonly button: string;
+  readonly name: string;
+}
+
+const COMMUNITY_SAMPLE: Sample = { button: 'Try a sample community event', name: SAMPLE_NAME };
+
+/** The wedding sample, whose plan has the bar vendor and no Volunteers tab. */
+export const WEDDING_SAMPLE: Sample = {
+  button: 'Try a sample wedding',
+  name: "Meera & Rohan's Wedding",
+};
 
 /** The line the AI panel shows once the fixed answer has landed. */
 export const AI_DONE = 'Personalized by gemini-3.5-flash-lite in one call.';
@@ -74,11 +88,11 @@ export async function prepare(
 export const noSidewaysScroll = (page: Page): Promise<boolean> =>
   page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 
-/** Opens the landing and fills the form from the community sample. */
-export async function openSampleForm(page: Page): Promise<void> {
+/** Opens the landing and fills the form from a sample (the community one unless told otherwise). */
+export async function openSampleForm(page: Page, sample: Sample = COMMUNITY_SAMPLE): Promise<void> {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Try a sample community event' }).click();
-  await expect(page.getByRole('textbox', { name: 'Event name' })).toHaveValue(SAMPLE_NAME);
+  await page.getByRole('button', { name: sample.button }).click();
+  await expect(page.getByRole('textbox', { name: 'Event name' })).toHaveValue(sample.name);
 }
 
 /** Opens the community sample's plan and waits until the AI's answer has landed. */

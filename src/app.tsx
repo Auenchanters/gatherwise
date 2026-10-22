@@ -32,6 +32,7 @@ const loadPlanner = (): Promise<PlannerModule> => import('./features/plan/planne
 /** How the sample announcement names each sample. */
 const SAMPLE_NAMES: Record<SampleKind, string> = {
   community: 'community event',
+  wedding: 'wedding',
   birthday: 'birthday',
 };
 

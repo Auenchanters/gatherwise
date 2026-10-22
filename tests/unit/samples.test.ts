@@ -1,8 +1,9 @@
 /**
  * Tests for src/features/brief/samples.ts, the demo briefs behind the landing's sample buttons.
  *
- * Does: proves both samples are schema-valid and inside the planning window for any `today`, and
- * pins the demo content the video and judges rely on.
+ * Does: proves every sample is schema-valid and inside the planning window for any `today`, that
+ * none opens with a task that is overdue or cannot be done in time, and pins the demo content the
+ * video and judges rely on.
  * Never does: read the clock; `today` is a parameter.
  */
 import fc from 'fast-check';
@@ -16,8 +17,10 @@ import { TODAY as today } from '../support/fixtures.js';
 
 const todayArb = fc.integer({ min: 0, max: 30_000 }).map((n) => addDays(isoDate('2000-01-01'), n));
 
+const KINDS = ['community', 'wedding', 'birthday'] as const;
+
 describe('sampleBrief', () => {
-  it.each(['community', 'birthday'] as const)(
+  it.each(KINDS)(
     'the %s sample parses unchanged and its date is in range for any today',
     (kind) => {
       fc.assert(
@@ -31,10 +34,51 @@ describe('sampleBrief', () => {
     },
   );
 
-  it('the community sample leaves time for every task, so the first plan opens calm (R71)', () => {
-    const plan = buildPlan(sampleBrief('community', today), today);
+  it.each(KINDS)(
+    'the %s sample leaves time for every task, so its first plan opens calm',
+    (kind) => {
+      const plan = buildPlan(sampleBrief(kind, today), today);
+      if (!plan.ok) throw new Error('the sample must plan');
+      const { schedule } = plan.value;
+      expect(schedule.infeasibleCount).toBe(0);
+      expect(schedule.overdueCount).toBe(0);
+      expect(
+        schedule.tasks.filter((t) => t.status === 'infeasible' || t.status === 'overdue'),
+      ).toEqual([]);
+    },
+  );
+
+  it('the wedding sample is a vegetarian reception that serves alcohol, so the bar vendor appears', () => {
+    expect(sampleBrief('wedding', today)).toEqual({
+      kind: 'wedding',
+      subtype: 'ceremony_reception',
+      name: "Meera & Rohan's Wedding",
+      date: '2027-06-18',
+      startTime: '19:00',
+      durationHours: 5,
+      city: 'Jaipur',
+      venue: 'indoor_hall',
+      guests: 150,
+      budget: 1_200_000,
+      currency: 'INR',
+      dietary: ['vegetarian'],
+      accessibility: ['elderly'],
+      amplifiedSound: true,
+      servesFood: true,
+      servesAlcohol: true,
+      volunteersAvailable: 0,
+      vibe: 'traditional, marigold garlands and candlelight',
+      notes: 'Ceremony first, then a reception dinner with music',
+    });
+    const plan = buildPlan(sampleBrief('wedding', today), today);
     if (!plan.ok) throw new Error('the sample must plan');
-    expect(plan.value.schedule.infeasibleCount + plan.value.schedule.overdueCount).toBe(0);
+    expect(plan.value.vendors.map((v) => v.label)).toEqual([
+      'Photographer & videographer',
+      'Caterer',
+      'Decorator & florist',
+      'DJ or band',
+      'Bar service',
+    ]);
   });
 
   it('the community sample is a lantern-lit Diwali mela with stalls and sponsors', () => {
@@ -74,7 +118,7 @@ describe('sampleBrief', () => {
       kind: 'birthday',
       subtype: 'kids',
       name: "Aarav's 8th — space adventure",
-      date: '2026-11-11',
+      date: '2026-11-30',
       startTime: '16:00',
       durationHours: 3,
       city: 'Pune',

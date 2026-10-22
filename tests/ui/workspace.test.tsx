@@ -177,6 +177,65 @@ describe('workspace: zero-call edits', () => {
   });
 });
 
+describe('workspace: a wedding', () => {
+  it('shows the wedding template: its budget lines, its vendors and no Volunteers tab', async () => {
+    const wedding = sampleBrief('wedding', today);
+    // No answer yet, so everything on screen is the engine's own plan for the sample.
+    const { store } = await setup({
+      client: fakeClient(() => new Promise<Answer>(() => undefined)),
+      start: wedding,
+    });
+    const state = store.getState().plan;
+    if (state.phase !== 'ready') throw new Error('expected a plan');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe("Meera & Rohan's Wedding");
+    const facts = screen.getByRole('list', { name: 'Event facts' }).textContent;
+    expect(facts).toContain('Wedding · Ceremony & reception');
+    expect(facts).toContain('240 days to go');
+    expect(facts).toContain('150 guests');
+    expect(facts).toContain('₹12,00,000.00 budget');
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
+      'Overview',
+      'Budget',
+      'Timeline',
+      'Vendors',
+      'Ideas',
+    ]);
+    expect(screen.queryByRole('region', { name: "Some deadlines can't be met" })).toBeNull();
+
+    const budget = within(screen.getByRole('tabpanel', { name: 'Budget' }));
+    expect(budget.getAllByRole('rowheader').map((h) => h.textContent)).toEqual([
+      'Venue',
+      'Catering',
+      'Décor & flowers',
+      'Photo & video',
+      'Music & entertainment',
+      'Attire & beauty',
+      'Invitations & gifts',
+      'Transport & stay',
+      'Contingency',
+      'Total',
+    ]);
+    for (const id of ['catering', 'photo_video']) {
+      const line = state.plan.budget.lines.find((l) => l.categoryId === id);
+      if (!line) throw new Error(`the wedding budget has a ${id} line`);
+      expect(allocated(line.label)).toBe(formatMoney(line.allocated, 'INR'));
+    }
+    expect(screen.queryByRole('region', { name: 'Break-even' })).toBeNull();
+
+    const vendors = within(screen.getByRole('tabpanel', { name: 'Vendors' }));
+    expect(
+      vendors.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent),
+    ).toEqual([
+      'Photographer & videographer',
+      'Caterer',
+      'Decorator & florist',
+      'DJ or band',
+      'Bar service',
+    ]);
+    expect(screen.queryByRole('heading', { name: 'Volunteers' })).toBeNull();
+  });
+});
+
 describe('workspace: AI failure', () => {
   it('keeps the budget, shows the notice and offers to try again', async () => {
     const answers: Answer[] = [err({ code: 'unavailable' })];

@@ -1,16 +1,17 @@
 /**
  * Ready-made briefs behind the landing's "Try a sample" buttons, so a judge or a first-time visitor
  * sees a full plan in one click.
- * Does: builds a community festival 75 days out (every lead time fits, so the first plan is calm)
- * and a kids' birthday 21 days out, both relative to the `today` passed in, so they always fall
- * inside the planning window.
+ * Does: builds a community festival 75 days out, a wedding 240 days out and a kids' birthday 40
+ * days out, all relative to the `today` passed in, so they always fall inside the planning window.
+ * Each is dated so every lead time fits and the first plan opens calm (weddings need the longest
+ * runway, so theirs is the furthest out).
  * Never does: read the clock, or share objects between calls (each call returns fresh data).
  */
 import { addDays, type IsoDate } from '../../domain/dates.js';
 import type { EventBrief } from '../../shared/schema.js';
 
 /** The event kinds that have a sample. */
-export type SampleKind = 'community' | 'birthday';
+export type SampleKind = 'community' | 'wedding' | 'birthday';
 
 /** A schema-valid, demo-ready brief of the given kind, dated relative to `today`. */
 export function sampleBrief(kind: SampleKind, today: IsoDate): EventBrief {
@@ -45,11 +46,34 @@ export function sampleBrief(kind: SampleKind, today: IsoDate): EventBrief {
       },
     };
   }
+  if (kind === 'wedding') {
+    return {
+      kind: 'wedding',
+      subtype: 'ceremony_reception',
+      name: "Meera & Rohan's Wedding",
+      date: addDays(today, 240),
+      startTime: '19:00',
+      durationHours: 5,
+      city: 'Jaipur',
+      venue: 'indoor_hall',
+      guests: 150,
+      budget: 1_200_000,
+      currency: 'INR',
+      dietary: ['vegetarian'],
+      accessibility: ['elderly'],
+      amplifiedSound: true,
+      servesFood: true,
+      servesAlcohol: true,
+      volunteersAvailable: 0,
+      vibe: 'traditional, marigold garlands and candlelight',
+      notes: 'Ceremony first, then a reception dinner with music',
+    };
+  }
   return {
     kind: 'birthday',
     subtype: 'kids',
     name: "Aarav's 8th — space adventure",
-    date: addDays(today, 21),
+    date: addDays(today, 40),
     startTime: '16:00',
     durationHours: 3,
     city: 'Pune',

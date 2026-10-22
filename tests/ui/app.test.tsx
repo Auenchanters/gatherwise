@@ -85,8 +85,9 @@ describe('App landing state', () => {
   });
 
   it.each([
-    ['Try a sample community event', 'Green Park Diwali Mela', 'community event'],
+    ['Try a sample wedding', "Meera & Rohan's Wedding", 'wedding'],
     ['Try a sample birthday', "Aarav's 8th — space adventure", 'birthday'],
+    ['Try a sample community event', 'Green Park Diwali Mela', 'community event'],
   ])('"%s" fills the form, focuses its heading and says so', async (button, name, sample) => {
     const { user } = setup();
     await user.click(screen.getByRole('button', { name: button }));

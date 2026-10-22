@@ -1,6 +1,6 @@
 /**
  * The landing intro shown above the brief form while there is no plan: what Gatherwise does, for
- * which events, and two one-click samples.
+ * which events, and three one-click samples.
  * Does: owns the page's only `<h1>` in this state and calls `onUseSample(kind)`; the parent fills
  * the form and moves focus to it.
  * Never does: hold state, fill the form itself, or call the API.
@@ -25,6 +25,13 @@ const PROMISES = [
     text: 'Ideas made for your event by Google Gemini, labeled and priced against your budget.',
   },
 ] as const;
+
+/** The sample buttons, in the order the headline names the events. */
+const SAMPLE_BUTTONS = [
+  { kind: 'wedding', label: 'Try a sample wedding' },
+  { kind: 'birthday', label: 'Try a sample birthday' },
+  { kind: 'community', label: 'Try a sample community event' },
+] as const satisfies readonly { readonly kind: SampleKind; readonly label: string }[];
 
 /** Props for {@link Landing}. */
 export interface LandingProps {
@@ -60,24 +67,18 @@ export function Landing({ onUseSample }: LandingProps): ReactElement {
       <div className="landing__samples">
         <p className="landing__samples-intro">In a hurry? Start from an example and edit it.</p>
         <div className="landing__buttons">
-          <button
-            className="button button--secondary"
-            type="button"
-            onClick={() => {
-              onUseSample('community');
-            }}
-          >
-            Try a sample community event
-          </button>
-          <button
-            className="button button--secondary"
-            type="button"
-            onClick={() => {
-              onUseSample('birthday');
-            }}
-          >
-            Try a sample birthday
-          </button>
+          {SAMPLE_BUTTONS.map(({ kind, label }) => (
+            <button
+              className="button button--secondary"
+              type="button"
+              key={kind}
+              onClick={() => {
+                onUseSample(kind);
+              }}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
     </section>
