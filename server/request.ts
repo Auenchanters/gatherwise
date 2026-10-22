@@ -49,7 +49,8 @@ export function validateTransport(request: Request, appOrigin: string | undefine
 /** The body as text, counting the bytes actually streamed since `Content-Length` is optional. */
 async function readBoundedText(request: Request): Promise<string> {
   if (!request.body) return '';
-  const reader = request.body.getReader();
+  // Typed explicitly: under Node's typings alone the reader's chunks are `any`.
+  const reader: ReadableStreamDefaultReader<Uint8Array> = request.body.getReader();
   const decoder = new TextDecoder();
   let bytes = 0;
   let text = '';

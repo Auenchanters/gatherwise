@@ -1,12 +1,11 @@
 {
-  "extends": "./tsconfig.json",
+  "extends": "./tsconfig.node.json",
   "compilerOptions": {
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "noEmit": false,
     "rootDir": ".",
-    "outDir": "artifacts/runtime",
-    "types": ["node"]
+    "outDir": "artifacts/runtime"
   },
   "include": ["api/**/*.ts", "server/**/*.ts"]
 }
