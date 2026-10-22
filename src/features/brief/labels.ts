@@ -13,6 +13,7 @@ import type {
   SUBTYPES,
   VENUES,
 } from '../../shared/options.js';
+import { LOCALE } from '../../ui/format.js';
 
 /**
  * Why a date was refused, by `eventDateOf`'s reason. The brief form's checker and the workspace's
@@ -103,11 +104,11 @@ export const LANGUAGE_LABELS: Record<Language, string> = {
 // One formatter call per currency, ever: a symbol never changes at runtime.
 const symbols = new Map<string, string>();
 
-/** The symbol shown before a money input, e.g. ₹ for INR or A$ for AUD (from `Intl`, en-IN). */
+/** The symbol shown before a money input, e.g. ₹ for INR or A$ for AUD (from `Intl`, in {@link LOCALE}). */
 export function currencySymbol(currency: string): string {
   let symbol = symbols.get(currency);
   if (symbol === undefined) {
-    symbol = new Intl.NumberFormat('en-IN', { style: 'currency', currency })
+    symbol = new Intl.NumberFormat(LOCALE, { style: 'currency', currency })
       .formatToParts(0)
       .filter((part) => part.type === 'currency')
       .map((part) => part.value)

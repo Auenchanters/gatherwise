@@ -32,6 +32,8 @@ export interface Shift {
   readonly needed: number;
   /** Volunteers placed on this shift, never more than `needed`. */
   readonly assigned: number;
+  /** Volunteers still missing on this shift: `needed - assigned`, 0 when fully staffed. */
+  readonly short: number;
 }
 
 /** The shifts of an event and the gap between the volunteers needed and available. */
@@ -71,12 +73,14 @@ export function planShifts(brief: EventBrief): ShiftPlan {
   const shifts = Array.from({ length: count }, (_, i): Shift => {
     const hours = Math.min(SHIFT_HOURS, brief.durationHours - i * SHIFT_HOURS);
     const from = startMinutes + i * SHIFT_HOURS * MINUTES_PER_HOUR;
+    const assigned = Math.min(needed, share + (i < extra ? 1 : 0));
     return {
       start: clock(from),
       end: clock(from + hours * MINUTES_PER_HOUR),
       hours,
       needed,
-      assigned: Math.min(needed, share + (i < extra ? 1 : 0)),
+      assigned,
+      short: needed - assigned,
     };
   });
   const assigned = shifts.reduce((total, shift) => total + shift.assigned, 0);

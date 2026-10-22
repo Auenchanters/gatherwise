@@ -8,7 +8,6 @@
  * and whether the form is showing).
  */
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
-import { flushSync } from 'react-dom';
 import { vendorView, type ReadyState } from '../../domain/reducer.js';
 import { BriefForm } from '../brief/brief-form.js';
 import { Budget } from './budget.js';
@@ -17,7 +16,8 @@ import { Ideas } from './ideas.js';
 import { InfeasibleBanner } from './infeasible-banner.js';
 import { Overview } from './overview.js';
 import type { PlannerSnapshot, PlannerStore } from './planner-store.js';
-import { PLAN_ERROR_ID } from './storage-key.js';
+import { focusAfter } from '../../ui/focus.js';
+import { refusalTarget } from './storage-key.js';
 import { panelId, tabId, Tabs, type TabSpec } from './tabs.js';
 import { Timeline } from './timeline.js';
 import { Vendors } from './vendors.js';
@@ -53,8 +53,7 @@ export function Workspace({ state, snapshot, store }: WorkspaceProps): ReactElem
   /** Runs a command that closes the plan, then puts focus on `<main>`, since this view is gone. */
   const close = (command: () => void): void => {
     const main = rootRef.current?.closest('main');
-    flushSync(command);
-    main?.focus();
+    focusAfter(command, () => main);
   };
 
   const tabs: TabSpec<TabId>[] = [
@@ -95,10 +94,12 @@ export function Workspace({ state, snapshot, store }: WorkspaceProps): ReactElem
         state={state}
         headingRef={headingRef}
         onEdit={() => {
-          flushSync(() => {
-            setEditing(true);
-          });
-          formHeadingRef.current?.focus();
+          focusAfter(
+            () => {
+              setEditing(true);
+            },
+            () => formHeadingRef.current,
+          );
         }}
         onNewPlan={() => {
           close(store.reset);
@@ -114,21 +115,22 @@ export function Workspace({ state, snapshot, store }: WorkspaceProps): ReactElem
             today={state.today}
             headingRef={formHeadingRef}
             onSubmit={(brief) => {
-              // Rendered at once, so a refusal's message exists to take focus.
-              const { accepted } = flushSync(() => store.submit(brief));
-              // A refused brief keeps the form, with everything typed, and says why.
+              // Rendered at once, so a refusal's message exists to take focus. A refused brief
+              // keeps the form, with everything typed, and says why.
+              const { accepted } = focusAfter(() => store.submit(brief), refusalTarget);
               if (accepted) setEditing(false);
-              else document.getElementById(PLAN_ERROR_ID)?.focus();
             }}
           />
           <button
             className="button button--secondary workspace__cancel"
             type="button"
             onClick={() => {
-              flushSync(() => {
-                setEditing(false);
-              });
-              headingRef.current?.focus();
+              focusAfter(
+                () => {
+                  setEditing(false);
+                },
+                () => headingRef.current,
+              );
             }}
           >
             Cancel editing

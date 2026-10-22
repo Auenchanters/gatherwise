@@ -14,7 +14,7 @@ import type { VendorItem } from '../../domain/vendors.js';
 import { KIND_LABELS, SUBTYPE_LABELS } from '../brief/labels.js';
 import { AiPanel } from './ai-panel.js';
 import { AiBadge } from './chips.js';
-import { countOf, formatCount, showDate } from './format.js';
+import { countOf, formatCount, showDate } from '../../ui/format.js';
 import { Panel } from './panel.js';
 import type { PlannerSnapshot } from './planner-store.js';
 import './overview.css';
@@ -55,7 +55,7 @@ export function Overview({ state, vendors, snapshot, onPersonalize }: OverviewPr
   const summary = plan.addenda?.summary;
   const attention = schedule.tasks.filter((t) => NEEDS_ATTENTION.has(t.status)).length;
   const toBook = vendors.filter((v) => v.status !== 'booked').length;
-  const shortfall = breakEven.surplus < 0;
+  const shortfall = breakEven.balance.kind === 'shortfall';
 
   return (
     <Panel title="Your plan at a glance">
@@ -89,7 +89,7 @@ export function Overview({ state, vendors, snapshot, onPersonalize }: OverviewPr
         {brief.kind === 'community' && (
           <Tile
             label="Break-even"
-            value={`${shortfall ? 'Shortfall' : 'Surplus'} ${money(Math.abs(breakEven.surplus))}`}
+            value={`${shortfall ? 'Shortfall' : 'Surplus'} ${money(breakEven.balance.amount)}`}
             note={`Income ${money(breakEven.income)} against costs ${money(breakEven.costs)}`}
             tone={shortfall ? 'bad' : undefined}
           />

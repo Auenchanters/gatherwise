@@ -31,7 +31,12 @@ const inr = (major: number) => toMinor(major, 'INR');
 describe('breakEven with no income', () => {
   it('has zero income, a deficit equal to the costs and no break-even figures', () => {
     const result = breakEven(budgetOf(150_000));
-    expect(result).toEqual({ income: 0, costs: inr(150_000), surplus: inr(-150_000) });
+    expect(result).toEqual({
+      income: 0,
+      costs: inr(150_000),
+      surplus: inr(-150_000),
+      balance: { kind: 'shortfall', amount: inr(150_000) },
+    });
     expect('breakEvenTicketPrice' in result).toBe(false);
     expect('breakEvenAttendance' in result).toBe(false);
   });
@@ -112,6 +117,7 @@ describe('breakEven with income', () => {
       sponsors: 200_000,
     });
     expect(result.surplus).toBe(inr(55_000));
+    expect(result.balance).toEqual({ kind: 'surplus', amount: inr(55_000) });
     expect(result.breakEvenTicketPrice).toBe(0);
     expect(result.breakEvenAttendance).toBe(0);
   });
@@ -165,6 +171,9 @@ describe('breakEven with income', () => {
         expect(isMinor(result.income)).toBe(true);
         expect(result.costs).toBe(budget.total + (budget.overBy ?? 0));
         expect(result.surplus).toBe(result.income - result.costs);
+        // The worded balance is the surplus split into a side of zero and a non-negative amount.
+        expect(result.balance.amount).toBe(Math.abs(result.surplus));
+        expect(result.balance.kind).toBe(result.surplus < 0 ? 'shortfall' : 'surplus');
         const { ticketPrice, expectedPaidAttendance } = income;
         const tickets = toMinor(ticketPrice, b.currency) * expectedPaidAttendance;
         const other =

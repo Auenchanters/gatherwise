@@ -23,7 +23,7 @@ import {
 import { createMemoryLimits, type Limits } from '../../server/rate-limit.js';
 import type { Generate } from '../../server/provider.js';
 import { buildPlan } from '../../src/domain/plan.js';
-import { buildPrompt } from '../../src/shared/prompt.js';
+import { buildPrompt } from '../../src/ai/prompt.js';
 import { aiMetaSchema, eventBriefSchema, type EventBrief } from '../../src/shared/schema.js';
 import { brief, TODAY } from '../support/fixtures.js';
 

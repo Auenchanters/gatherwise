@@ -30,8 +30,10 @@ const community = (
 
 const sum = (values: readonly number[]): number => values.reduce((total, v) => total + v, 0);
 /** One numeric column of the shifts. */
-const field = (shifts: readonly Shift[], key: 'needed' | 'assigned' | 'hours'): number[] =>
-  shifts.map((s) => s[key]);
+const field = (
+  shifts: readonly Shift[],
+  key: 'needed' | 'assigned' | 'hours' | 'short',
+): number[] => shifts.map((s) => s[key]);
 
 /**
  * The reference: hand out volunteers one at a time, shift after shift, skipping full shifts,
@@ -80,8 +82,8 @@ describe('a 300-guest, 6-hour event', () => {
 
   it('has two 3-hour shifts that follow each other from the start time', () => {
     expect(plan.shifts).toEqual([
-      { start: '16:00', end: '19:00', hours: 3, needed: 12, assigned: 12 },
-      { start: '19:00', end: '22:00', hours: 3, needed: 12, assigned: 12 },
+      { start: '16:00', end: '19:00', hours: 3, needed: 12, assigned: 12, short: 0 },
+      { start: '19:00', end: '22:00', hours: 3, needed: 12, assigned: 12, short: 0 },
     ]);
   });
 
@@ -104,6 +106,12 @@ describe('too few volunteers', () => {
 
   it('shares the volunteers round-robin, earlier shifts first', () => {
     expect(field(planShifts(b).shifts, 'assigned')).toEqual([3, 2]);
+  });
+
+  it('says how many each shift is short, and those add up to the shortfall', () => {
+    const plan = planShifts(b);
+    expect(field(plan.shifts, 'short')).toEqual([9, 10]);
+    expect(plan.shifts.reduce((total, shift) => total + shift.short, 0)).toBe(plan.shortfall);
   });
 });
 
@@ -162,7 +170,7 @@ describe('volunteer supply', () => {
   it('never staffs a shift above what it needs: the rest are spare', () => {
     const plan = planShifts(community(10, 1, 500));
     expect(plan.shifts).toEqual([
-      { start: '16:00', end: '17:00', hours: 1, needed: 2, assigned: 2 },
+      { start: '16:00', end: '17:00', hours: 1, needed: 2, assigned: 2, short: 0 },
     ]);
     expect(plan.shortfall).toBe(0);
     expect(plan.spare).toBe(498);

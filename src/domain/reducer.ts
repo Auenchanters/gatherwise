@@ -26,8 +26,11 @@ interface Progress {
   readonly checklistDone: readonly string[];
 }
 
-/** Why the AI step produced no suggestions, as the browser's client reports it. */
-export type AiErrorCode = 'network' | 'timeout' | 'rate_limited' | 'unavailable' | 'invalid';
+/**
+ * Why a plan has no AI layer: the plan stays whole without it, and the state records which of
+ * these the client reported so the workspace can say what to do (wait, retry or carry on).
+ */
+export type AiFailure = 'network' | 'timeout' | 'rate_limited' | 'unavailable' | 'invalid';
 
 /** Where the one model call for this plan stands. Absent fields are left out, never `undefined`. */
 export interface AiState {
@@ -35,7 +38,7 @@ export interface AiState {
   readonly suggestions?: AiSuggestions;
   readonly meta?: AiMeta;
   /** Why the call failed; set only while `status` is `failed`. */
-  readonly error?: AiErrorCode;
+  readonly error?: AiFailure;
 }
 
 /** Why an action was refused. The plan before it is kept. */
@@ -79,7 +82,7 @@ export type PlanAction =
       readonly suggestions: AiSuggestions;
       readonly meta: AiMeta;
     }
-  | { readonly type: 'ai/failed'; readonly generation: number; readonly error: AiErrorCode }
+  | { readonly type: 'ai/failed'; readonly generation: number; readonly error: AiFailure }
   | { readonly type: 'guests/changed'; readonly guests: number }
   | { readonly type: 'budget/changed'; readonly budget: number }
   | { readonly type: 'date/changed'; readonly date: string }

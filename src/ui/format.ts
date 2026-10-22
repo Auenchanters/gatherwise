@@ -2,15 +2,19 @@
  * Number and date wording shared by the workspace views, in the product's default locale.
  * Never does: compute a figure; every number shown comes from the engine or the client's counter.
  */
-import type { Budget } from '../../domain/budget.js';
-import { formatDate, type IsoDate } from '../../domain/dates.js';
+import type { Budget } from '../domain/budget.js';
+import { formatDate, type IsoDate } from '../domain/dates.js';
 
 /** Dates and counts read as in India (5 Dec 2026, 1,50,000), the product's default locale. */
-const LOCALE = 'en-IN';
+export const LOCALE = 'en-IN';
 const counts = new Intl.NumberFormat(LOCALE);
+const percents = new Intl.NumberFormat(LOCALE, { style: 'percent' });
 
 /** A whole count with grouping, e.g. `5,000`. */
 export const formatCount = (n: number): string => counts.format(n);
+
+/** A ratio as a whole percentage, e.g. `0.225` as `23%`. */
+export const formatShare = (ratio: number): string => percents.format(ratio);
 
 /** A count and its noun, e.g. `1 guest` or `250 guests`. */
 export const countOf = (n: number, one: string, many: string): string =>

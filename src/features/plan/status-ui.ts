@@ -15,13 +15,15 @@ interface StatusUi {
   readonly className: string;
 }
 
-/**
- * Task statuses from the scheduler, booking statuses from `bookingStatus` and the two budget fits.
- * A booking label containing `{date}` gets the formatted book-by date at render time.
- */
+/** A booking's look; its label is worded from the vendor's formatted book-by date. */
+interface BookingUi extends Omit<StatusUi, 'label'> {
+  readonly label: (bookBy: string) => string;
+}
+
+/** Task statuses from the scheduler, booking statuses from `bookingStatus` and the two budget fits. */
 export const STATUS_UI: {
   readonly task: Readonly<Record<Status, StatusUi>>;
-  readonly booking: Readonly<Record<BookingStatus, StatusUi>>;
+  readonly booking: Readonly<Record<BookingStatus, BookingUi>>;
   readonly fit: Readonly<Record<'fits' | 'over', Omit<StatusUi, 'label'>>>;
 } = {
   task: {
@@ -33,10 +35,10 @@ export const STATUS_UI: {
     overdue: { label: 'Overdue', icon: '!', className: 'status--bad' },
   },
   booking: {
-    booked: { label: 'Booked', icon: '✓', className: 'status--ok' },
-    ok: { label: 'Book by {date}', icon: '●', className: 'status--ok' },
-    due_soon: { label: 'Book soon', icon: '◔', className: 'status--soon' },
-    overdue: { label: 'Booking overdue', icon: '!', className: 'status--bad' },
+    booked: { label: () => 'Booked', icon: '✓', className: 'status--ok' },
+    ok: { label: (bookBy) => `Book by ${bookBy}`, icon: '●', className: 'status--ok' },
+    due_soon: { label: () => 'Book soon', icon: '◔', className: 'status--soon' },
+    overdue: { label: () => 'Booking overdue', icon: '!', className: 'status--bad' },
   },
   // An idea against its budget category. `over` is also how a shortfall looks anywhere else
   // (a category too low to fund, volunteers short), always with its own words.

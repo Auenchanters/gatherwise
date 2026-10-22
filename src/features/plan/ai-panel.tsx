@@ -15,9 +15,9 @@ import type { IsoDate } from '../../domain/dates.js';
 import type { Adjustment } from '../../domain/merge.js';
 import { buildPlan } from '../../domain/plan.js';
 import type { ReadyState } from '../../domain/reducer.js';
-import { buildPrompt } from '../../shared/prompt.js';
+import { buildPrompt } from '../../ai/prompt.js';
 import type { AdjustRequest, EventBrief } from '../../shared/schema.js';
-import { callCount, formatCount } from './format.js';
+import { callCount, formatCount } from '../../ui/format.js';
 import type { AiView } from './planner-store.js';
 import './ai-panel.css';
 

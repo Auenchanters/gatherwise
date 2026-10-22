@@ -6,9 +6,10 @@
  * in a calendar or a mail client, collapse whitespace, trim and cap by code points.
  * Never does: touch ids or numbers (the schema checks ids, the engine clamps numbers), or escape
  * for HTML; React renders text, so removal is defence in depth, not the only line.
- * Lives in shared because the prompt builder (src/shared/prompt.ts) runs in the browser as well as
+ * Lives in shared because the prompt builder (src/ai/prompt.ts) runs in the browser as well as
  * on the server and must clean brief text identically on both sides.
  */
+import { capText } from './cap-text.js';
 
 const TAG = /<[a-z/!?][^<>]*>/giu;
 const ANGLE = /[<>]/gu;
@@ -20,10 +21,8 @@ const INVISIBLE = /(?![\t\n\v\f\r])[\p{Cc}\p{Cs}\u202A-\u202E\u2066-\u2069\u{E00
 const LINK = /https?:\/\/|www\.|javascript:/giu;
 const SPACE_RUN = /\s+/gu;
 
-// NOTE: this caps by code point, so a cut can split an emoji built from several code points (a
-// family joined by ZWJ). Cutting with Intl.Segmenter would lift that.
 /**
- * Cleans untrusted text and cuts it to at most `max` code points.
+ * Cleans untrusted text and cuts it to at most `max` code points ({@link capText}).
  * Trade-off: removing tag characters also turns subdivision-flag emoji (England, Scotland, Wales)
  * into a plain black flag; blocking hidden instructions is worth those three flags.
  */
@@ -33,7 +32,6 @@ export function sanitizeText(s: string, max: number): string {
     .replace(ANGLE, '')
     .replace(INVISIBLE, '')
     .replace(LINK, ' ')
-    .replace(SPACE_RUN, (run) => (run.includes('\n') ? '\n' : ' '))
-    .trim();
-  return Array.from(clean).slice(0, max).join('').trimEnd();
+    .replace(SPACE_RUN, (run) => (run.includes('\n') ? '\n' : ' '));
+  return capText(clean, max);
 }

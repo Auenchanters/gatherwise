@@ -13,7 +13,7 @@ import type { IsoDate } from '../../domain/dates.js';
 import { eventDateOf } from '../../domain/schedule.js';
 import { LIMITS } from '../../shared/limits.js';
 import { eventBriefSchema, type EventBrief } from '../../shared/schema.js';
-import { formatCount } from '../plan/format.js';
+import { formatCount } from '../../ui/format.js';
 import { draftToCandidate, type BriefDraft } from './draft.js';
 import { DATE_COPY } from './labels.js';
 

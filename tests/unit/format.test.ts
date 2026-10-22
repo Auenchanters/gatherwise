@@ -1,5 +1,5 @@
 /**
- * Tests for src/features/plan/format.ts, the workspace's number and date wording.
+ * Tests for src/ui/format.ts, the workspace's number and date wording.
  * Does: pins the en-IN grouping, singular and plural nouns, the date style, and the call count
  * shown while a request is in flight.
  * Never does: read the clock.
@@ -15,7 +15,7 @@ import {
   formatCount,
   showDate,
   showMonth,
-} from '../../src/features/plan/format.js';
+} from '../../src/ui/format.js';
 import { brief } from '../support/fixtures.js';
 
 describe('workspace wording', () => {

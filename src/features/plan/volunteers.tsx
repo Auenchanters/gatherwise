@@ -9,7 +9,7 @@ import type { ReactElement } from 'react';
 import type { ReadyState } from '../../domain/reducer.js';
 import { templateFor } from '../../domain/templates/index.js';
 import { StatusChip } from './chips.js';
-import { countOf, showDate } from './format.js';
+import { countOf, showDate } from '../../ui/format.js';
 import { Panel } from './panel.js';
 import { STATUS_UI } from './status-ui.js';
 import './volunteers.css';
@@ -59,7 +59,7 @@ export function Volunteers({ state }: VolunteersProps): ReactElement {
         </thead>
         <tbody>
           {shifts.map((shift) => {
-            const gap = shift.needed - shift.assigned;
+            const gap = shift.short;
             return (
               <tr key={shift.start}>
                 <th scope="row">

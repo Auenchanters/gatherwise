@@ -25,7 +25,7 @@ import { templateFor } from '../../src/domain/templates/index.js';
 import { communityTemplate } from '../../src/domain/templates/community.js';
 import type { EventKind } from '../../src/domain/templates/types.js';
 import { LIMITS } from '../../src/shared/limits.js';
-import { buildUserPrompt } from '../../src/shared/prompt.js';
+import { buildUserPrompt } from '../../src/ai/prompt.js';
 import type { AiSuggestions, EventBrief } from '../../src/shared/schema.js';
 import { brief, briefArb, TODAY as today } from '../support/fixtures.js';
 

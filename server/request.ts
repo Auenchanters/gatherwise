@@ -18,7 +18,7 @@ import { addDays, daysBetween, isoDate, parseIsoDate } from '../src/domain/dates
 import { buildPlan, type Plan } from '../src/domain/plan.js';
 import type { EventKind } from '../src/domain/templates/types.js';
 import { LIMITS } from '../src/shared/limits.js';
-import { suggestionsSchemaFor } from '../src/shared/prompt.js';
+import { suggestionsSchemaFor } from '../src/ai/prompt.js';
 import { eventBriefSchema, type AdjustRequest, type EventBrief } from '../src/shared/schema.js';
 import { AppError } from './errors.js';
 

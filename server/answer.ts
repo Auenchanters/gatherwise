@@ -1,5 +1,5 @@
 /**
- * The reader for the model's answer; the prompt itself is built in src/shared/prompt.ts.
+ * The reader for the model's answer; the prompt itself is built in src/ai/prompt.ts.
  * Does: parse the response as JSON, then each section on its own and each item within a list on
  * its own, against the template schema; keep everything valid, count what had to be left out, and
  * sanitize every string. One off-template id or one malformed item costs that item, not the paid
@@ -9,7 +9,7 @@
  */
 import { z } from 'zod';
 import type { EventKind } from '../src/domain/templates/types.js';
-import { suggestionsSchemaFor } from '../src/shared/prompt.js';
+import { suggestionsSchemaFor } from '../src/ai/prompt.js';
 import type { AiSuggestions } from '../src/shared/schema.js';
 import { AppError } from './errors.js';
 import { sanitizeSuggestions } from '../src/shared/sanitize-suggestions.js';

@@ -19,7 +19,7 @@ import type { Plan } from '../../domain/plan.js';
 import type { AiState, ReadyState } from '../../domain/reducer.js';
 import { LIMITS } from '../../shared/limits.js';
 import { AiBadge, StandardBadge, StatusChip } from './chips.js';
-import { categoryLabel, formatCount } from './format.js';
+import { categoryLabel, formatCount } from '../../ui/format.js';
 import { LiveRegion, Panel } from './panel.js';
 import type { PlannerStore } from './planner-store.js';
 import { STATUS_UI } from './status-ui.js';

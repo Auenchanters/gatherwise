@@ -1,10 +1,12 @@
 /**
- * Architecture boundary for the pure domain engine (src/domain).
+ * Architecture boundaries: the layer order of the whole codebase, and the stricter rule for the
+ * pure domain engine (src/domain).
  *
- * Does: asserts domain files import only from inside src/domain (plus `import type` from
- * src/shared, and runtime imports of the import-free modules on RUNTIME_SHARED_ALLOWLIST) and never
- * mention non-deterministic or I/O APIs. The checkers are pure functions over (path, source) so
- * they are themselves tested against synthetic bad input.
+ * Does: asserts every layer imports only from itself and the layers below it (LAYERS), so the
+ * import graph between folders has no cycles; asserts domain files import only from inside
+ * src/domain (plus `import type` from src/shared, and runtime imports of the import-free modules on
+ * RUNTIME_SHARED_ALLOWLIST) and never mention non-deterministic or I/O APIs. The checkers are pure
+ * functions over (path, source) so they are themselves tested against synthetic bad input.
  * Never does: parse anything but imports and forbidden tokens; those rules live in ESLint/tsc.
  */
 import { readdirSync, readFileSync } from 'node:fs';
@@ -15,7 +17,29 @@ import { describe, expect, it } from 'vitest';
 const DOMAIN_DIR = 'src/domain';
 const SHARED_DIR = 'src/shared';
 /** Shared modules domain code may import at runtime; both must stay free of imports. */
-const RUNTIME_SHARED_ALLOWLIST = ['src/shared/limits', 'src/shared/result'];
+const RUNTIME_SHARED_ALLOWLIST = ['src/shared/limits', 'src/shared/result', 'src/shared/cap-text'];
+/**
+ * The layers, lowest first, and the folders each may import from besides itself. Nothing imports
+ * upwards: shared, then the domain engine, then the AI prompt and the UI wording, then the
+ * features, with the server beside them. The domain's finer rule is checked separately below.
+ */
+const LAYERS = {
+  'src/shared': [],
+  'src/domain': ['src/shared'],
+  'src/ai': ['src/shared', 'src/domain'],
+  'src/ui': ['src/shared', 'src/domain'],
+  'src/features/client': ['src/shared', 'src/domain', 'src/ai'],
+  'src/features/brief': ['src/shared', 'src/domain', 'src/ui'],
+  'src/features/plan': [
+    'src/shared',
+    'src/domain',
+    'src/ai',
+    'src/ui',
+    'src/features/brief',
+    'src/features/client',
+  ],
+  server: ['src/shared', 'src/domain', 'src/ai'],
+} as const satisfies Record<string, readonly string[]>;
 /** What domain code may not mention, by name: the clock, randomness, I/O and storage. */
 const FORBIDDEN_TOKENS = new Map([
   ['Date.now', /Date\.now/u],
@@ -90,9 +114,66 @@ function boundaryViolations(file: string, source: string): string[] {
     .map(({ specifier }) => specifier);
 }
 
+/** Relative imports in `file`, which belongs to `layer`, that reach a folder it may not use. */
+function layerViolations(
+  file: string,
+  source: string,
+  layer: string,
+  allowed: readonly string[],
+): string[] {
+  return moduleReferences(source)
+    .filter(({ specifier }) => {
+      if (!specifier.startsWith('.')) return false;
+      const target = posix.normalize(posix.join(posix.dirname(file), specifier));
+      return !isInside(layer, target) && !allowed.some((dir) => isInside(dir, target));
+    })
+    .map(({ specifier }) => specifier);
+}
+
 /** Forbidden tokens present anywhere in the text, comments included. */
 const forbiddenTokens = (source: string): string[] =>
   [...FORBIDDEN_TOKENS].filter(([, pattern]) => pattern.test(source)).map(([name]) => name);
+
+describe('layer order', () => {
+  it.each(Object.entries(LAYERS))('%s imports only from itself and %j', (layer, allowed) => {
+    const files = sourceFiles(layer);
+    expect(files.length, layer).toBeGreaterThan(0);
+    for (const file of files) {
+      expect(layerViolations(file, readFileSync(file, 'utf8'), layer, allowed), file).toEqual([]);
+    }
+  });
+
+  it('flags an import that climbs to a higher layer, type-only or not', () => {
+    const brief = 'src/features/brief';
+    expect(
+      layerViolations(
+        `${brief}/validate.ts`,
+        "import { formatCount } from '../plan/format.js';",
+        brief,
+        LAYERS[brief],
+      ),
+    ).toEqual(['../plan/format.js']);
+    expect(
+      layerViolations(
+        'src/shared/prompt.ts',
+        "import type { Plan } from '../domain/plan.js';",
+        'src/shared',
+        LAYERS['src/shared'],
+      ),
+    ).toEqual(['../domain/plan.js']);
+  });
+
+  it('allows packages, the layer itself and the layers below it', () => {
+    const source = [
+      "import { z } from 'zod';",
+      "import { a } from './sibling.js';",
+      "import { b } from '../../ui/format.js';",
+      "import type { Plan } from '../../domain/plan.js';",
+    ].join('\n');
+    const brief = 'src/features/brief';
+    expect(layerViolations(`${brief}/form.tsx`, source, brief, LAYERS[brief])).toEqual([]);
+  });
+});
 
 describe('domain boundary', () => {
   const files = sourceFiles(DOMAIN_DIR);

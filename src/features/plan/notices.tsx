@@ -13,7 +13,7 @@ import { useRef, type ReactElement } from 'react';
 import type { PlanStateError } from '../../domain/reducer.js';
 import { LIMITS } from '../../shared/limits.js';
 import { DATE_COPY } from '../brief/labels.js';
-import { formatCount } from './format.js';
+import { formatCount } from '../../ui/format.js';
 import { PLAN_HEADING_ID } from './header.js';
 import type { Notice, PlannerSnapshot } from './planner-store.js';
 import { PLAN_ERROR_ID } from './storage-key.js';

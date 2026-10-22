@@ -1,6 +1,6 @@
 /**
  * The model contract: one fixed instruction, one JSON data block, one per-template schema (the
- * shared builder in src/shared/prompt.ts) and the reader for the answer (server/answer.ts).
+ * shared builder in src/ai/prompt.ts) and the reader for the answer (server/answer.ts).
  * Does: checks the user prompt carries only engine numbers, active ids and sanitized brief text,
  * runs the injection corpus through every free-text field, and checks the response reader.
  */
@@ -12,7 +12,7 @@ import { parseSuggestions } from '../../server/answer.js';
 import { buildPlan, type Plan } from '../../src/domain/plan.js';
 import { templateFor } from '../../src/domain/templates/index.js';
 import { LIMITS } from '../../src/shared/limits.js';
-import { buildPrompt, buildUserPrompt, SYSTEM_INSTRUCTION } from '../../src/shared/prompt.js';
+import { buildPrompt, buildUserPrompt, SYSTEM_INSTRUCTION } from '../../src/ai/prompt.js';
 import { sanitizeText } from '../../src/shared/sanitize-text.js';
 import { sanitizeSuggestions } from '../../src/shared/sanitize-suggestions.js';
 import {

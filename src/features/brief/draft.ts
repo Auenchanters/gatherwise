@@ -9,12 +9,11 @@
  * Also builds `DraftApi`, the typed, functional-update bindings the form's sections edit through.
  * Never does: validate (that is validate.ts and the schema), read the clock, or touch the DOM.
  */
+import type { Income } from '../../domain/break-even.js';
+import type { EventKind } from '../../domain/templates/types.js';
 import { SUBTYPES } from '../../shared/options.js';
 import type { EventBrief } from '../../shared/schema.js';
 import type { FieldError, FieldKey } from './validate.js';
-
-type EventKind = EventBrief['kind'];
-type Income = NonNullable<Extract<EventBrief, { kind: 'community' }>['income']>;
 
 /** The form's working copy of a brief. Free-form values stay strings until submit. */
 export interface BriefDraft {

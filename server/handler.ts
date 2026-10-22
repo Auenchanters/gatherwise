@@ -10,7 +10,7 @@
 import { randomUUID } from 'node:crypto';
 import { ApiError } from '@google/genai';
 import type { EventKind } from '../src/domain/templates/types.js';
-import { buildPrompt, type Prompt } from '../src/shared/prompt.js';
+import { buildPrompt, type Prompt } from '../src/ai/prompt.js';
 import { aiMetaSchema } from '../src/shared/schema.js';
 import { parseSuggestions } from './answer.js';
 import { createInferenceGate } from './capacity.js';

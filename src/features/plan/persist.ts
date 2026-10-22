@@ -18,7 +18,7 @@ import {
 } from '../../domain/reducer.js';
 import { VENDOR_STATUSES } from '../../domain/vendors.js';
 import { LIMITS } from '../../shared/limits.js';
-import { suggestionsSchemaFor } from '../../shared/prompt.js';
+import { suggestionsSchemaFor } from '../../ai/prompt.js';
 import { err, type Result } from '../../shared/result.js';
 import { aiMetaSchema, eventBriefSchema, type EventBrief } from '../../shared/schema.js';
 import { STORAGE_KEY } from './storage-key.js';

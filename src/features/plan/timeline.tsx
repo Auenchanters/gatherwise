@@ -16,7 +16,7 @@ import { isAiTask } from '../../domain/merge.js';
 import type { ScheduledTask } from '../../domain/schedule.js';
 import { AiBadge, StatusChip } from './chips.js';
 import { icsBlob, icsFilename } from './download.js';
-import { categoryLabel, showDate, showMonth } from './format.js';
+import { categoryLabel, showDate, showMonth } from '../../ui/format.js';
 import { LiveRegion, Panel } from './panel.js';
 import type { PlannerStore } from './planner-store.js';
 import { STATUS_UI } from './status-ui.js';

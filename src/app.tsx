@@ -10,15 +10,15 @@
  * `<h1>`.
  */
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
-import { flushSync } from 'react-dom';
 import { BriefForm } from './features/brief/brief-form.js';
 import { Landing } from './features/brief/landing.js';
 import { sampleBrief, type SampleKind } from './features/brief/samples.js';
 import type { PlanClient } from './features/client/api-client.js';
 import type { PlannerStorage, PlannerStore } from './features/plan/planner-store.js';
-import { PLAN_ERROR_ID, STORAGE_KEY } from './features/plan/storage-key.js';
+import { refusalTarget, STORAGE_KEY } from './features/plan/storage-key.js';
 import { todayIso } from './features/plan/today.js';
 import type { EventBrief } from './shared/schema.js';
+import { focusAfter } from './ui/focus.js';
 
 type PlannerModule = typeof import('./features/plan/planner.js');
 
@@ -108,13 +108,15 @@ export function App({ client, storage: given }: AppProps): ReactElement {
 
   const loadSample = (kind: SampleKind): void => {
     // Commit the refilled form first, so the heading that takes focus is the new one.
-    flushSync(() => {
-      setSeed((current) => ({ key: current.key + 1, initial: sampleBrief(kind, today) }));
-      setStatus(
-        `Filled in the sample ${SAMPLE_NAMES[kind]} — check the details, then generate your plan.`,
-      );
-    });
-    headingRef.current?.focus();
+    focusAfter(
+      () => {
+        setSeed((current) => ({ key: current.key + 1, initial: sampleBrief(kind, today) }));
+        setStatus(
+          `Filled in the sample ${SAMPLE_NAMES[kind]} — check the details, then generate your plan.`,
+        );
+      },
+      () => headingRef.current,
+    );
   };
 
   /** The next time the form shows (after "New plan"), it starts blank. */
@@ -124,21 +126,15 @@ export function App({ client, storage: given }: AppProps): ReactElement {
     setStatus('');
   };
 
-  /** Moves focus to the planner's message saying why a brief was refused. */
-  const focusPlanError = (): void => {
-    document.getElementById(PLAN_ERROR_ID)?.focus();
-  };
-
   /**
    * The form's submit: start the plan, loading the planner first if this is the first one. Each
-   * update is rendered at once (`flushSync`), so a refusal's message exists to take focus, and a
+   * update is rendered at once (`focusAfter`), so a refusal's message exists to take focus, and a
    * refused brief stays in the form.
    */
   const submit = (brief: EventBrief): void => {
     if (session) {
-      const { accepted } = flushSync(() => session.store.submit(brief));
+      const { accepted } = focusAfter(() => session.store.submit(brief), refusalTarget);
       if (accepted) blankForm();
-      else focusPlanError();
       return;
     }
     if (opening.current) return;
@@ -148,13 +144,18 @@ export function App({ client, storage: given }: AppProps): ReactElement {
       .then(
         (planner) => {
           const { store, accepted } = planner.startPlan(brief, { storage, client });
-          flushSync(() => {
-            setSession({ Planner: planner.Planner, store });
-            setStatus('');
-            // The form remounts inside the planner; a refused brief comes back filled in.
-            setSeed((current) => ({ key: current.key + 1, initial: accepted ? undefined : brief }));
-          });
-          if (!accepted) focusPlanError();
+          focusAfter(
+            () => {
+              setSession({ Planner: planner.Planner, store });
+              setStatus('');
+              // The form remounts inside the planner; a refused brief comes back filled in.
+              setSeed((current) => ({
+                key: current.key + 1,
+                initial: accepted ? undefined : brief,
+              }));
+            },
+            () => refusalTarget({ accepted }),
+          );
         },
         () => {
           setStatus(OPEN_FAILED);

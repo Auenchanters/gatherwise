@@ -17,15 +17,15 @@ import { MINOR_PER_MAJOR } from '../domain/money.js';
 import type { Plan } from '../domain/plan.js';
 import { templateFor, templateIds } from '../domain/templates/index.js';
 import type { EventKind } from '../domain/templates/types.js';
-import { LIMITS } from './limits.js';
-import { sanitizeSuggestions } from './sanitize-suggestions.js';
-import { sanitizeText } from './sanitize-text.js';
+import { LIMITS } from '../shared/limits.js';
+import { sanitizeSuggestions } from '../shared/sanitize-suggestions.js';
+import { sanitizeText } from '../shared/sanitize-text.js';
 import {
   aiResponseJsonSchema,
   aiSuggestionsSchema,
   type AdjustRequest,
   type AiSuggestionsSchema,
-} from './schema.js';
+} from '../shared/schema.js';
 
 /** Fixed for every request; nothing from the user is ever added to it. Public, not a secret. */
 export const SYSTEM_INSTRUCTION = `You are Gatherwise, an event-planning assistant that personalizes plans for community events, weddings and birthdays.

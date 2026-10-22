@@ -8,9 +8,9 @@
  * brief from a form that was replaced while the checker loaded.
  */
 import { useId, useRef, useState, type ReactElement, type Ref, type SubmitEvent } from 'react';
-import { flushSync } from 'react-dom';
 import type { IsoDate } from '../../domain/dates.js';
 import type { EventBrief } from '../../shared/schema.js';
+import { focusAfter } from '../../ui/focus.js';
 import './brief.css';
 import { draftApi, draftFromBrief, EMPTY_DRAFT } from './draft.js';
 import { ErrorSummary } from './error-summary.js';
@@ -66,10 +66,12 @@ export function BriefForm({ initial, today, onSubmit, headingRef }: BriefFormPro
         return;
       }
       // Render the summary now, so it exists to take focus (the GOV.UK pattern).
-      flushSync(() => {
-        setErrors(result.errors);
-      });
-      summaryRef.current?.focus();
+      focusAfter(
+        () => {
+          setErrors(result.errors);
+        },
+        () => summaryRef.current,
+      );
     });
   };
 

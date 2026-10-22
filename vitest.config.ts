@@ -32,6 +32,8 @@ export default defineConfig({
       include: [
         'src/domain/**',
         'src/shared/**',
+        'src/ai/**',
+        'src/ui/**',
         'src/features/**/*.ts',
         'src/**/*.tsx',
         'server/**',

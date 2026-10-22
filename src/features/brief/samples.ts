@@ -8,10 +8,11 @@
  * Never does: read the clock, or share objects between calls (each call returns fresh data).
  */
 import { addDays, type IsoDate } from '../../domain/dates.js';
+import type { EventKind } from '../../domain/templates/types.js';
 import type { EventBrief } from '../../shared/schema.js';
 
-/** The event kinds that have a sample. */
-export type SampleKind = 'community' | 'wedding' | 'birthday';
+/** The event kinds that have a sample: every kind has one. */
+export type SampleKind = EventKind;
 
 /** A schema-valid, demo-ready brief of the given kind, dated relative to `today`. */
 export function sampleBrief(kind: SampleKind, today: IsoDate): EventBrief {

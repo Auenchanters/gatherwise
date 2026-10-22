@@ -10,8 +10,8 @@
  * none (edits never reach this client), an "Adjust with AI" costs one, an identical brief costs none.
  */
 import { z } from 'zod';
-import type { AiErrorCode } from '../../domain/reducer.js';
-import { suggestionsSchemaFor } from '../../shared/prompt.js';
+import type { AiFailure } from '../../domain/reducer.js';
+import { suggestionsSchemaFor } from '../../ai/prompt.js';
 import { err, ok, type Result } from '../../shared/result.js';
 import {
   aiMetaSchema,
@@ -42,7 +42,7 @@ export interface SuggestResponse {
 
 /** Why a request produced no suggestions; the plan itself is unaffected. */
 export interface ClientError {
-  readonly code: AiErrorCode;
+  readonly code: AiFailure;
   /** Only for `rate_limited`, only when the server's `Retry-After` was a sane 1 to 86400. */
   readonly retryAfterSeconds?: number;
 }

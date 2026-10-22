@@ -8,6 +8,7 @@
  * budget total; throw on any `AiSuggestions`-shaped input (NaN, ±Infinity, 1e300, huge lists,
  * emoji or right-to-left text included).
  */
+import { capText } from '../shared/cap-text.js';
 import { LIMITS } from '../shared/limits.js';
 import type { AiSuggestions, Currency, EventBrief } from '../shared/schema.js';
 import type { Idea } from './ideas.js';
@@ -55,13 +56,10 @@ interface Cut {
   readonly to: number;
 }
 
-// NOTE: this counts code points, not graphemes, so a cut can still split an emoji built from
-// several code points (a family joined by ZWJ). Cutting with Intl.Segmenter would lift that.
-/** Trims `raw` and cuts it to `max` code points (never inside a surrogate pair), then trims the cut. */
+/** `raw` cut with {@link capText}, with its length in code points before and after. */
 function cut(raw: string, max: number): Cut {
-  const chars = Array.from(raw.trim());
-  const text = chars.slice(0, max).join('').trimEnd();
-  return { text, from: chars.length, to: Array.from(text).length };
+  const text = capText(raw, max);
+  return { text, from: Array.from(raw.trim()).length, to: Array.from(text).length };
 }
 
 /**

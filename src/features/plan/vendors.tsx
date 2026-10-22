@@ -20,7 +20,7 @@ import {
   type VendorStatus,
 } from '../../domain/vendors.js';
 import { StatusChip } from './chips.js';
-import { showDate } from './format.js';
+import { showDate } from '../../ui/format.js';
 import { LiveRegion, Panel } from './panel.js';
 import type { PlannerStore } from './planner-store.js';
 import { STATUS_UI } from './status-ui.js';
@@ -58,7 +58,7 @@ function VendorCard(props: {
         <h3 className="vendor__title" dir="auto">
           {vendor.label}
         </h3>
-        <StatusChip ui={ui} label={ui.label.replace('{date}', showDate(vendor.bookBy))} />
+        <StatusChip ui={ui} label={ui.label(showDate(vendor.bookBy))} />
       </div>
       <p className="vendor__reason" dir="auto">
         {vendor.reason}

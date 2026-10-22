@@ -21,21 +21,19 @@ import {
   type ReactElement,
 } from 'react';
 import { addDays } from '../../domain/dates.js';
-import { formatMoney, minor, toMinor, type Minor } from '../../domain/money.js';
+import { formatMoney, toMinor, type Minor } from '../../domain/money.js';
 import type { PlanStateError, ReadyState } from '../../domain/reducer.js';
 import { LIMITS } from '../../shared/limits.js';
 import { Field } from '../brief/fields.js';
 import { currencySymbol } from '../brief/labels.js';
 import type { FieldKey } from '../brief/validate.js';
 import { StatusChip } from './chips.js';
-import { callCount, countOf, showDate } from './format.js';
+import { callCount, countOf, formatShare, showDate } from '../../ui/format.js';
 import { errorText } from './notices.js';
 import { Panel } from './panel.js';
 import type { PlannerStore } from './planner-store.js';
 import { STATUS_UI } from './status-ui.js';
 import './budget.css';
-
-const shareFormat = new Intl.NumberFormat('en-IN', { style: 'percent' });
 
 /** Props for {@link Budget}. */
 export interface BudgetProps {
@@ -227,7 +225,7 @@ function Line(props: {
   readonly scales: string;
   readonly tooLow?: boolean;
 }): ReactElement {
-  const share = shareFormat.format(props.allocated / props.total);
+  const share = formatShare(props.allocated / props.total);
   return (
     <tr>
       <th scope="row">{props.label}</th>
@@ -261,7 +259,7 @@ function BreakEven({ state }: { readonly state: ReadyState }): ReactElement | nu
   const { breakEven } = plan;
   const money = (amount: Minor): string => formatMoney(amount, currency);
   const major = (amount: number): string => money(toMinor(amount, currency));
-  const shortfall = breakEven.surplus < 0;
+  const shortfall = breakEven.balance.kind === 'shortfall';
   return (
     <section className="break-even" aria-labelledby={titleId}>
       <h3 className="break-even__title" id={titleId}>
@@ -303,7 +301,7 @@ function BreakEven({ state }: { readonly state: ReadyState }): ReactElement | nu
         </div>
         <div className={shortfall ? 'ledger__result ledger__result--bad' : 'ledger__result'}>
           <dt>{shortfall ? 'Shortfall' : 'Surplus'}</dt>
-          <dd>{money(minor(Math.abs(breakEven.surplus)))}</dd>
+          <dd>{money(breakEven.balance.amount)}</dd>
         </div>
         {breakEven.breakEvenTicketPrice !== undefined && (
           <div>

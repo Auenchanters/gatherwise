@@ -12,7 +12,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { clientErrorMessage } from '../../src/features/client/messages.js';
 import { STORAGE_KEY } from '../../src/features/plan/storage-key.js';
-import { SYSTEM_INSTRUCTION } from '../../src/shared/prompt.js';
+import { SYSTEM_INSTRUCTION } from '../../src/ai/prompt.js';
 import { AI_DONE, axeViolations, isoIn, openSampleForm, prepare, SAMPLE_NAME } from './helpers.js';
 
 const CANT_DO = "Can't be done in time";

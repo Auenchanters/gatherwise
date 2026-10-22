@@ -23,7 +23,7 @@ import { InfeasibleBanner } from '../../src/features/plan/infeasible-banner.js';
 import { Planner } from '../../src/features/plan/planner.js';
 import { createPlannerStore } from '../../src/features/plan/planner-store.js';
 import { PLAN_ERROR_ID, STORAGE_KEY } from '../../src/features/plan/storage-key.js';
-import { SYSTEM_INSTRUCTION } from '../../src/shared/prompt.js';
+import { SYSTEM_INSTRUCTION } from '../../src/ai/prompt.js';
 import { err, ok } from '../../src/shared/result.js';
 import { descriptionOf, must } from '../support/ui.js';
 import {

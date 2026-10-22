@@ -21,6 +21,8 @@ export interface BreakEven {
   readonly costs: Minor;
   /** Income minus costs. Negative is a shortfall. */
   readonly surplus: Minor;
+  /** The same result as the views word it: which side of zero, and by how much (never negative). */
+  readonly balance: { readonly kind: 'surplus' | 'shortfall'; readonly amount: Minor };
   /** The cheapest ticket that breaks even at the expected attendance. Only if attendance > 0. */
   readonly breakEvenTicketPrice?: Minor;
   /** The fewest paying guests that break even at the ticket price. Only if the price > 0. */
@@ -56,12 +58,14 @@ export function breakEven(budget: Budget, income: Income = NO_INCOME): BreakEven
     budget.lines.reduce<number>((acc, line) => acc + line.allocated, budget.contingency),
   );
   const totalIncome = minor(ticketIncome + otherIncome);
+  const surplus = totalIncome - costs;
   // What tickets alone must raise; 0 once the other income already covers the costs.
   const ticketGap = Math.max(0, costs - otherIncome);
   return {
     income: totalIncome,
     costs,
-    surplus: minor(totalIncome - costs),
+    surplus: minor(surplus),
+    balance: { kind: surplus < 0 ? 'shortfall' : 'surplus', amount: minor(Math.abs(surplus)) },
     ...(expectedPaidAttendance > 0
       ? { breakEvenTicketPrice: minor(ceilDiv(ticketGap, expectedPaidAttendance)) }
       : {}),
