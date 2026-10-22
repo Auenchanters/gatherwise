@@ -9,6 +9,7 @@ import type {
   Currency,
   DIETARY_OPTIONS,
   EVENT_KINDS,
+  Language,
   SUBTYPES,
   VENUES,
 } from '../../shared/options.js';
@@ -82,6 +83,21 @@ export const ACCESSIBILITY_LABELS: Record<(typeof ACCESSIBILITY_OPTIONS)[number]
   neurodivergent: 'Neurodivergent guests',
   elderly: 'Older guests',
   infants: 'Infants',
+};
+
+/**
+ * Labels for plan languages, by their English names: the option text stays in the interface's
+ * language, so a screen reader reads every option with one voice.
+ */
+export const LANGUAGE_LABELS: Record<Language, string> = {
+  English: 'English',
+  Hindi: 'Hindi',
+  Tamil: 'Tamil',
+  Telugu: 'Telugu',
+  Bengali: 'Bengali',
+  Marathi: 'Marathi',
+  Spanish: 'Spanish',
+  French: 'French',
 };
 
 // One formatter call per currency, ever: a symbol never changes at runtime.

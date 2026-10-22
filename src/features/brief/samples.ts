@@ -36,6 +36,7 @@ export function sampleBrief(kind: SampleKind, today: IsoDate): EventBrief {
       volunteersAvailable: 18,
       vibe: 'warm, family-friendly, lantern-lit',
       notes: "Residents' association event; first time with food stalls",
+      language: 'English',
       income: {
         ticketPrice: 0,
         expectedPaidAttendance: 0,
@@ -67,6 +68,7 @@ export function sampleBrief(kind: SampleKind, today: IsoDate): EventBrief {
       volunteersAvailable: 0,
       vibe: 'traditional, marigold garlands and candlelight',
       notes: 'Ceremony first, then a reception dinner with music',
+      language: 'English',
     };
   }
   return {
@@ -89,5 +91,6 @@ export function sampleBrief(kind: SampleKind, today: IsoDate): EventBrief {
     volunteersAvailable: 0,
     vibe: 'rockets, stars, glow-in-the-dark',
     notes: '',
+    language: 'English',
   };
 }

@@ -13,6 +13,7 @@ import {
   CURRENCIES,
   DIETARY_OPTIONS,
   EVENT_KINDS,
+  LANGUAGES,
   SUBTYPES,
   VENUES,
   aiMetaSchema,
@@ -108,6 +109,26 @@ describe('option tuples', () => {
     expect(accepts({ ...valid, currency: 'JPY' })).toBe(false);
     expect(accepts({ ...valid, dietary: ['pescatarian'] })).toBe(false);
     expect(accepts({ ...valid, accessibility: ['jetpack'] })).toBe(false);
+  });
+
+  it('take a plan language from the list, English when a brief has none', () => {
+    expect(LANGUAGES).toEqual([
+      'English',
+      'Hindi',
+      'Tamil',
+      'Telugu',
+      'Bengali',
+      'Marathi',
+      'Spanish',
+      'French',
+    ]);
+    for (const language of LANGUAGES) {
+      expect(eventBriefSchema.parse({ ...valid, language }).language).toBe(language);
+    }
+    // A brief saved or sent before the field existed is English, not invalid.
+    expect(eventBriefSchema.parse(valid).language).toBe('English');
+    expect(accepts({ ...valid, language: 'Klingon' })).toBe(false);
+    expect(accepts({ ...valid, language: 'hindi' })).toBe(false);
   });
 
   it('keep the discriminated union in step with EVENT_KINDS', () => {

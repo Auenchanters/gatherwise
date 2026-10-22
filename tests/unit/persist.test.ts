@@ -556,6 +556,14 @@ describe('loadPlan: tampered AI (the plan survives)', () => {
     expect(back.plan.addenda?.extraTasks.length).toBeLessThanOrEqual(5);
   });
 
+  it('restores a brief saved before plans had a language as an English plan', () => {
+    const { language, ...older } = state.brief;
+    expect(language).toBe('English');
+    const back = loaded(tampered({ brief: older }));
+    expect(back.brief.language).toBe('English');
+    expect(back.plan).toEqual(state.plan);
+  });
+
   it('restores an answer saved with the retired weight hints, silently dropping them', () => {
     const legacy = { ...suggestions, weightHints: [{ categoryId: 'decor', factor: 1.2 }] };
     const back = loaded(tampered({ ai: { suggestions: legacy, meta } }));

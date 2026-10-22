@@ -15,6 +15,7 @@ import {
   ACCESSIBILITY_OPTIONS,
   CURRENCIES,
   DIETARY_OPTIONS,
+  LANGUAGES,
   SUBTYPES,
   VENUES,
   type AiMeta,
@@ -52,6 +53,7 @@ const BASE: { readonly [K in EventKind]: BriefOf<K> } = {
     volunteersAvailable: 20,
     vibe: 'family friendly',
     notes: '',
+    language: 'English',
   },
   wedding: {
     kind: 'wedding',
@@ -73,6 +75,7 @@ const BASE: { readonly [K in EventKind]: BriefOf<K> } = {
     volunteersAvailable: 0,
     vibe: 'traditional',
     notes: '',
+    language: 'English',
   },
   birthday: {
     kind: 'birthday',
@@ -94,6 +97,7 @@ const BASE: { readonly [K in EventKind]: BriefOf<K> } = {
     volunteersAvailable: 0,
     vibe: 'games and cake',
     notes: '',
+    language: 'English',
   },
 };
 
@@ -145,6 +149,7 @@ const shared = {
   volunteersAvailable: fc.integer({ min: 0, max: LIMITS.brief.volunteersMax }),
   vibe: fc.constantFrom('', 'family friendly', 'quiet'),
   notes: fc.constantFrom(...notes),
+  language: fc.constantFrom(...LANGUAGES),
 };
 
 const money = fc.integer({ min: 0, max: LIMITS.brief.budgetMax });

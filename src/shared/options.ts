@@ -1,6 +1,6 @@
 /**
  * The option lists of an event brief (kinds, subtypes, currencies, venues, dietary and access
- * needs), defined once. schema.ts builds its enums from these and re-exports them.
+ * needs, plan languages), defined once. schema.ts builds its enums from these and re-exports them.
  * Never imports anything, so the first-page bundle can render the brief form from these lists
  * without pulling in zod (validation loads on demand when the form is submitted).
  */
@@ -34,6 +34,22 @@ export const DIETARY_OPTIONS = [
   'gluten_free',
   'nut_free',
 ] as const;
+/**
+ * Languages the AI can write a plan's text in. The values are the language names the prompt uses;
+ * the interface itself stays in English.
+ */
+export const LANGUAGES = [
+  'English',
+  'Hindi',
+  'Tamil',
+  'Telugu',
+  'Bengali',
+  'Marathi',
+  'Spanish',
+  'French',
+] as const;
+/** One of the plan languages. */
+export type Language = (typeof LANGUAGES)[number];
 /** Accessibility needs a guest list can have. */
 export const ACCESSIBILITY_OPTIONS = [
   'wheelchair',

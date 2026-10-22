@@ -52,7 +52,7 @@ The wedding template plans a single ceremony and reception (`src/domain/template
 
 ## English interface
 
-The interface copy is in English (`index.html` declares `lang="en"`). Text the user or the model writes is rendered with `dir="auto"`, so right-to-left text such as Arabic takes its own direction inside the English layout, but labels and messages are English only. Money is formatted with a fixed locale per currency, and the workspace formats dates and counts in `en-IN` whatever the browser's language.
+The interface copy is in English (`index.html` declares `lang="en"`). The brief's **Language for AI suggestions** setting changes only what Gemini writes (summary, ideas, extra tasks and vendor questions); every label, message, template task and vendor name and the standard suggestions stay English, so a Hindi plan mixes Hindi AI text with English interface text. Text the user or the model writes is rendered with `dir="auto"`, so right-to-left text such as Arabic takes its own direction inside the English layout, but labels and messages are English only. Money is formatted with a fixed locale per currency, and the workspace formats dates and counts in `en-IN` whatever the browser's language.
 
 **What would lift it:** a message catalog per language and locale-aware date formatting chosen by the user.
 

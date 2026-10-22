@@ -87,6 +87,7 @@ const COPY = {
   servesAlcohol: { invalid: 'Say whether you will serve alcohol' },
   vibe: { invalid: longest('Vibe', caps.vibeMax) },
   notes: { invalid: longest('Notes', caps.notesMax) },
+  language: { invalid: 'Choose a language for the plan' },
   volunteersAvailable: {
     digits: COUNT_DIGITS,
     invalid: whole('Volunteers', 0, caps.volunteersMax),

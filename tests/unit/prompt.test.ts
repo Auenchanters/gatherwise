@@ -59,6 +59,7 @@ describe('SYSTEM_INSTRUCTION', () => {
       'servesAlcohol',
       'check with your local authority',
       'Never include URLs, email addresses or phone numbers',
+      'in the language named by brief.language',
     ]) {
       expect(SYSTEM_INSTRUCTION).toContain(phrase);
     }
@@ -76,7 +77,15 @@ describe('buildUserPrompt', () => {
     }
     expect(sent.brief).not.toHaveProperty('budget');
     expect(sent.brief).not.toHaveProperty('income');
-    expect(sent.brief).toMatchObject({ kind: 'community', guests: 250, venue: 'outdoor_public' });
+    expect(sent.brief).toMatchObject({
+      kind: 'community',
+      guests: 250,
+      venue: 'outdoor_public',
+      language: 'English',
+    });
+    expect(readPrompt(planOf(brief('wedding', { language: 'Tamil' }))).brief).toMatchObject({
+      language: 'Tamil',
+    });
   });
 
   it('lists only the tasks and vendors active for this brief', () => {

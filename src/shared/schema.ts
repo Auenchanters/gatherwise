@@ -7,7 +7,14 @@
  */
 import { z } from 'zod';
 import { LIMITS } from './limits.js';
-import { ACCESSIBILITY_OPTIONS, CURRENCIES, DIETARY_OPTIONS, SUBTYPES, VENUES } from './options.js';
+import {
+  ACCESSIBILITY_OPTIONS,
+  CURRENCIES,
+  DIETARY_OPTIONS,
+  LANGUAGES,
+  SUBTYPES,
+  VENUES,
+} from './options.js';
 
 // The option lists live in import-free options.ts so the first page can render the form without
 // zod; they are re-exported here so contract users keep one import site.
@@ -16,6 +23,7 @@ export {
   CURRENCIES,
   DIETARY_OPTIONS,
   EVENT_KINDS,
+  LANGUAGES,
   SUBTYPES,
   VENUES,
   type Currency,
@@ -66,6 +74,8 @@ const briefFields = {
   volunteersAvailable: wholeNumber(0, brief.volunteersMax),
   vibe: z.string().trim().max(brief.vibeMax),
   notes: z.string().trim().max(brief.notesMax),
+  // Briefs saved or sent before the language existed are English, which they were written in.
+  language: z.enum(LANGUAGES).default('English'),
 };
 
 /** The user's event description. Strict everywhere; `income` exists only on community events. */

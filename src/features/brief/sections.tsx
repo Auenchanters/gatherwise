@@ -13,6 +13,7 @@ import {
   CURRENCIES,
   DIETARY_OPTIONS,
   EVENT_KINDS,
+  LANGUAGES,
   SUBTYPES,
   VENUES,
 } from '../../shared/options.js';
@@ -33,6 +34,7 @@ import {
   currencySymbol,
   DIETARY_LABELS,
   KIND_LABELS,
+  LANGUAGE_LABELS,
   SUBTYPE_LABELS,
   VENUE_LABELS,
 } from './labels.js';
@@ -179,7 +181,7 @@ const FLAGS = [
   ['servesAlcohol', 'Serving alcohol'],
 ] as const;
 
-/** Dietary and accessibility needs, sound, food and alcohol, vibe and notes. */
+/** Dietary and accessibility needs, sound, food and alcohol, vibe, notes and the plan language. */
 export function PreferencesSection({ api }: { readonly api: DraftApi }): ReactElement {
   const { draft, errorOf, bind, update } = api;
   const checkboxes = <T extends string>(
@@ -264,6 +266,13 @@ export function PreferencesSection({ api }: { readonly api: DraftApi }): ReactEl
           />
         )}
       </Field>
+      <SelectField
+        {...bind('language')}
+        label="Language for AI suggestions"
+        hint="Gemini writes the summary, ideas, extra tasks and vendor questions in this language. The app's own labels stay in English."
+        options={LANGUAGES}
+        labels={LANGUAGE_LABELS}
+      />
     </Section>
   );
 }

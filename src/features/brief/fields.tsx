@@ -210,15 +210,16 @@ export function InputField(props: InputFieldProps): ReactElement {
 
 interface SelectFieldProps<T extends string> extends Bound {
   readonly label: string;
+  readonly hint?: string;
   readonly options: readonly T[];
   readonly labels: Readonly<Record<T, string>>;
 }
 
 /** A native select over a fixed option list, showing each option's label. */
 export function SelectField<T extends string>(props: SelectFieldProps<T>): ReactElement {
-  const { field, label, error, value, onChange, options, labels } = props;
+  const { field, label, hint, error, value, onChange, options, labels } = props;
   return (
-    <Field field={field} label={label} error={error}>
+    <Field field={field} label={label} hint={hint} error={error}>
       {(control) => (
         <select
           {...control}

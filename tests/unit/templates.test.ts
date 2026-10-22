@@ -46,6 +46,7 @@ const MINIMAL: Fields = {
   volunteersAvailable: 0,
   vibe: '',
   notes: '',
+  language: 'English',
 };
 const community = (over: Partial<Extract<EventBrief, { kind: 'community' }>> = {}): EventBrief => ({
   ...MINIMAL,

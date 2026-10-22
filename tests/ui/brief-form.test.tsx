@@ -219,6 +219,16 @@ describe('BriefForm: kind-dependent fields', () => {
     expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ venue: 'restaurant', currency: 'USD' });
   });
 
+  it('sets the language the AI writes in, says the labels stay English, and defaults to English', async () => {
+    const { user, submit, onSubmit } = setup(sampleBrief('birthday', today));
+    const language = screen.getByRole('combobox', { name: 'Language for AI suggestions' });
+    expect(language).toHaveProperty('value', 'English');
+    expect(descriptionOf(language)).toContain("The app's own labels stay in English.");
+    await user.selectOptions(language, 'Hindi');
+    await submit();
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ language: 'Hindi' });
+  });
+
   it('keeps ticks in the options order, whatever order they were ticked in', async () => {
     const { user, submit, onSubmit } = setup(sampleBrief('birthday', today));
     await user.click(screen.getByRole('checkbox', { name: 'Vegan' }));

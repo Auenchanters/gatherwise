@@ -69,6 +69,7 @@ describe('sampleBrief', () => {
       volunteersAvailable: 0,
       vibe: 'traditional, marigold garlands and candlelight',
       notes: 'Ceremony first, then a reception dinner with music',
+      language: 'English',
     });
     const plan = buildPlan(sampleBrief('wedding', today), today);
     if (!plan.ok) throw new Error('the sample must plan');
@@ -102,6 +103,7 @@ describe('sampleBrief', () => {
       volunteersAvailable: 18,
       vibe: 'warm, family-friendly, lantern-lit',
       notes: "Residents' association event; first time with food stalls",
+      language: 'English',
       income: {
         ticketPrice: 0,
         expectedPaidAttendance: 0,
@@ -134,6 +136,7 @@ describe('sampleBrief', () => {
       volunteersAvailable: 0,
       vibe: 'rockets, stars, glow-in-the-dark',
       notes: '',
+      language: 'English',
     });
   });
 

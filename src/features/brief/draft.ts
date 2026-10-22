@@ -37,6 +37,7 @@ export interface BriefDraft {
   readonly volunteersAvailable: string;
   readonly vibe: string;
   readonly notes: string;
+  readonly language: string;
   readonly income: Readonly<Record<keyof Income, string>>;
 }
 
@@ -104,6 +105,7 @@ export const EMPTY_DRAFT: BriefDraft = {
   volunteersAvailable: '',
   vibe: '',
   notes: '',
+  language: 'English',
   income: BLANK_INCOME,
 };
 
@@ -150,6 +152,7 @@ export function draftToCandidate(draft: BriefDraft): Record<string, unknown> {
     volunteersAvailable: community ? (toNumber(draft.volunteersAvailable) ?? 0) : 0,
     vibe: draft.vibe,
     notes: draft.notes,
+    language: draft.language,
     ...(hasIncome ? { income: mapIncome(draft.income, (value) => toNumber(value) ?? 0) } : {}),
   };
 }

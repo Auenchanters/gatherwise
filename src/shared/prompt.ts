@@ -26,6 +26,7 @@ Costs are whole major units of the given currency. Each idea should fit within t
 Never compute totals, sums, dates or deadlines; the planning engine does that.
 Extra tasks are only for work missing from the given task list; "after" lists given task ids that must finish first. Vendor questions are what the organizer should ask the given vendors.
 Personalize: each idea's personalization names the brief fields it answers to, such as dietary, accessibility, subtype, guests, venue or vibe.
+Write every text value (the summary, titles, descriptions, personalizations and questions) in the language named by brief.language; ids stay exactly as given.
 Keep every idea inclusive and safe for the guests described. Suggest no alcohol unless servesAlcohol is true. Respect every dietary need listed.
 Make no legal, permit, medical or financial-advice claims. Where permission may be needed, say "check with your local authority".
 Never include URLs, email addresses or phone numbers.
@@ -84,6 +85,7 @@ export function buildUserPrompt(plan: Plan): string {
       volunteersAvailable: brief.volunteersAvailable,
       vibe: sanitizeText(brief.vibe, caps.vibeMax),
       notes: sanitizeText(brief.notes, caps.notesMax),
+      language: brief.language,
     },
     currency: budget.currency,
     categories: budget.lines.map((line) => ({
