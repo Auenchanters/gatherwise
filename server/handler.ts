@@ -10,20 +10,18 @@ import { randomUUID } from 'node:crypto';
 import type { EventKind } from '../src/domain/templates/types.js';
 import { buildPrompt, type Prompt } from '../src/shared/prompt.js';
 import { aiMetaSchema } from '../src/shared/schema.js';
+import { parseSuggestions } from './answer.js';
 import { createInferenceGate } from './capacity.js';
 import { AppError, errorResponse, type ErrorCode } from './errors.js';
 import { logRequest } from './log.js';
-import { parseSuggestions } from './prompt.js';
 import { createGeminiGenerator, type Generate, type Generation } from './provider.js';
 import { clientId, createRateLimiter, type RateLimiter } from './rate-limit.js';
 import { planFor, readBrief, validateTransport } from './request.js';
 
 const DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 /** Each route and the one method it accepts. */
-const ROUTES = new Map([
-  ['/api/plan', 'POST'],
-  ['/api/health', 'GET'],
-]);
+const ROUTES = { '/api/plan': 'POST', '/api/health': 'GET' } as const;
+const isRoute = (path: string): path is keyof typeof ROUTES => Object.hasOwn(ROUTES, path);
 const NO_STORE = { 'Cache-Control': 'no-store' };
 
 /** Dependencies, injectable so tests run offline and deterministically. */
@@ -133,8 +131,8 @@ export function createHandler(
     trace: Trace,
   ): Promise<Response> {
     request.signal.throwIfAborted();
-    const method = ROUTES.get(path);
-    if (!method) throw new AppError('NOT_FOUND');
+    if (!isRoute(path)) throw new AppError('NOT_FOUND');
+    const method = ROUTES[path];
     if (request.method !== method) throw new AppError('METHOD_NOT_ALLOWED', { allow: method });
     if (path === '/api/plan') return planRoute(request, requestId, trace);
     const ai = generate ? 'configured' : 'not_configured';
@@ -158,7 +156,7 @@ export function createHandler(
     }
     logRequest({
       requestId,
-      route: ROUTES.has(path) ? path : 'unknown',
+      route: isRoute(path) ? path : 'unknown',
       status: response.status,
       ...(code ? { code } : {}),
       latencyMs: Math.round(performance.now() - started),

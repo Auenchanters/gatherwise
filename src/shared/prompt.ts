@@ -35,7 +35,7 @@ export interface Prompt {
   readonly system: string;
   readonly user: string;
   /** The JSON Schema the response must follow. */
-  readonly schema: object;
+  readonly schema: z.core.JSONSchema.BaseSchema;
 }
 
 /** The zod schema for a template and the JSON Schema Gemini is given; Gemini accepts `$schema`. */

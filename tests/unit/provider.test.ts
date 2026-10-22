@@ -6,6 +6,7 @@
 import { ThinkingLevel } from '@google/genai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createGeminiGenerator } from '../../server/provider.js';
+import type { Prompt } from '../../src/shared/prompt.js';
 
 const mocks = vi.hoisted(() => ({ construct: vi.fn(), generateContent: vi.fn() }));
 vi.mock('@google/genai', async (importOriginal) => ({
@@ -18,7 +19,11 @@ vi.mock('@google/genai', async (importOriginal) => ({
   },
 }));
 
-const prompt = { system: 'fixed instruction', user: '{"brief":{}}', schema: { type: 'object' } };
+const prompt: Prompt = {
+  system: 'fixed instruction',
+  user: '{"brief":{}}',
+  schema: { type: 'object' },
+};
 
 describe('createGeminiGenerator', () => {
   beforeEach(() => {

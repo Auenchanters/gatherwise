@@ -12,7 +12,7 @@ import type { ErrorCode } from './errors.js';
 export interface RequestLog {
   readonly requestId: string;
   /** A known route, or `unknown`; never the raw path. */
-  readonly route: string;
+  readonly route: '/api/plan' | '/api/health' | 'unknown';
   readonly status: number;
   readonly code?: ErrorCode;
   /** `internal` marks an unexpected fault (a bug), so it can be traced without its message. */

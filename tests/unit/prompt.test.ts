@@ -1,6 +1,6 @@
 /**
  * The model contract: one fixed instruction, one JSON data block, one per-template schema (the
- * shared builder in src/shared/prompt.ts) and the reader for the answer (server/prompt.ts).
+ * shared builder in src/shared/prompt.ts) and the reader for the answer (server/answer.ts).
  * Does: checks the user prompt carries only engine numbers, active ids and sanitized brief text,
  * runs the injection corpus through every free-text field, and checks the response reader.
  */
@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { AppError } from '../../server/errors.js';
-import { parseSuggestions } from '../../server/prompt.js';
+import { parseSuggestions } from '../../server/answer.js';
 import { buildPlan, type Plan } from '../../src/domain/plan.js';
 import { templateFor } from '../../src/domain/templates/index.js';
 import { LIMITS } from '../../src/shared/limits.js';

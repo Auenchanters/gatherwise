@@ -27,7 +27,7 @@ flowchart TD
     capacity["server/capacity.ts: 3 calls in flight"]
     provider["server/provider.ts: one generateContent"]
     gemini(["Gemini"])
-    parse["server/prompt.ts: JSON, template schema, sanitize"]
+    parse["server/answer.ts: JSON, template schema, sanitize"]
   end
 
   entry -->|submit| validate
@@ -64,7 +64,7 @@ Key files:
 
 - **Engine:** `src/domain/money.ts` (integer minor units and largest-remainder allocation), `src/domain/budget.ts` (contingency and guest rescaling), `src/domain/break-even.ts`, `src/domain/schedule.ts` (backward critical path and statuses), `src/domain/vendors.ts`, `src/domain/volunteers.ts`, `src/domain/ideas.ts`, `src/domain/plan.ts` (assembly), `src/domain/merge.ts` (AI normalization), `src/domain/reducer.ts` (edits), `src/domain/ics.ts` (calendar export) and the templates in `src/domain/templates/`.
 - **Shared:** `src/shared/schema.ts`, `src/shared/limits.ts`, `src/shared/options.ts`, `src/shared/result.ts`, `src/shared/prompt.ts` and `src/shared/sanitize-text.ts`.
-- **Server:** `server/handler.ts` (routing and the log line), `server/request.ts` (the gate), `server/rate-limit.ts`, `server/capacity.ts`, `server/provider.ts` (Gemini), `server/prompt.ts` and `server/sanitize.ts` (reading the answer), `server/errors.ts` (the catalog) and `server/log.ts`.
+- **Server:** `server/handler.ts` (routing and the log line), `server/request.ts` (the gate), `server/rate-limit.ts`, `server/capacity.ts`, `server/provider.ts` (Gemini), `server/answer.ts` and `server/sanitize.ts` (reading the answer), `server/errors.ts` (the catalog) and `server/log.ts`.
 - **Browser:** `src/features/client/api-client.ts`, `src/features/client/messages.ts`, `src/features/plan/planner-store.ts`, `src/features/plan/persist.ts`, `src/features/plan/today.ts`.
 - **Function entry points:** `api/plan.ts` and `api/health.ts`.
 
