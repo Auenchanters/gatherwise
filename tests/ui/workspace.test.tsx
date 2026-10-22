@@ -8,7 +8,7 @@
  * "Personalize with AI (1 call)"; WAI-ARIA tab keys; refused edits; and the header actions.
  * Never does: call the network or read the clock (`today` is fixed for the store).
  */
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StrictMode } from 'react';
 import { describe, expect, it } from 'vitest';
@@ -33,7 +33,7 @@ import {
   savedStorage,
   type Answer,
 } from '../support/fakes.js';
-import { aiSuggestions, aiMeta, TODAY as today } from '../support/fixtures.js';
+import { aiMeta, aiSuggestions, brief, TODAY as today } from '../support/fixtures.js';
 import { festival, settle, setup } from '../support/planner-ui.js';
 
 /** The planner's polite region, by its name (the tabs have status regions of their own). */
@@ -167,6 +167,63 @@ describe('workspace: zero-call edits', () => {
     expect(client.suggest).toHaveBeenCalledTimes(1);
   });
 
+  it('a half-typed year is not sent, so it raises no alert, and a blank field drops the confirmation', async () => {
+    const { user, store } = await setup();
+    await user.click(screen.getByRole('tab', { name: 'Budget' }));
+    const date = screen.getByLabelText('Event date');
+    // Chrome fills the year in as it is typed: each step is a real date, long past.
+    for (const partial of ['0002-12-20', '0020-12-20', '0202-12-20']) {
+      fireEvent.change(date, { target: { value: partial } });
+      expect(screen.getByRole('alert').textContent).toBe('');
+      expect(date.getAttribute('aria-invalid')).toBeNull();
+    }
+    const unchanged = store.getState().plan;
+    expect(unchanged.phase === 'ready' && unchanged.brief.date).toBe(festival.date);
+    fireEvent.change(date, { target: { value: addDays(today, 60) } });
+    expect(screen.getByText(/^Plan updated for 20 Dec 2026/u)).toBeTruthy();
+    // The field is no longer a date the plan holds, so the green confirmation goes.
+    fireEvent.change(date, { target: { value: '' } });
+    expect(screen.queryByText(/^Plan updated for/u)).toBeNull();
+    expect(screen.getByRole('alert').textContent).toBe('');
+    const budget = screen.getByRole('spinbutton', { name: 'Total budget' });
+    await user.clear(budget);
+    await user.type(budget, '200000');
+    expect(screen.getByText(/^Budget updated to/u)).toBeTruthy();
+    await user.clear(budget);
+    expect(screen.queryByText(/^Budget updated to/u)).toBeNull();
+  });
+
+  it('shows the break-even ticket price and attendance when the income names both', async () => {
+    const ticketed = brief('community', {
+      date: addDays(today, 75),
+      income: {
+        ticketPrice: 200,
+        expectedPaidAttendance: 300,
+        sponsors: 40_000,
+        donations: 30_000,
+        stallCount: 0,
+        stallFee: 0,
+      },
+    });
+    const { user, store } = await setup({ start: ticketed });
+    await user.click(screen.getByRole('tab', { name: 'Budget' }));
+    const state = store.getState().plan;
+    if (state.phase !== 'ready') throw new Error('expected a plan');
+    // Costs ₹1,50,000 less ₹70,000 of other income leaves ₹80,000 for tickets to raise: 300 guests at
+    // ₹266.67 (rounded up to the paisa), or 400 at ₹200.
+    const ledger = within(screen.getByRole('region', { name: 'Break-even' }));
+    expect(ledger.getByText('Break-even ticket price').nextElementSibling?.textContent).toBe(
+      '₹266.67',
+    );
+    expect(ledger.getByText('Break-even paid attendance').nextElementSibling?.textContent).toBe(
+      '400 guests',
+    );
+    expect(state.plan.breakEven.breakEvenAttendance).toBe(400);
+    expect(ledger.getByText('Tickets').nextElementSibling?.textContent).toBe(
+      '₹200.00 × 300 paid guests',
+    );
+  });
+
   it('lays out the budget table with meters, contingency, total and break-even', async () => {
     const { user } = await setup();
     await user.click(screen.getByRole('tab', { name: 'Budget' }));
@@ -182,6 +239,9 @@ describe('workspace: zero-call edits', () => {
     const ledger = screen.getByRole('region', { name: 'Break-even' });
     expect(ledger.textContent).toContain('20 stalls × ₹1,500.00');
     expect(ledger.textContent).toMatch(/Shortfall|Surplus/u);
+    // The sample sells no tickets, so there is no price or attendance to break even at.
+    expect(ledger.textContent).not.toContain('Break-even ticket price');
+    expect(ledger.textContent).not.toContain('Break-even paid attendance');
   });
 });
 

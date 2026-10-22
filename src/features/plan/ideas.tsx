@@ -5,7 +5,7 @@
  * Does: call `store.refreshIdeas()` from that button's click; mark the button `aria-disabled` while
  * a request is pending (it keeps keyboard focus, and a click does nothing); say plainly that edits
  * never call the AI; announce what a refresh brought, truthfully (fresh, the same as before, or
- * nothing usable); label every idea "AI · personalized" (with why it was chosen) or "Standard
+ * nothing usable), and say nothing while it waits (the Notices region does); label every idea "AI · personalized" (with why it was chosen) or "Standard
  * suggestion"; when no AI ideas are showing, say why.
  * Never does: call the AI from anywhere else, compute a fit (the engine did), or show AI text
  * unlabelled.
@@ -31,14 +31,16 @@ const STANDARD_NOTICE: Readonly<Record<AiStatus, string>> = {
   applied: "Gemini's answer had no usable ideas, so you're seeing standard suggestions.",
 };
 
-/** What the refresh the user asked for has done, as one polite sentence. */
+/**
+ * What the refresh the user asked for has done, as one polite sentence. Silent while the request
+ * is pending (and before any): the Notices region already announces the wait.
+ */
 function refreshMessage(
   status: AiStatus,
   answer: { readonly hasAiIdeas: boolean; readonly cached: boolean; readonly calls: number },
 ): string {
-  if (status === 'pending') return 'Asking Gemini for fresh ideas… this uses 1 AI call.';
   if (status === 'failed') return "The refresh didn't go through, so your ideas are unchanged.";
-  if (status === 'idle') return '';
+  if (status === 'idle' || status === 'pending') return '';
   if (!answer.hasAiIdeas) return STANDARD_NOTICE.applied;
   if (answer.cached) return 'Same ideas as before — reused from this session, no new AI call.';
   return `Fresh ideas are in. AI calls this session: ${formatCount(answer.calls)}.`;

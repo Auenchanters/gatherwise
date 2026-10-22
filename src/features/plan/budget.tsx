@@ -6,7 +6,8 @@
  * mark a refused value at its field (`aria-invalid`, an inline message, the brief form's `Field`)
  * as well as in the alert.
  * Never does: compute money (every figure is the engine's), call the AI, snap an input back while
- * the user is typing, or send a blank or unreadable draft before the user leaves the field.
+ * the user is typing, send a blank or unreadable draft (a half-typed year included) before the user
+ * leaves the field, or leave a confirmation up for a value that was not sent.
  */
 import {
   useId,
@@ -47,9 +48,14 @@ const FIELD_OF = {
 
 type ControlKey = (typeof FIELD_OF)[PlanStateError['kind']];
 
-/** Whether the browser can read a draft: a number, or a complete date. */
+/**
+ * Whether the browser can read a draft: a number, or a date with a four-digit year from 1000 on.
+ * Chrome fills a date input as the year is typed (`0002-…`, `0020-…`, `0202-…`), and each of those
+ * is a real date in the past that would raise the alert before the user has finished typing; the
+ * event window starts today, so a year below 1000 is never a finished date.
+ */
 const readable = (input: HTMLInputElement): boolean =>
-  input.type === 'date' ? input.value !== '' : !Number.isNaN(input.valueAsNumber);
+  input.type === 'date' ? /^[1-9]\d{3}-/u.test(input.value) : !Number.isNaN(input.valueAsNumber);
 
 /** The three inputs that re-plan the budget, and the live region that reports each recompute. */
 function Controls({ state, store }: BudgetProps): ReactElement {
@@ -112,6 +118,8 @@ function Controls({ state, store }: BudgetProps): ReactElement {
       const { value } = input;
       setDrafts((current) => ({ ...current, [key]: value }));
       if (readable(input)) apply[key](input);
+      // Nothing was sent, so the last confirmation no longer describes the field.
+      else setMessage('');
     },
     onBlur: (event: FocusEvent<HTMLInputElement>) => {
       if (!readable(event.currentTarget)) apply[key](event.currentTarget);

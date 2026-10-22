@@ -73,6 +73,11 @@ describe('validateBrief: one human message per field', () => {
       { durationHours: '17' },
       'Duration must be a whole number of hours from 1 to 16',
     ],
+    [
+      'durationHours',
+      { durationHours: '2.5' },
+      'Duration must be a whole number of hours from 1 to 16',
+    ],
     ['city', { city: 'x'.repeat(61) }, 'City must be 60 characters or fewer'],
     ['venue', { venue: 'castle' }, 'Choose a type of venue'],
     ['guests', { guests: '' }, 'Enter the number of guests'],

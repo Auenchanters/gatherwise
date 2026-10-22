@@ -549,7 +549,11 @@ describe('ideas', () => {
     expect(client.suggest).toHaveBeenCalledTimes(2);
     expect(client.suggest.mock.calls[1]?.[2]).toEqual({ refresh: true });
     expect(button.getAttribute('aria-disabled')).toBe('true');
-    expect(i.getByRole('status').textContent).toContain('Asking Gemini for fresh ideas');
+    // The wait is announced once, by the Notices region; the Ideas region stays quiet until it ends.
+    expect(i.getByRole('status').textContent).toBe('');
+    expect(screen.getByRole('status', { name: 'Notices' }).textContent).toContain(
+      'Gemini is personalizing your plan…',
+    );
     // A second click while pending does nothing, and the button keeps keyboard focus.
     button.focus();
     await user.keyboard('{Enter}');
