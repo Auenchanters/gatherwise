@@ -348,6 +348,8 @@
 .data-table td {
   padding: 0.5rem 0.375rem;
   border-bottom: 1px solid var(--color-border);
+  /* Long words may break, so the table fits a phone with any font; amounts stay whole (.num). */
+  overflow-wrap: anywhere;
   text-align: left;
   vertical-align: middle;
 }
@@ -501,6 +503,14 @@
   .data-table th,
   .data-table td {
     padding: 0.625rem 0.75rem;
+  }
+}
+
+/* Badges and status chips are told apart by their tint; a forced palette drops it, so outline them. */
+@media (forced-colors: active) {
+  .badge,
+  .status {
+    border: 1px solid CanvasText;
   }
 }
 

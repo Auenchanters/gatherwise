@@ -494,7 +494,7 @@ describe('notices and subscriptions', () => {
     store.dismissNotice('storage');
     expect(store.getState().notices.map((n) => n.id)).toEqual(['ai']);
     const before = store.getState();
-    store.dismissNotice('nothing');
+    store.dismissNotice('restore'); // not showing, so nothing changes
     expect(store.getState()).toBe(before);
   });
 

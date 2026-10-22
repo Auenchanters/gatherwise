@@ -342,7 +342,12 @@ describe('workspace: AI failure', () => {
     const { user } = await setup({
       client: fakeClient(() => Promise.resolve(err({ code: 'network' }))),
     });
-    await user.click(screen.getByRole('button', { name: /^Dismiss: Can't reach the AI service/u }));
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Dismiss notice',
+        description: /^Can't reach the AI service/u,
+      }),
+    );
     expect(statusRegion().textContent).toBe('');
     expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }));
   });
@@ -355,12 +360,13 @@ describe('workspace: focus after a notice is dismissed', () => {
       client: fakeClient(() => Promise.resolve(err({ code: 'network' }))),
       storage: memoryStorage(undefined, { refuseWrites: true }),
     });
-  const dismissButtons = () => screen.getAllByRole('button', { name: /^Dismiss: / });
+  const dismissButtons = () => screen.getAllByRole('button', { name: 'Dismiss notice' });
 
   it('moves to the next notice, then to the plan heading when none is left', async () => {
     const { user } = await twoNotices();
     const [first, second] = dismissButtons();
-    expect(first?.getAttribute('aria-label')).toContain("browser isn't letting us save");
+    // Each button is described by its own notice's text, which stays out of the button's name.
+    expect(descriptionOf(must(first))).toContain("browser isn't letting us save");
     await user.click(must(first));
     expect(document.activeElement).toBe(second);
     await user.click(must(second));
@@ -380,7 +386,10 @@ describe('workspace: focus after a notice is dismissed', () => {
     const { user } = await setup();
     await user.click(screen.getByRole('button', { name: 'Clear my data' }));
     await user.click(
-      screen.getByRole('button', { name: /^Dismiss: Your saved plan was removed/u }),
+      screen.getByRole('button', {
+        name: 'Dismiss notice',
+        description: /^Your saved plan was removed/u,
+      }),
     );
     expect(statusRegion().textContent).toBe('');
     expect(document.activeElement).toBe(screen.getByRole('main'));

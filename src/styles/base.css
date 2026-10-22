@@ -2,6 +2,8 @@
  * Design tokens and page-wide rules. Every text colour below meets WCAG AA (>= 4.5:1) on both
  * --color-bg and --color-surface; --color-field-border meets the 3:1 non-text minimum for input
  * edges. --color-border is decorative only (card edges), never the sole boundary of a control.
+ * The dark palette after :root keeps the same promises, and the forced-colors block at the end
+ * hands every colour to the system palette.
  */
 :root {
   --color-bg: #fbf9f4;
@@ -41,7 +43,45 @@
   --tap: 2.75rem;
   --font-sans:
     system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
-  color-scheme: light;
+  color-scheme: light dark;
+}
+
+/*
+ * Dark mode: the same tokens, redefined, so no component needs its own dark rules. Measured
+ * contrast: body text 15:1 and muted text 9:1 on the page; accent text 9.8:1 on the page and 6.8:1
+ * on its tint; every status, AI and celebrate colour >= 7:1 on its own tint; dark text on the
+ * accent button 9.8:1; field borders >= 5.2:1.
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #14181d;
+    --color-surface: #1c2229;
+    --color-border: #353d47;
+    --color-field-border: #8b95a1;
+    --color-text: #e7eaee;
+    --color-muted: #b0bac4;
+    --color-accent: #62d2c3;
+    --color-accent-strong: #8fe0d5;
+    --color-accent-soft: #163a36;
+    --color-on-accent: #0b1a19;
+    --color-celebrate: #f3ad62;
+    --color-celebrate-soft: #3a2a18;
+    --status-ok: #74d494;
+    --status-soon: #9dbcff;
+    --status-risk: #f4b871;
+    --status-bad: #ff9a9a;
+    --status-done: #b0bac4;
+    --status-ok-soft: #17321f;
+    --status-soon-soft: #1b2742;
+    --status-risk-soft: #3a2a18;
+    --status-bad-soft: #3d1d1d;
+    --status-done-soft: #272d34;
+    --color-ai: #c9b0ff;
+    --color-ai-soft: #2a2142;
+    --color-surface-sunken: #181d23;
+    --color-track: #323a44;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  }
 }
 
 *,
@@ -205,5 +245,18 @@ h1 {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Windows High Contrast and other forced palettes: system colours, so state never hides in a tint. */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline-color: Highlight;
+  }
+
+  .button:disabled,
+  .button[aria-disabled='true'] {
+    border-color: GrayText;
+    color: GrayText;
   }
 }

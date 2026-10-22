@@ -47,13 +47,15 @@ export function errorText(error: PlanStateError, hasPlan: boolean): string {
 
 /** The id of a notice's Dismiss button, so the one before it can hand focus on. */
 const dismissId = (id: Notice['id']): string => `dismiss-${id}`;
+/** The id of a notice's text, which describes its Dismiss button. */
+const textId = (id: Notice['id']): string => `notice-${id}`;
 
 const TONE_ICONS: Record<Notice['tone'], string> = { info: 'ℹ', warning: '⚠︎', error: '✕' };
 
 /** Props for {@link Notices}. */
 export interface NoticesProps {
   readonly snapshot: PlannerSnapshot;
-  readonly onDismiss: (id: string) => void;
+  readonly onDismiss: (id: Notice['id']) => void;
 }
 
 /** Progress and notices (polite) and refused values (assertive). */
@@ -101,12 +103,17 @@ export function Notices({ snapshot, onDismiss }: NoticesProps): ReactElement {
             <span className="notice__icon" aria-hidden="true">
               {TONE_ICONS[notice.tone]}
             </span>
-            <span className="notice__text">{notice.text}</span>
+            <span className="notice__text" id={textId(notice.id)}>
+              {notice.text}
+            </span>
+            {/* A short name, with the text as its description: the live region reads a new notice
+                once, not its text again inside the button's name. */}
             <button
               className="notice__dismiss"
               id={dismissId(notice.id)}
               type="button"
-              aria-label={`Dismiss: ${notice.text}`}
+              aria-label="Dismiss notice"
+              aria-describedby={textId(notice.id)}
               onClick={() => {
                 dismiss(notice, index);
               }}

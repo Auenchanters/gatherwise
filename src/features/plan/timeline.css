@@ -170,6 +170,27 @@
   }
 }
 
+/* The bar is drawn with backgrounds, which a forced palette removes: give it system colours. */
+@media (forced-colors: active) {
+  .timeline__bar {
+    forced-color-adjust: none;
+    border: 1px solid CanvasText;
+    background: Canvas;
+  }
+
+  .timeline__bar::-webkit-progress-bar {
+    background: Canvas;
+  }
+
+  .timeline__bar::-webkit-progress-value {
+    background: Highlight;
+  }
+
+  .timeline__bar::-moz-progress-bar {
+    background: Highlight;
+  }
+}
+
 @media print {
   .timeline__tools {
     display: none;

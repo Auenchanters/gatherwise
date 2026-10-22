@@ -108,7 +108,7 @@ export interface PlannerStore {
   readonly clearData: () => void;
   /** Moves the plan to the new day if the date has changed since it was built. */
   readonly syncToday: () => void;
-  readonly dismissNotice: (id: string) => void;
+  readonly dismissNotice: (id: Notice['id']) => void;
   /** Aborts any request in flight; its answer is dropped. For when the planner goes away. */
   readonly dispose: () => void;
 }

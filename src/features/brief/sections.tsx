@@ -94,22 +94,27 @@ export function EventSection({
           },
         }))}
       />
-      <ChoiceGroup
-        legend="Type of event"
-        type="radio"
-        name="subtype"
-        field="subtype"
-        error={errorOf('subtype')}
-        choices={SUBTYPES[draft.kind].map((subtype, i) => ({
-          id: choiceId('subtype', i, subtype),
-          value: subtype,
-          label: SUBTYPE_LABELS[subtype],
-          checked: draft.subtype === subtype,
-          onChange: () => {
-            update((current) => ({ ...current, subtype }));
-          },
-        }))}
-      />
+      {/* A kind with one type (a wedding) states it: a group of one radio offers no choice. */}
+      {SUBTYPES[draft.kind].length === 1 ? (
+        <p className="brief__note">Type of event: {SUBTYPE_LABELS[SUBTYPES[draft.kind][0]]}</p>
+      ) : (
+        <ChoiceGroup
+          legend="Type of event"
+          type="radio"
+          name="subtype"
+          field="subtype"
+          error={errorOf('subtype')}
+          choices={SUBTYPES[draft.kind].map((subtype, i) => ({
+            id: choiceId('subtype', i, subtype),
+            value: subtype,
+            label: SUBTYPE_LABELS[subtype],
+            checked: draft.subtype === subtype,
+            onChange: () => {
+              update((current) => ({ ...current, subtype }));
+            },
+          }))}
+        />
+      )}
       <TextField {...bind('name')} label="Event name" max={caps.nameMax} counter required />
       <div className="brief__row">
         <InputField

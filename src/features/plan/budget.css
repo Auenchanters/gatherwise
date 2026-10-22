@@ -2,6 +2,8 @@
 
 .budget__layout {
   display: grid;
+  /* minmax(0, …): the table's widest word must not widen the column past a phone screen. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.5rem;
 }
 
@@ -146,9 +148,30 @@
   }
 }
 
+/* The meters are drawn with backgrounds, which a forced palette removes: give them system colours. */
+@media (forced-colors: active) {
+  .share__meter {
+    forced-color-adjust: none;
+    border: 1px solid CanvasText;
+    background: Canvas;
+  }
+
+  .share__meter::-webkit-meter-bar {
+    background: Canvas;
+  }
+
+  .share__meter::-webkit-meter-optimum-value {
+    background: Highlight;
+  }
+
+  .share__meter::-moz-meter-bar {
+    background: Highlight;
+  }
+}
+
 @media (min-width: 60rem) {
   .budget__layout {
-    grid-template-columns: 18rem 1fr;
+    grid-template-columns: 18rem minmax(0, 1fr);
     align-items: start;
   }
 

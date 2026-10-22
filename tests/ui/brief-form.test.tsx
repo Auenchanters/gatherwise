@@ -204,11 +204,10 @@ describe('BriefForm: kind-dependent fields', () => {
       .map((r) => r.getAttribute('value'));
     expect(values).toEqual(['kids', 'adult', 'milestone']);
     expect(subtypes().getByRole('radio', { name: "Kids' party" })).toHaveProperty('checked', true);
+    // A wedding has one type, so it is stated rather than offered as a group of one radio.
     await user.click(screen.getByRole('radio', { name: 'Wedding' }));
-    expect(subtypes().getByRole('radio', { name: 'Ceremony & reception' })).toHaveProperty(
-      'checked',
-      true,
-    );
+    expect(screen.queryByRole('group', { name: 'Type of event' })).toBeNull();
+    expect(screen.getByText('Type of event: Ceremony & reception')).toBeTruthy();
   });
 
   it('changes the venue and the currency from their lists', async () => {
