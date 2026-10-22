@@ -3,12 +3,15 @@
  * failure, a restore or storage problem, cleared data) and an assertive one for a brief or an edit
  * the plan refused. It stays mounted while the plan opens and closes, so changes are always
  * announced. Also the one catalog of refused-value copy, which the Budget fields repeat inline.
+ * Does: keep focus when a notice is dismissed: it moves to the next notice's Dismiss button, or to
+ * the plan's heading (to `<main>` when no plan is open) once none is left.
  * Never does: decide what a notice says (the store does), or start anything.
  */
-import type { ReactElement } from 'react';
+import { useRef, type ReactElement } from 'react';
 import type { PlanStateError } from '../../domain/reducer.js';
 import { LIMITS } from '../../shared/limits.js';
 import { formatCount } from './format.js';
+import { PLAN_HEADING_ID } from './header.js';
 import type { Notice, PlannerSnapshot } from './planner-store.js';
 import { PLAN_ERROR_ID } from './storage-key.js';
 
@@ -41,6 +44,9 @@ export function errorText(error: PlanStateError, hasPlan: boolean): string {
   return hasPlan ? `${why} — the plan still uses the last valid ${KEPT[error.kind]}.` : `${why}.`;
 }
 
+/** The id of a notice's Dismiss button, so the one before it can hand focus on. */
+const dismissId = (id: Notice['id']): string => `dismiss-${id}`;
+
 const TONE_ICONS: Record<Notice['tone'], string> = { info: 'ℹ', warning: '⚠︎', error: '✕' };
 
 /** Props for {@link Notices}. */
@@ -52,11 +58,26 @@ export interface NoticesProps {
 /** Progress and notices (polite) and refused values (assertive). */
 export function Notices({ snapshot, onDismiss }: NoticesProps): ReactElement {
   const { plan, notices, aiView } = snapshot;
+  const root = useRef<HTMLDivElement>(null);
   const status = plan.phase === 'ready' ? plan.ai.status : 'idle';
   // An answer that arrived this session is announced; the AI panel already shows it on screen.
   const landed = status === 'applied' && aiView.sentBrief !== undefined;
+
+  /** Dismisses one notice; focus moves off its button first, since the button is about to go. */
+  const dismiss = (index: number): void => {
+    const notice = notices[index];
+    if (!notice) return;
+    const neighbour = notices[index + 1] ?? notices[index - 1];
+    const main = root.current?.closest('main');
+    const target = neighbour
+      ? document.getElementById(dismissId(neighbour.id))
+      : (document.getElementById(PLAN_HEADING_ID) ?? main);
+    target?.focus();
+    onDismiss(notice.id);
+  };
+
   return (
-    <div className="notices">
+    <div className="notices" ref={root}>
       {/* Named, so it is told apart from the page's other status regions. Not atomic: a new notice
           is read on its own, not with every notice already showing. */}
       <div role="status" aria-label="Notices" aria-atomic="false">
@@ -73,7 +94,7 @@ export function Notices({ snapshot, onDismiss }: NoticesProps): ReactElement {
               : 'Gemini has personalized your plan.'}
           </span>
         )}
-        {notices.map((notice) => (
+        {notices.map((notice, index) => (
           <p className={`notice notice--${notice.tone}`} key={notice.id}>
             <span className="notice__icon" aria-hidden="true">
               {TONE_ICONS[notice.tone]}
@@ -81,10 +102,11 @@ export function Notices({ snapshot, onDismiss }: NoticesProps): ReactElement {
             <span className="notice__text">{notice.text}</span>
             <button
               className="notice__dismiss"
+              id={dismissId(notice.id)}
               type="button"
               aria-label={`Dismiss: ${notice.text}`}
               onClick={() => {
-                onDismiss(notice.id);
+                dismiss(index);
               }}
             >
               <span aria-hidden="true">×</span>

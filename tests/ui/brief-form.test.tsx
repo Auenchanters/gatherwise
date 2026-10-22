@@ -17,7 +17,7 @@ import { addDays } from '../../src/domain/dates.js';
 import { BriefForm } from '../../src/features/brief/brief-form.js';
 import { sampleBrief } from '../../src/features/brief/samples.js';
 import { eventBriefSchema, type EventBrief } from '../../src/shared/schema.js';
-import { descriptionOf } from '../support/dom.js';
+import { descriptionOf } from '../support/ui.js';
 import { TODAY as today } from '../support/fixtures.js';
 
 const VALIDATE = '../../src/features/brief/validate.js';

@@ -1,7 +1,8 @@
 /**
  * The workspace header: the event name as the page's only `<h1>`, the facts line (kind, date,
  * countdown, guests, budget) and the plan actions.
- * Does: take focus when a plan opens (the workspace calls `focus` on `headingRef`).
+ * Does: take focus when a plan opens (the workspace calls `focus` on `headingRef`); the heading has
+ * an id, so a dismissed notice can hand focus back to it.
  * Never does: compute a figure (every number is the engine's) or change the plan itself.
  */
 import type { ReactElement, Ref } from 'react';
@@ -10,6 +11,9 @@ import { formatMoney } from '../../domain/money.js';
 import type { ReadyState } from '../../domain/reducer.js';
 import { KIND_LABELS, SUBTYPE_LABELS } from '../brief/labels.js';
 import { countOf, showDate } from './format.js';
+
+/** The id of the event name heading, which takes focus whenever a plan opens. */
+export const PLAN_HEADING_ID = 'plan-heading';
 
 /** "Today!" on the day, otherwise how many days are left. */
 const countdown = (days: number): string =>
@@ -35,7 +39,13 @@ export function Header({
   const { brief, plan, today } = state;
   return (
     <header className="ws-header">
-      <h1 className="ws-header__title" dir="auto" tabIndex={-1} ref={headingRef}>
+      <h1
+        className="ws-header__title"
+        id={PLAN_HEADING_ID}
+        dir="auto"
+        tabIndex={-1}
+        ref={headingRef}
+      >
         {brief.name}
       </h1>
       <ul className="ws-meta" aria-label="Event facts">

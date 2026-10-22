@@ -23,8 +23,16 @@ import { createPlannerStore } from '../../src/features/plan/planner-store.js';
 import { PLAN_ERROR_ID, STORAGE_KEY } from '../../src/features/plan/storage-key.js';
 import { SYSTEM_INSTRUCTION } from '../../src/shared/prompt.js';
 import { err, ok } from '../../src/shared/result.js';
-import { descriptionOf } from '../support/dom.js';
-import { fakeClient, planned, savedStorage, type Answer } from '../support/fakes.js';
+import { descriptionOf, must } from '../support/ui.js';
+import {
+  deferred,
+  fakeClient,
+  freshAnswer,
+  memoryStorage,
+  planned,
+  savedStorage,
+  type Answer,
+} from '../support/fakes.js';
 import { aiSuggestions, aiMeta, TODAY as today } from '../support/fixtures.js';
 import { festival, settle, setup } from '../support/planner-ui.js';
 
@@ -260,12 +268,120 @@ describe('workspace: AI failure', () => {
     expect(client.suggest).toHaveBeenCalledTimes(2);
   });
 
-  it('a notice can be dismissed', async () => {
+  it('a notice can be dismissed, and focus goes to the plan heading', async () => {
     const { user } = await setup({
       client: fakeClient(() => Promise.resolve(err({ code: 'network' }))),
     });
     await user.click(screen.getByRole('button', { name: /^Dismiss: Can't reach the AI service/u }));
     expect(statusRegion().textContent).toBe('');
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }));
+  });
+});
+
+describe('workspace: focus after a notice is dismissed', () => {
+  /** A plan with two notices: the browser refused to save, then the AI failed. */
+  const twoNotices = () =>
+    setup({
+      client: fakeClient(() => Promise.resolve(err({ code: 'network' }))),
+      storage: memoryStorage(undefined, { refuseWrites: true }),
+    });
+  const dismissButtons = () => screen.getAllByRole('button', { name: /^Dismiss: / });
+
+  it('moves to the next notice, then to the plan heading when none is left', async () => {
+    const { user } = await twoNotices();
+    const [first, second] = dismissButtons();
+    expect(first?.getAttribute('aria-label')).toContain("browser isn't letting us save");
+    await user.click(must(first));
+    expect(document.activeElement).toBe(second);
+    await user.click(must(second));
+    expect(statusRegion().textContent).toBe('');
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }));
+  });
+
+  it('moves to the one before when the last notice is dismissed', async () => {
+    const { user } = await twoNotices();
+    const [first, second] = dismissButtons();
+    await user.click(must(second));
+    expect(document.activeElement).toBe(first);
+    expect(dismissButtons()).toHaveLength(1);
+  });
+
+  it('moves to main when no plan is open, since there is no plan heading', async () => {
+    const { user } = await setup();
+    await user.click(screen.getByRole('button', { name: 'Clear my data' }));
+    await user.click(
+      screen.getByRole('button', { name: /^Dismiss: Your saved plan was removed/u }),
+    );
+    expect(statusRegion().textContent).toBe('');
+    expect(document.activeElement).toBe(screen.getByRole('main'));
+  });
+});
+
+describe('workspace: focus and the AI panel button', () => {
+  /** The restored plan without an answer, which offers "Personalize with AI (1 call)". */
+  async function restored(client: ReturnType<typeof fakeClient>) {
+    const rendered = await setup({ client, storage: savedStorage(planned(festival)), start: null });
+    act(() => {
+      rendered.store.hydrate();
+    });
+    return rendered;
+  }
+  const answerLine = () => screen.getByText('Personalized by gemini-3.5-flash-lite in one call.');
+
+  it('Personalize stays mounted, focused and aria-disabled while it waits', async () => {
+    const answer = deferred<Answer>();
+    const client = fakeClient(() => answer.promise);
+    const { user } = await restored(client);
+    const button = screen.getByRole('button', { name: 'Personalize with AI (1 call)' });
+    await user.click(button);
+    expect(button.isConnected).toBe(true);
+    expect(document.activeElement).toBe(button);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    expect(button.textContent).toBe('Personalizing…');
+    await user.click(button);
+    expect(client.suggest).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(button);
+  });
+
+  it('focus moves to the line that reports the answer once the button is gone', async () => {
+    const answer = deferred<Answer>();
+    const { user } = await restored(fakeClient(() => answer.promise));
+    await user.click(screen.getByRole('button', { name: 'Personalize with AI (1 call)' }));
+    answer.resolve(freshAnswer);
+    await settle();
+    expect(screen.queryByRole('button', { name: /^Personalize/u })).toBeNull();
+    expect(document.activeElement).toBe(answerLine());
+  });
+
+  it('Try again keeps focus while it waits, then hands it to the answer line', async () => {
+    const retry = deferred<Answer>();
+    let asked = 0;
+    const client = fakeClient(() => {
+      asked += 1;
+      return asked === 1 ? Promise.resolve(err({ code: 'unavailable' })) : retry.promise;
+    });
+    const { user } = await setup({ client });
+    const button = screen.getByRole('button', { name: 'Try again' });
+    await user.click(button);
+    expect(button.isConnected).toBe(true);
+    expect(document.activeElement).toBe(button);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    retry.resolve(freshAnswer);
+    await settle();
+    expect(document.activeElement).toBe(answerLine());
+  });
+
+  it('does not take focus when the user has moved on before the answer lands', async () => {
+    const answer = deferred<Answer>();
+    const { user } = await restored(fakeClient(() => answer.promise));
+    await user.click(screen.getByRole('button', { name: 'Personalize with AI (1 call)' }));
+    const budgetTab = screen.getByRole('tab', { name: 'Budget' });
+    act(() => {
+      budgetTab.focus();
+    });
+    answer.resolve(freshAnswer);
+    await settle();
+    expect(document.activeElement).toBe(budgetTab);
   });
 });
 

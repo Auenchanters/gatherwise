@@ -19,7 +19,7 @@ import type { ReadyState } from '../../src/domain/reducer.js';
 import { sampleBrief } from '../../src/features/brief/samples.js';
 import type { PlannerStore } from '../../src/features/plan/planner-store.js';
 import { err, ok } from '../../src/shared/result.js';
-import { descriptionOf } from '../support/dom.js';
+import { descriptionOf, must } from '../support/ui.js';
 import {
   deferred,
   fakeClient,
@@ -57,12 +57,6 @@ function ready(store: PlannerStore): ReadyState {
   const state = store.getState().plan;
   if (state.phase !== 'ready') throw new Error('expected a plan');
   return state;
-}
-
-/** `value`, or a failed test when it is missing. */
-function must<T>(value: T | undefined): T {
-  if (value === undefined) throw new Error('expected a value');
-  return value;
 }
 
 /** The checkbox with this name in the Timeline or Vendors panel. */
