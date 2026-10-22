@@ -102,7 +102,7 @@ export function planFor(brief: EventBrief, now: Date): Plan {
   const today = isoDate(now.toISOString().slice(0, 10));
   const event = parseIsoDate(brief.date);
   const ahead = event.ok ? daysBetween(today, event.value) : 0;
-  const shift = ahead < 0 ? -1 : Number(ahead > LIMITS.brief.horizonDays);
+  const shift = ahead < 0 ? -1 : ahead > LIMITS.brief.horizonDays ? 1 : 0;
   const plan = buildPlan(brief, addDays(today, shift));
   if (!plan.ok) throw new AppError('INVALID_BRIEF', { fields: ['date'] });
   return plan.value;

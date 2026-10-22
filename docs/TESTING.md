@@ -38,7 +38,7 @@ Coverage is collected by `@vitest/coverage-v8` as configured in `vitest.config.t
 What is outside the measured scope, and why:
 
 - **`src/main.tsx`.** It finds `#root` and renders `<App />` in `StrictMode`, which needs a real page. Every Playwright journey loads it through the production build, and `App` itself is measured through `tests/ui/app.test.tsx`.
-- **`api/plan.ts` and `api/health.ts`.** Each is two statements: import the shared handler and export it. The handler is measured in full, and the runtime smoke imports the emitted entry points after every build.
+- **`api/plan.ts` and `api/health.ts`.** Each is two statements: import the handler factory and export the handler it builds from `process.env`. The factory (`handlerFromEnv`) and the handler are measured in full, with the environment passed as a plain object, and the runtime smoke imports the emitted entry points after every build.
 - **`scripts/`.** `scripts/bundle-budget.mjs` and `scripts/runtime-smoke.mjs` run inside every build. `scripts/live-checks.ts` and `scripts/doc-checks.ts` are unit-tested but sit outside `src` and `server`. `scripts/preflight.mjs`, `scripts/live-smoke.ts` and `scripts/dev-server.ts` are thin wrappers run by hand.
 
 ## Running each layer

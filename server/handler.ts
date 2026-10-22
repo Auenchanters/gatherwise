@@ -7,6 +7,7 @@
  * Never does: retry a model call, return a provider message, log brief or model text, or cache.
  */
 import { randomUUID } from 'node:crypto';
+import { ApiError } from '@google/genai';
 import type { EventKind } from '../src/domain/templates/types.js';
 import { buildPrompt, type Prompt } from '../src/shared/prompt.js';
 import { aiMetaSchema } from '../src/shared/schema.js';
@@ -46,21 +47,12 @@ interface Trace {
   kind?: 'internal';
 }
 
-const isObject = (value: unknown): value is object => typeof value === 'object' && value !== null;
-
-/** Quota exhaustion: an SDK `ApiError` with status 429, or a RESOURCE_EXHAUSTED body. */
-const isBusy = (error: unknown): boolean =>
-  isObject(error) &&
-  (('status' in error && error.status === 429) ||
-    ('message' in error &&
-      typeof error.message === 'string' &&
-      error.message.includes('RESOURCE_EXHAUSTED')));
+/** Quota exhaustion: the SDK throws its `ApiError` with the HTTP status, 429 for a spent quota. */
+const isBusy = (error: unknown): boolean => error instanceof ApiError && error.status === 429;
 
 /** The SDK's own timeout aborts its fetch, which rejects with an AbortError. */
 const isTimeout = (error: unknown): boolean =>
-  isObject(error) &&
-  'name' in error &&
-  (error.name === 'AbortError' || error.name === 'TimeoutError');
+  error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError');
 
 /**
  * The public code for a failed model call, chosen by the error's shape. Inspecting a hostile value
@@ -116,7 +108,8 @@ export function createHandler(
     const generation = await withCapacity(() => callModel(generate, prompt, request.signal));
     const latencyMs = Math.round(performance.now() - started);
     const { inputTokens, outputTokens } = generation;
-    Object.assign(trace, { inputTokens, outputTokens });
+    trace.inputTokens = inputTokens;
+    trace.outputTokens = outputTokens;
     const suggestions = parseSuggestions(generation.text, brief.kind);
     // Checked at runtime too: a bad model id or token count must not reach the client's store.
     const meta = aiMetaSchema.safeParse({ model, latencyMs, inputTokens, outputTokens, requestId });
@@ -166,18 +159,25 @@ export function createHandler(
   };
 }
 
-/** An environment setting, trimmed; unset and blank (`NAME=`) both mean "not set". */
-function setting(name: string): string | undefined {
-  const value = process.env[name]?.trim();
-  return value === '' ? undefined : value;
-}
+/** The environment variables a handler is configured from, such as `process.env`. */
+export type Env = Readonly<Record<string, string | undefined>>;
 
-const key = setting('GEMINI_API_KEY');
-const configuredModel = setting('GEMINI_MODEL') ?? DEFAULT_MODEL;
-const appOrigin = setting('APP_ORIGIN');
-/** The production handler, configured from the environment once per warm instance. */
-export const handleRequest = createHandler({
-  model: configuredModel,
-  ...(key ? { generate: createGeminiGenerator(key, configuredModel) } : {}),
-  ...(appOrigin ? { origin: appOrigin } : {}),
-});
+/**
+ * A handler configured from `env`, built once per warm instance by each function entry point:
+ * `GEMINI_API_KEY` (no key, no model calls), `GEMINI_MODEL` and `APP_ORIGIN`. A value that is
+ * unset or blank (`NAME=`) means "not set".
+ */
+export function handlerFromEnv(env: Env): (request: Request) => Promise<Response> {
+  const setting = (name: string): string | undefined => {
+    const value = env[name]?.trim();
+    return value === '' ? undefined : value;
+  };
+  const key = setting('GEMINI_API_KEY');
+  const model = setting('GEMINI_MODEL') ?? DEFAULT_MODEL;
+  const origin = setting('APP_ORIGIN');
+  return createHandler({
+    model,
+    ...(key ? { generate: createGeminiGenerator(key, model) } : {}),
+    ...(origin ? { origin } : {}),
+  });
+}

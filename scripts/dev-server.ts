@@ -3,6 +3,6 @@
  * Does: serve `/api/*` for Vite's dev proxy. Never does: listen beyond loopback.
  */
 import { serve } from '@hono/node-server';
-import { handleRequest } from '../server/handler.js';
+import { handlerFromEnv } from '../server/handler.js';
 
-serve({ fetch: handleRequest, port: 3001, hostname: '127.0.0.1' });
+serve({ fetch: handlerFromEnv(process.env), port: 3001, hostname: '127.0.0.1' });

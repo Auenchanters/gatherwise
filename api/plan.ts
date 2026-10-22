@@ -1,8 +1,9 @@
 /**
  * Vercel function for `POST /api/plan`.
- * Does: hand every request to the shared Fetch handler. Never does: anything else.
+ * Does: build the shared Fetch handler from the environment once per warm instance and hand it
+ * every request. Never does: anything else.
  */
-import { handleRequest } from '../server/handler.js';
+import { handlerFromEnv } from '../server/handler.js';
 
 /** Vercel's Web-standard function export. */
-export default { fetch: handleRequest };
+export default { fetch: handlerFromEnv(process.env) };

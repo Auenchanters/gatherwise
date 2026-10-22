@@ -3,16 +3,22 @@
  * generator: one test per row of the request matrix, plus output sanitizing and log privacy.
  * Never calls the network.
  */
+import { ApiError } from '@google/genai';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { createHandler, type HandlerOptions } from '../../server/handler.js';
+import {
+  createHandler,
+  handlerFromEnv,
+  type Env,
+  type HandlerOptions,
+} from '../../server/handler.js';
 import type { Generate } from '../../server/provider.js';
 import { buildPlan } from '../../src/domain/plan.js';
 import { buildPrompt } from '../../src/shared/prompt.js';
 import { aiMetaSchema, eventBriefSchema, type EventBrief } from '../../src/shared/schema.js';
 import { brief, TODAY } from '../support/fixtures.js';
 
-// Only `handleRequest` (built from the environment) reaches the SDK; every other test injects
-// `generate`. The mock keeps that path offline too.
+// Only a handler built by `handlerFromEnv` reaches the SDK; every other test injects `generate`.
+// The mock keeps that path offline too.
 const sdk = vi.hoisted(() => ({ generateContent: vi.fn() }));
 vi.mock('@google/genai', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@google/genai')>()),
@@ -85,7 +91,6 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.restoreAllMocks();
-  vi.unstubAllEnvs();
 });
 
 describe('request matrix', () => {
@@ -271,14 +276,27 @@ describe('request matrix', () => {
     expect(message).not.toMatch(/upstream|stack|key=/u);
   });
 
-  it.each([
-    ['an HTTP 429', Object.assign(new Error('quota'), { status: 429 })],
-    ['RESOURCE_EXHAUSTED', new Error('{"error":{"status":"RESOURCE_EXHAUSTED"}}')],
-  ])('503 AI_BUSY with Retry-After when the provider reports %s', async (_name, failure) => {
-    const response = await handlerWith({ generate: failing(failure) })(post());
+  it('503 AI_BUSY with Retry-After when the SDK reports a spent quota (ApiError 429)', async () => {
+    const quota = new ApiError({
+      message: '{"error":{"status":"RESOURCE_EXHAUSTED"}}',
+      status: 429,
+    });
+    const response = await handlerWith({ generate: failing(quota) })(post());
     expect(response.status).toBe(503);
     expect(response.headers.get('retry-after')).toBe('60');
     expect((await errorOf(response)).code).toBe('AI_BUSY');
+  });
+
+  it.each([
+    ['an ApiError with another status', new ApiError({ message: 'upstream', status: 500 })],
+    [
+      'a plain error that only looks like a 429',
+      Object.assign(new Error('quota'), { status: 429 }),
+    ],
+  ])('502 AI_UNAVAILABLE for %s', async (_name, failure) => {
+    const response = await handlerWith({ generate: failing(failure) })(post());
+    expect(response.status).toBe(502);
+    expect((await errorOf(response)).code).toBe('AI_UNAVAILABLE');
   });
 
   it('502 AI_UNAVAILABLE, not 500, when inspecting the error itself throws', async () => {
@@ -513,23 +531,19 @@ describe('default clock', () => {
   });
 });
 
-describe('handleRequest from the environment', () => {
-  /** Re-imports the handler so it is built from the env stubbed in the test. */
-  const freshHandler = async () => {
-    vi.resetModules();
-    return (await import('../../server/handler.js')).handleRequest;
-  };
-  const health = async (): Promise<unknown> => {
-    const handleRequest = await freshHandler();
-    const body: unknown = await (await handleRequest(new Request(`${ORIGIN}/api/health`))).json();
+describe('handlerFromEnv', () => {
+  const health = async (env: Env): Promise<unknown> => {
+    const response = await handlerFromEnv(env)(new Request(`${ORIGIN}/api/health`));
+    const body: unknown = await response.json();
     return body;
   };
-  /** `meta.model` of a successful plan through the env-built handler (SDK mocked above). */
-  const reportedModel = async (): Promise<unknown> => {
+  const soon = () => new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
+  /** `meta.model` of a successful plan through a handler built from `env` (SDK mocked above). */
+  const reportedModel = async (env: Env, origin = ORIGIN): Promise<unknown> => {
     sdk.generateContent.mockResolvedValue({ text: JSON.stringify(SUGGESTIONS) });
-    const handleRequest = await freshHandler();
-    const soon = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
-    const response = await handleRequest(post({ brief: brief('community', { date: soon }) }));
+    const response = await handlerFromEnv(env)(
+      post({ brief: brief('community', { date: soon() }) }, { origin }),
+    );
     expect(response.status).toBe(200);
     const body: unknown = await response.json();
     return typeof body === 'object' && body !== null && 'meta' in body
@@ -537,17 +551,22 @@ describe('handleRequest from the environment', () => {
       : undefined;
   };
 
-  it('is not configured without GEMINI_API_KEY', async () => {
-    vi.stubEnv('GEMINI_API_KEY', '');
-    await expect(health()).resolves.toEqual({ status: 'ok', ai: 'not_configured' });
+  it.each<[string, Env]>([
+    ['unset', {}],
+    ['blank', { GEMINI_API_KEY: '   ' }],
+  ])('is not configured when GEMINI_API_KEY is %s', async (_name, env) => {
+    await expect(health(env)).resolves.toEqual({ status: 'ok', ai: 'not_configured' });
   });
 
   it('is configured with a key, and honours a model override and APP_ORIGIN', async () => {
-    vi.stubEnv('GEMINI_API_KEY', 'test-key-not-a-secret');
-    vi.stubEnv('GEMINI_MODEL', 'gemini-test');
-    vi.stubEnv('APP_ORIGIN', 'https://gatherwise.vercel.app');
-    await expect(health()).resolves.toEqual({ status: 'ok', ai: 'configured' });
-    await expect(reportedModel()).resolves.toBe('gemini-test');
+    const app = 'https://gatherwise.vercel.app';
+    const env: Env = {
+      GEMINI_API_KEY: 'test-key-not-a-secret',
+      GEMINI_MODEL: 'gemini-test',
+      APP_ORIGIN: ` ${app} `,
+    };
+    await expect(health(env)).resolves.toEqual({ status: 'ok', ai: 'configured' });
+    await expect(reportedModel(env, app)).resolves.toBe('gemini-test');
     expect(sdk.generateContent).toHaveBeenCalledWith(
       expect.objectContaining({ model: 'gemini-test' }),
     );
@@ -557,9 +576,8 @@ describe('handleRequest from the environment', () => {
     ['unset', undefined],
     ['blank', '   '],
   ])('uses gemini-3.5-flash-lite when GEMINI_MODEL is %s', async (_name, value) => {
-    vi.stubEnv('GEMINI_API_KEY', 'test-key-not-a-secret');
-    vi.stubEnv('GEMINI_MODEL', value);
-    await expect(reportedModel()).resolves.toBe('gemini-3.5-flash-lite');
+    const env: Env = { GEMINI_API_KEY: 'test-key-not-a-secret', GEMINI_MODEL: value };
+    await expect(reportedModel(env)).resolves.toBe('gemini-3.5-flash-lite');
     expect(sdk.generateContent).toHaveBeenLastCalledWith(
       expect.objectContaining({ model: 'gemini-3.5-flash-lite' }),
     );
