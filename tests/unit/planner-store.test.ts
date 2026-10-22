@@ -220,6 +220,7 @@ describe('personalize and refreshIdeas', () => {
     expect(client.suggest.mock.calls[0]?.[2]).toBeUndefined();
     expect(ready(store.getState()).ai.status).toBe('applied');
     expect(store.getState().calls).toBe(1);
+    expect(store.getState().aiView.refresh).toBeUndefined();
   });
 
   it('refreshIdeas costs one call, skips the cache, and is ignored while pending', async () => {
@@ -238,6 +239,8 @@ describe('personalize and refreshIdeas', () => {
     await Promise.all([first, second]);
     expect(store.getState().calls).toBe(2);
     expect(ready(store.getState()).ai.status).toBe('applied');
+    // The Ideas tab announces this answer, so the view marks it as a refresh's.
+    expect(store.getState().aiView.refresh).toBe(true);
   });
 
   it('does nothing without a plan', async () => {

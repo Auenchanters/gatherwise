@@ -42,6 +42,8 @@ export interface AiView {
   readonly sentBrief?: EventBrief;
   /** True when the applied answer was reused from this session's cache: no new call was made. */
   readonly cached: boolean;
+  /** Set when the latest request was an explicit Refresh ideas, which the Ideas tab announces. */
+  readonly refresh?: true;
   /** The sentence for the latest failure, while the plan's AI state is `failed`. */
   readonly failure?: string;
 }
@@ -199,7 +201,7 @@ export function createPlannerStore({ client, storage, today }: PlannerDeps): Pla
     callsBefore = client.calls();
     inFlight = controller;
     const { brief, generation } = state;
-    const sent = { sentBrief: brief };
+    const sent = { sentBrief: brief, ...(opts?.refresh ? { refresh: true as const } : {}) };
     dispatch(
       { type: 'ai/requested', generation },
       { aiView: { ...sent, cached: false }, notices: withoutAiNotice() },

@@ -619,6 +619,32 @@ describe('ideas', () => {
     expect(panel('Ideas').getByRole('status').textContent).toBe('');
   });
 
+  it.each([
+    ['fresh', false, 'Fresh ideas are in. AI calls this session: 2.'],
+    ['reused', true, 'Same ideas as before — reused from this session, no new AI call.'],
+  ])(
+    'announces a refresh once, in the Ideas tab: %s ideas leave the Notices region quiet',
+    async (_name, cached, sentence) => {
+      let asked = 0;
+      const client = fakeClient(() => {
+        asked += 1;
+        return Promise.resolve(
+          ok({ suggestions: aiSuggestions, meta: aiMeta, cached: asked > 1 && cached }),
+        );
+      });
+      const { user } = await setup({ client });
+      const notices = screen.getByRole('status', { name: 'Notices' });
+      const ideas = panel('Ideas').getByRole('status');
+      // The first answer belongs to the Notices region; the Ideas tab has not been asked.
+      expect(notices.textContent).toBe('Gemini has personalized your plan.');
+      expect(ideas.textContent).toBe('');
+
+      await user.click(panel('Ideas').getByRole('button', REFRESH));
+      expect(ideas.textContent).toBe(sentence);
+      expect(notices.textContent).toBe('');
+    },
+  );
+
   it('shows the standard ideas with an honest notice when the AI failed', async () => {
     const client = fakeClient(() => Promise.resolve(err({ code: 'unavailable' })));
     await setup({ client });

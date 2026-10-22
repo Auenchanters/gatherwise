@@ -4,8 +4,9 @@
  * the plan refused. It stays mounted while the plan opens and closes, so changes are always
  * announced. Also the catalog of refused-value copy, which the Budget fields repeat inline: the
  * date sentences are shared with the brief form (`DATE_COPY`), the guest and budget ones are its own.
- * Does: keep focus when a notice is dismissed: it moves to the next notice's Dismiss button, or to
- * the plan's heading (to `<main>` when no plan is open) once none is left.
+ * Does: announce when the first answer or Personalize's lands, but not Refresh ideas', which the
+ * Ideas tab announces itself. Keep focus when a notice is dismissed: it moves to the next notice's
+ * Dismiss button, or to the plan's heading (to `<main>` when no plan is open) once none is left.
  * Never does: decide what a notice says (the store does), or start anything.
  */
 import { useRef, type ReactElement } from 'react';
@@ -61,7 +62,9 @@ export function Notices({ snapshot, onDismiss }: NoticesProps): ReactElement {
   const root = useRef<HTMLDivElement>(null);
   const status = plan.phase === 'ready' ? plan.ai.status : 'idle';
   // An answer that arrived this session is announced; the AI panel already shows it on screen.
-  const landed = status === 'applied' && aiView.sentBrief !== undefined;
+  // A refresh is the exception: the Ideas tab announces what that one brought, so it is not
+  // announced twice.
+  const landed = status === 'applied' && aiView.sentBrief !== undefined && !aiView.refresh;
 
   /** Dismisses one notice; focus moves off its button first, since the button is about to go. */
   const dismiss = (notice: Notice, index: number): void => {

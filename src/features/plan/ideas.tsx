@@ -5,8 +5,11 @@
  * Does: call `store.refreshIdeas()` from that button's click; mark the button `aria-disabled` while
  * a request is pending (it keeps keyboard focus, and a click does nothing); say plainly that edits
  * never call the AI; announce what a refresh brought, truthfully (fresh, the same as before, or
- * nothing usable), and say nothing while it waits (the Notices region does); label every idea "AI · personalized" (with why it was chosen) or "Standard
- * suggestion"; when no AI ideas are showing, say why.
+ * nothing usable), and say nothing while it waits (the Notices region does); label every idea
+ * "AI · personalized" (with why it was chosen) or "Standard suggestion"; when no AI ideas are
+ * showing, say why.
+ * A refresh is announced here and only here: the Notices region announces the answer to the first
+ * request and to Personalize, and skips one that a refresh asked for.
  * Never does: call the AI from anywhere else, compute a fit (the engine did), or show AI text
  * unlabelled.
  */
