@@ -35,7 +35,6 @@ const SUGGESTIONS = {
       personalization: 'vibe: family friendly',
     },
   ],
-  weightHints: [{ categoryId: 'decor', factor: 1.2 }],
   extraTasks: [],
   vendorQuestions: [{ vendorId: 'tent_shamiana', questions: ['Is the tent rain-proof?'] }],
 };

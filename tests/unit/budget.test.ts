@@ -2,8 +2,8 @@
  * Contract tests for src/domain/budget.ts.
  *
  * Does: pins the reconciliation guarantee (lines plus contingency equal the total, to the paisa)
- * with properties over generated briefs and hints, the hand-computed numbers for the community
- * template, the weight-hint preconditions, the too-low sanity floor and guest-count rescaling.
+ * with properties over generated briefs, the hand-computed numbers for the community template, the
+ * too-low sanity floor and guest-count rescaling.
  * Never does: depend on the clock or the host locale; every random input is seeded.
  */
 import fc from 'fast-check';
@@ -15,7 +15,6 @@ import {
   rescaleGuests,
   type Budget,
   type BudgetLine,
-  type WeightHint,
 } from '../../src/domain/budget.js';
 import {
   allocate,
@@ -27,7 +26,7 @@ import {
 } from '../../src/domain/money.js';
 import { templateFor } from '../../src/domain/templates/index.js';
 import { communityTemplate } from '../../src/domain/templates/community.js';
-import type { EventKind, EventTemplate } from '../../src/domain/templates/types.js';
+import type { EventTemplate } from '../../src/domain/templates/types.js';
 import { LIMITS } from '../../src/shared/limits.js';
 import { brief, briefArb } from '../support/fixtures.js';
 
@@ -41,18 +40,6 @@ function lineOf(b: Budget, categoryId: string): BudgetLine {
   if (!found) throw new Error(`no budget line for ${categoryId}`);
   return found;
 }
-
-const factorArb = fc.double({ min: LIMITS.ai.factorMin, max: LIMITS.ai.factorMax, noNaN: true });
-/** Valid hints for a template: distinct known categories, factors inside the allowed band. */
-const hintsFor = (kind: EventKind): fc.Arbitrary<WeightHint[]> =>
-  fc.uniqueArray(
-    fc.record({
-      categoryId: fc.constantFrom(...templateFor(kind).categories.map((c) => c.id)),
-      factor: factorArb,
-    }),
-    { selector: (hint) => hint.categoryId, maxLength: LIMITS.ai.weightHintsMax },
-  );
-const briefAndHints = briefArb.chain((b) => hintsFor(b.kind).map((hints) => ({ b, hints })));
 
 const b250 = buildBudget(brief('community'), communityTemplate);
 /** Community weights of 12 15 25 8 6 6 5 4 9 10 on 90% of 15,000,000 paise, all exact. */
@@ -102,10 +89,10 @@ describe('buildBudget', () => {
     );
   });
 
-  it('reconciles to the paisa for any brief and any valid hints', () => {
+  it('reconciles to the paisa for any brief', () => {
     fc.assert(
-      fc.property(briefAndHints, ({ b, hints }) => {
-        const x = buildBudget(b, templateFor(b.kind), hints);
+      fc.property(briefArb, (b) => {
+        const x = buildBudget(b, templateFor(b.kind));
         expect(x.total).toBe(toMinor(b.budget, b.currency));
         expect(linesSum(x) + x.contingency).toBe(x.total);
       }),
@@ -113,21 +100,11 @@ describe('buildBudget', () => {
     );
   });
 
-  it('reconciles with no hints too', () => {
-    fc.assert(
-      fc.property(briefArb, (b) => {
-        const x = buildBudget(b, templateFor(b.kind));
-        return linesSum(x) + x.contingency === x.total;
-      }),
-      SEED,
-    );
-  });
-
   it('only ever produces non-negative safe integers, in template order', () => {
     fc.assert(
-      fc.property(briefAndHints, ({ b, hints }) => {
+      fc.property(briefArb, (b) => {
         const template = templateFor(b.kind);
-        const x = buildBudget(b, template, hints);
+        const x = buildBudget(b, template);
         expect(x.lines.map((l) => l.categoryId)).toEqual(template.categories.map((c) => c.id));
         for (const value of [
           x.total,
@@ -143,79 +120,6 @@ describe('buildBudget', () => {
       }),
       SEED,
     );
-  });
-
-  it('does not depend on the order of the hints', () => {
-    const hints: WeightHint[] = [
-      { categoryId: 'decor', factor: 1.5 },
-      { categoryId: 'food_beverage', factor: 0.7 },
-      { categoryId: 'rentals', factor: 1.9 },
-    ];
-    const forward = buildBudget(brief('community'), communityTemplate, hints);
-    expect(buildBudget(brief('community'), communityTemplate, [...hints].reverse())).toEqual(
-      forward,
-    );
-  });
-
-  it('treats an empty hint list as no hints', () => {
-    expect(buildBudget(brief('community'), communityTemplate, [])).toEqual(b250);
-  });
-});
-
-describe('buildBudget weight hints', () => {
-  it('multiplies a category weight by its factor and still reconciles', () => {
-    const hinted = buildBudget(brief('community'), communityTemplate, [
-      { categoryId: 'decor', factor: 2 },
-    ]);
-    // Weights now sum to 108: decor is 16 of 108 of 13,500,000 paise.
-    expect(lineOf(hinted, 'decor').allocated).toBe(2_000_000);
-    expect(lineOf(hinted, 'food_beverage').allocated).toBe(3_125_000);
-    expect(hinted.total).toBe(b250.total);
-    expect(hinted.contingency).toBe(b250.contingency);
-    expect(linesSum(hinted) + hinted.contingency).toBe(hinted.total);
-  });
-
-  it('accepts factors exactly at the allowed limits', () => {
-    const edge: WeightHint[] = [
-      { categoryId: 'decor', factor: LIMITS.ai.factorMin },
-      { categoryId: 'rentals', factor: LIMITS.ai.factorMax },
-    ];
-    expect(() => buildBudget(brief('community'), communityTemplate, edge)).not.toThrow();
-  });
-
-  it('does not mutate the hints it is given', () => {
-    const hints = Object.freeze([Object.freeze({ categoryId: 'decor', factor: 1.2 })]);
-    expect(() => buildBudget(brief('community'), communityTemplate, hints)).not.toThrow();
-  });
-
-  it('throws RangeError for a category the template does not have', () => {
-    expect(() =>
-      buildBudget(brief('community'), communityTemplate, [{ categoryId: 'fireworks', factor: 1 }]),
-    ).toThrow(RangeError);
-  });
-
-  it('throws RangeError for a category that belongs to another template', () => {
-    expect(() =>
-      buildBudget(brief('wedding'), templateFor('wedding'), [{ categoryId: 'decor', factor: 1 }]),
-    ).toThrow(RangeError);
-  });
-
-  it.each([0.49, 2.01, 0, -1, 3, Number.NaN, Number.POSITIVE_INFINITY])(
-    'throws RangeError for factor %s, which the merge step must clamp first',
-    (factor) => {
-      expect(() =>
-        buildBudget(brief('community'), communityTemplate, [{ categoryId: 'decor', factor }]),
-      ).toThrow(RangeError);
-    },
-  );
-
-  it('throws RangeError for two hints on one category', () => {
-    expect(() =>
-      buildBudget(brief('community'), communityTemplate, [
-        { categoryId: 'decor', factor: 1.1 },
-        { categoryId: 'decor', factor: 1.2 },
-      ]),
-    ).toThrow(RangeError);
   });
 });
 
@@ -393,8 +297,8 @@ describe('rescaleGuests', () => {
 
   it('keeps lines + contingency = total + overBy for any budget and target guest count', () => {
     fc.assert(
-      fc.property(briefAndHints, guestsArb, ({ b, hints }, target) => {
-        const before = buildBudget(b, templateFor(b.kind), hints);
+      fc.property(briefArb, guestsArb, (b, target) => {
+        const before = buildBudget(b, templateFor(b.kind));
         const after = rescaleGuests(before, target);
         const over = after.overBy ?? 0;
         expect(linesSum(after) + after.contingency).toBe(before.total + over);

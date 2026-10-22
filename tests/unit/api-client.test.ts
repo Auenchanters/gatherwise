@@ -27,7 +27,6 @@ const SUGGESTIONS = {
       personalization: 'vibe: family friendly',
     },
   ],
-  weightHints: [{ categoryId: 'decor', factor: 1.2 }],
   extraTasks: [],
   vendorQuestions: [{ vendorId: 'tent_shamiana', questions: ['Is the tent rain-proof?'] }],
 };
@@ -656,7 +655,6 @@ describe('the network is untrusted', () => {
     const suggestionsWith = (categoryId: string, vendorId: string) => ({
       ...SUGGESTIONS,
       ideas: [{ ...SUGGESTIONS.ideas[0], categoryId }],
-      weightHints: [{ categoryId, factor: 1 }],
       vendorQuestions: [{ vendorId, questions: ['Is it included?'] }],
     });
     const asked = async (b: EventBrief, suggestions: object) =>

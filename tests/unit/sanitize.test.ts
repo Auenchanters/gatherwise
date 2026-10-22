@@ -20,7 +20,6 @@ describe('sanitizeSuggestions', () => {
         personalization: 'vibe <i>family</i>',
       },
     ],
-    weightHints: [{ categoryId: 'decor', factor: 9 }],
     extraTasks: [
       {
         title: 'Book <u>drums</u>',
@@ -40,7 +39,6 @@ describe('sanitizeSuggestions', () => {
     expect(clean.ideas[0]?.description).toHaveLength(LIMITS.ai.ideaDescriptionMax);
     expect(clean.ideas[0]?.personalization).toBe('vibe family');
     expect(clean.ideas[0]?.estimatedCost).toBe(1e12);
-    expect(clean.weightHints).toEqual(dirty.weightHints);
     expect(clean.extraTasks[0]).toEqual({ ...dirty.extraTasks[0], title: 'Book drums' });
     expect(clean.vendorQuestions[0]).toEqual({
       vendorId: 'generator',

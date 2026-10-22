@@ -20,7 +20,6 @@ export function sanitizeSuggestions(s: AiSuggestions): AiSuggestions {
       description: sanitizeText(idea.description, ai.ideaDescriptionMax),
       personalization: sanitizeText(idea.personalization, ai.personalizationMax),
     })),
-    weightHints: s.weightHints,
     extraTasks: s.extraTasks.map((task) => ({
       ...task,
       title: sanitizeText(task.title, ai.taskTitleMax),

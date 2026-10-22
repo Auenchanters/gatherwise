@@ -35,7 +35,6 @@ const WEDDING_ANSWER = {
       personalization: 'vibe: marigold garlands',
     },
   ],
-  weightHints: [],
   extraTasks: [],
   vendorQuestions: [{ vendorId: 'bar_service', questions: ['Is a licensed bartender included?'] }],
 };

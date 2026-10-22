@@ -3,12 +3,14 @@
  *
  * Does: runs the brief's absurd payload, then one focused case per normalization rule, each
  * pinning the exact adjustment `kind` and `target`; checks what a merge preserves (total, guests,
- * today, done tasks, template deadlines), that a refresh replaces the old addenda, purity on
- * deep-frozen input, and a seeded property over arbitrary suggestion-shaped junk.
+ * today, done tasks, template deadlines, the budget), that a new answer replaces the old addenda,
+ * that an idea priced within its prompt allocation always fits, purity on deep-frozen input, and a
+ * seeded property over arbitrary suggestion-shaped junk.
  * Never does: read the clock; `today` is fixed and every random input is seeded.
  */
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import type { Budget } from '../../src/domain/budget.js';
 import { addDays, isoDate } from '../../src/domain/dates.js';
 import {
@@ -23,6 +25,7 @@ import { templateFor } from '../../src/domain/templates/index.js';
 import { communityTemplate } from '../../src/domain/templates/community.js';
 import type { EventKind } from '../../src/domain/templates/types.js';
 import { LIMITS } from '../../src/shared/limits.js';
+import { buildUserPrompt } from '../../src/shared/prompt.js';
 import type { AiSuggestions, EventBrief } from '../../src/shared/schema.js';
 import { brief, briefArb, TODAY as today } from '../support/fixtures.js';
 
@@ -42,7 +45,6 @@ function planOf(b: EventBrief, opts?: Parameters<typeof buildPlan>[2], day = tod
 const base = planOf(brief('community'));
 
 type Idea = AiSuggestions['ideas'][number];
-type Hint = AiSuggestions['weightHints'][number];
 type Extra = AiSuggestions['extraTasks'][number];
 type Questions = AiSuggestions['vendorQuestions'][number];
 
@@ -62,7 +64,6 @@ const extra = (over: Partial<Extra> = {}): Extra => ({
   after: ['book_venue'],
   ...over,
 });
-const hint = (categoryId: string, factor: number): Hint => ({ categoryId, factor });
 const asks = (
   vendorId: string,
   questions: string[] = ['Can it stay up overnight?'],
@@ -74,7 +75,6 @@ const asks = (
 const clean: AiSuggestions = {
   summary: 'A warm, walkable Diwali mela for 250 neighbours.',
   ideas: [idea()],
-  weightHints: [hint('decor', 1.2)],
   extraTasks: [extra()],
   vendorQuestions: [asks('tent_shamiana')],
 };
@@ -97,7 +97,6 @@ describe('the absurd payload', () => {
   const absurd: AiSuggestions = {
     summary: 'Big plans.',
     ideas: [idea({ title: 'Fireworks', estimatedCost: 1e12 }), idea({ title: '   ' })],
-    weightHints: [hint('decor', 9)],
     extraTasks: [
       extra({ after: ['publicity'] }),
       extra({ durationDays: Number.NaN }),
@@ -121,7 +120,6 @@ describe('the absurd payload', () => {
     expect(result.adjustments.map(({ kind, target }) => ({ kind, target }))).toEqual([
       { kind: 'clamped', target: 'ideas[0].estimatedCost' },
       { kind: 'dropped', target: 'ideas[1]' },
-      { kind: 'clamped', target: 'weightHints[0].factor' },
       { kind: 'truncated', target: 'extraTasks' },
       { kind: 'dropped', target: 'extraTasks[0].after[0]' },
       { kind: 'dropped', target: 'extraTasks[1]' },
@@ -130,11 +128,10 @@ describe('the absurd payload', () => {
   });
 
   it('says what changed in plain words with formatted money', () => {
-    const [cost, , factor, cut] = result.adjustments;
+    const [cost, , cut] = result.adjustments;
     expect(cost?.detail).toBe(
       "Cost of 'Fireworks' clamped from ₹10,00,00,00,00,000.00 to ₹1,50,000.00 (the whole budget)",
     );
-    expect(factor?.detail).toBe('Weight hint for Décor clamped from 9 to 2');
     expect(cut?.detail).toBe('Kept the first 5 of 50 extra tasks');
   });
 
@@ -143,7 +140,6 @@ describe('the absurd payload', () => {
     expect(addenda?.ideas.map((i) => [i.title, i.estimatedCost])).toEqual([
       ['Fireworks', toMinor(150_000, 'INR')],
     ]);
-    expect(addenda?.weightHints).toEqual([hint('decor', 2)]);
     expect(addenda?.extraTasks.map((t) => [t.id, t.dependsOn])).toEqual([
       ['ai-task-1', []],
       ['ai-task-2', ['book_venue']],
@@ -172,7 +168,6 @@ describe('a clean response', () => {
           source: 'ai',
         },
       ],
-      weightHints: [hint('decor', 1.2)],
       extraTasks: [
         {
           id: 'ai-task-1',
@@ -356,49 +351,6 @@ describe('ideas', () => {
     expect(logOf({ ideas: [idea({ estimatedCost: 150_000.5 })] })).toEqual([
       { kind: 'clamped', target: 'ideas[0].estimatedCost' },
     ]);
-  });
-});
-
-describe('weight hints', () => {
-  it(`keeps the first ${ai.weightHintsMax}`, () => {
-    const ids = communityTemplate.categories.map((c) => c.id);
-    const weightHints = [...ids, 'decor'].map((id) => hint(id, 1));
-    expect(logOf({ weightHints })).toEqual([{ kind: 'truncated', target: 'weightHints' }]);
-    expect(addendaOf({ weightHints }).weightHints).toHaveLength(ai.weightHintsMax);
-  });
-
-  it('drops a hint for an unknown category', () => {
-    expect(logOf({ weightHints: [hint('catering', 1.5)] })).toEqual([
-      { kind: 'dropped', target: 'weightHints[0]' },
-    ]);
-  });
-
-  it('keeps the first hint for a category and drops the rest', () => {
-    const weightHints = [hint('decor', 1.5), hint('decor', 0.7)];
-    expect(logOf({ weightHints })).toEqual([{ kind: 'dropped', target: 'weightHints[1]' }]);
-    expect(addendaOf({ weightHints }).weightHints).toEqual([hint('decor', 1.5)]);
-  });
-
-  it('drops a factor that is not a finite number', () => {
-    for (const factor of [Number.NaN, Number.POSITIVE_INFINITY]) {
-      expect(logOf({ weightHints: [hint('decor', factor)] })).toEqual([
-        { kind: 'dropped', target: 'weightHints[0]' },
-      ]);
-    }
-    expect(merge({ weightHints: [hint('decor', Number.NaN)] }).adjustments[0]?.detail).toBe(
-      'Dropped the weight hint for Décor: its factor is not a usable number',
-    );
-  });
-
-  it(`clamps a factor into ${ai.factorMin}..${ai.factorMax}`, () => {
-    expect(logOf({ weightHints: [hint('decor', 9), hint('rentals', 0.1)] })).toEqual([
-      { kind: 'clamped', target: 'weightHints[0].factor' },
-      { kind: 'clamped', target: 'weightHints[1].factor' },
-    ]);
-    expect(
-      addendaOf({ weightHints: [hint('decor', 9), hint('rentals', 0.1)] }).weightHints,
-    ).toEqual([hint('decor', ai.factorMax), hint('rentals', ai.factorMin)]);
-    expect(logOf({ weightHints: [hint('decor', ai.factorMax)] })).toEqual([]);
   });
 });
 
@@ -619,7 +571,44 @@ describe('mergeSuggestions', () => {
     expect(merged.schedule.tasks.find((t) => t.id === 'define_goals')?.status).toBe('done');
   });
 
-  it('replaces the previous addenda on a refresh, without carrying a ticked AI task over', () => {
+  it('marks an idea as fitting whenever it costs no more than the prompt showed its category', () => {
+    // What the model is told each category has, read back from the prompt it is sent.
+    const shownSchema = z.object({
+      categories: z.array(z.object({ id: z.string(), allocated: z.number() })),
+    });
+    const scenario = fc.record({
+      b: briefArb,
+      plannedGuests: fc.integer({ min: LIMITS.brief.guestsMin, max: LIMITS.brief.guestsMax }),
+      picks: fc.array(
+        fc.record({
+          index: fc.nat(),
+          share: fc.oneof(fc.constant(1), fc.double({ min: 0, max: 1, noNaN: true })),
+        }),
+        { minLength: 1, maxLength: ai.ideasMax },
+      ),
+    });
+    fc.assert(
+      fc.property(scenario, ({ b, plannedGuests, picks }) => {
+        const plan = planOf(b, { plannedGuests }, addDays(isoDate(b.date), -30));
+        const shown = shownSchema.parse(JSON.parse(buildUserPrompt(plan))).categories;
+        const ideas = picks.map(({ index, share }) => {
+          const category = shown[index % shown.length];
+          if (!category) throw new Error('the prompt lists every category');
+          const estimatedCost = Math.floor(category.allocated * share);
+          return idea({ categoryId: category.id, estimatedCost });
+        });
+        const merged = mergeSuggestions(plan, { ...clean, ideas }).plan;
+        // The Budget tab shows the same amounts the prompt was built from.
+        expect(merged.budget).toEqual(plan.budget);
+        expect(merged.ideas).toHaveLength(ideas.length);
+        for (const shownIdea of merged.ideas)
+          expect(shownIdea.fit).toEqual({ fits: true, overBy: 0 });
+      }),
+      SEED,
+    );
+  });
+
+  it('replaces the previous addenda on a new answer, without carrying a ticked AI task over', () => {
     const first = mergeSuggestions(base, clean).plan;
     const ticked = planOf(first.brief, {
       ...(first.addenda ? { addenda: first.addenda } : {}),
@@ -658,7 +647,6 @@ describe('mergeSuggestions', () => {
     const s = deepFreeze<AiSuggestions>({
       ...clean,
       ideas: [idea({ categoryId: 'catering', estimatedCost: 1e12 })],
-      weightHints: [hint('catering', 9)],
       extraTasks: [extra({ categoryId: 'catering', after: ['set_budget', 'book_caterer'] })],
       vendorQuestions: [asks('caterer')],
     });
@@ -715,9 +703,6 @@ describe('any suggestion-shaped junk (property)', () => {
         }),
         { maxLength: 14 },
       ),
-      weightHints: fc.array(fc.record({ categoryId: category, factor: junkNumber }), {
-        maxLength: 16,
-      }),
       extraTasks: fc.array(
         fc.record({
           title: junkText,
@@ -767,7 +752,6 @@ describe('any suggestion-shaped junk (property)', () => {
         if (!addenda) throw new Error('expected addenda');
         const lists: [string, number, number][] = [
           ['ideas', s.ideas.length, addenda.ideas.length],
-          ['weightHints', s.weightHints.length, addenda.weightHints.length],
           ['extraTasks', s.extraTasks.length, addenda.extraTasks.length],
           [
             'vendorQuestions',
@@ -811,14 +795,6 @@ describe('any suggestion-shaped junk (property)', () => {
           expect(withinCap(i.title, ai.ideaTitleMax) && i.title !== '').toBe(true);
           expect(withinCap(i.description, ai.ideaDescriptionMax)).toBe(true);
           expect(withinCap(i.personalization ?? '', ai.personalizationMax)).toBe(true);
-        }
-
-        expect(addenda.weightHints.length).toBeLessThanOrEqual(ai.weightHintsMax);
-        const hinted = addenda.weightHints.map((h) => h.categoryId);
-        expect(new Set(hinted).size).toBe(hinted.length);
-        for (const h of addenda.weightHints) {
-          expect(h.factor).toBeGreaterThanOrEqual(ai.factorMin);
-          expect(h.factor).toBeLessThanOrEqual(ai.factorMax);
         }
 
         expect(addenda.extraTasks.length).toBeLessThanOrEqual(ai.extraTasksMax);

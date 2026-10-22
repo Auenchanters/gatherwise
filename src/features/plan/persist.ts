@@ -60,10 +60,19 @@ const envelopeSchema = z.strictObject({
   ai: z.unknown().optional(),
 });
 
+/**
+ * Answers saved while the AI still sent budget weight hints restore too: that one retired field is
+ * dropped, and everything else is checked as strictly as ever.
+ */
+const withoutWeightHints = (value: unknown): unknown =>
+  typeof value === 'object' && value !== null
+    ? Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'weightHints'))
+    : value;
+
 /** The AI part of a stored plan: both halves, with ids that exist in this brief's template. */
 const aiSchemaFor = (kind: EventBrief['kind']) =>
   z.strictObject({
-    suggestions: suggestionsSchemaFor(kind),
+    suggestions: z.preprocess(withoutWeightHints, suggestionsSchemaFor(kind)),
     meta: aiMetaSchema,
   });
 

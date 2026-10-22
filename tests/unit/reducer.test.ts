@@ -49,7 +49,6 @@ const clean: AiSuggestions = {
       personalization: 'Diwali festival, outdoor venue',
     },
   ],
-  weightHints: [{ categoryId: 'decor', factor: 1.2 }],
   extraTasks: [
     {
       title: 'Order clay diyas',

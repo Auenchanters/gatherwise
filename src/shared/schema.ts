@@ -119,16 +119,6 @@ const buildAiSchema = (ids: TemplateIds) => {
         }),
       )
       .describe(`At most ${ai.ideasMax} ideas.`),
-    weightHints: z
-      .array(
-        z.strictObject({
-          categoryId,
-          factor: z
-            .number()
-            .describe(`Budget weight factor between ${ai.factorMin} and ${ai.factorMax}.`),
-        }),
-      )
-      .describe(`At most ${ai.weightHintsMax} hints.`),
     extraTasks: z
       .array(
         z.strictObject({

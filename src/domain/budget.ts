@@ -1,15 +1,15 @@
 /**
  * The event budget: a total split into a contingency and one line per template category, and
  * rescaled when the guest count changes. The product's promise, "plans that add up", lives here.
- * Does: builds the lines with exact integer allocation (largest remainder, in paise or cents),
- * applies Gemini's weight hints, flags lines too small to be real, and keeps
+ * Does: builds the lines with exact integer allocation (largest remainder, in paise or cents) from
+ * the template's weights alone, flags lines too small to be real, and keeps
  * `sum(lines) + contingency === total + (overBy ?? 0)` true after every call.
- * Never does: trust AI numbers (hints are validated preconditions, clamped upstream by the merge
- * step and rejected here if they slipped through), use floats where an integer will do, cut a line
- * silently to make a total fit, or lose or invent a paisa.
+ * Never does: take any number from the AI (the split is the same with or without an AI answer, so
+ * the amounts the prompt shows are the amounts ideas are checked against), use floats where an
+ * integer will do, cut a line silently to make a total fit, or lose or invent a paisa.
  */
 import { LIMITS } from '../shared/limits.js';
-import type { AiSuggestions, Currency, EventBrief } from '../shared/schema.js';
+import type { Currency, EventBrief } from '../shared/schema.js';
 import { allocate, MINOR_PER_MAJOR, minor, toMinor, type Minor } from './money.js';
 import type { CategoryDef, EventTemplate } from './templates/types.js';
 
@@ -21,9 +21,6 @@ export const CONTINGENCY_PERCENT = 10;
  * flagged `too_low`. It is a check that the money is not rounding to nothing, not a price estimate.
  */
 export const MIN_PER_GUEST_MAJOR = 1;
-
-/** One of Gemini's suggestions to weight a budget category up or down. */
-export type WeightHint = AiSuggestions['weightHints'][number];
 
 /** One budget category with the money allocated to it. */
 export interface BudgetLine {
@@ -85,43 +82,10 @@ function assemble(frame: Frame, drafts: readonly LineDraft[], overBy: Minor): Bu
 }
 
 /**
- * Checks Gemini's hints against the template and indexes them by category.
- * @throws RangeError for an unknown category, a factor outside the allowed band or a repeated
- * category. That is a programming error: the merge step clamps and drops hints before this runs.
- */
-function factorsByCategory(
-  template: EventTemplate,
-  hints: readonly WeightHint[],
-): ReadonlyMap<string, number> {
-  const known = new Set(template.categories.map((category) => category.id));
-  const { factorMin, factorMax } = LIMITS.ai;
-  const factors = new Map<string, number>();
-  for (const { categoryId, factor } of hints) {
-    const inBand = factor >= factorMin && factor <= factorMax;
-    if (!known.has(categoryId))
-      throw new RangeError(`Weight hint for unknown category: ${categoryId}`);
-    if (!inBand)
-      throw new RangeError(`Weight hint factor outside ${factorMin}..${factorMax}: ${factor}`);
-    if (factors.has(categoryId))
-      throw new RangeError(`Two weight hints for one category: ${categoryId}`);
-    factors.set(categoryId, factor);
-  }
-  return factors;
-}
-
-/**
  * Builds the budget for a brief: 10% contingency off the top, then the rest split across the
- * template's categories by weight. A hint multiplies its category's weight by its factor.
- * @throws RangeError if a hint names a category the template lacks, has a factor outside
- * `LIMITS.ai.factorMin..factorMax`, or repeats a category. Hints are a precondition, not user
- * input: the merge step clamps them first.
+ * template's categories by weight.
  */
-export function buildBudget(
-  brief: EventBrief,
-  template: EventTemplate,
-  hints: readonly WeightHint[] = [],
-): Budget {
-  const factors = factorsByCategory(template, hints);
+export function buildBudget(brief: EventBrief, template: EventTemplate): Budget {
   const total = toMinor(brief.budget, brief.currency);
   const [contingency = minor(0)] = allocate(total, [
     CONTINGENCY_PERCENT,
@@ -129,7 +93,7 @@ export function buildBudget(
   ]);
   const shares = allocate(
     minor(total - contingency),
-    template.categories.map((category) => category.weight * (factors.get(category.id) ?? 1)),
+    template.categories.map((category) => category.weight),
   );
   const drafts = template.categories.map((category, i): LineDraft => {
     // `allocate` returns one share per weight, so the default only satisfies the indexed access.

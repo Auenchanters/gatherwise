@@ -10,13 +10,7 @@
 import { err, ok, type Result } from '../shared/result.js';
 import type { EventBrief } from '../shared/schema.js';
 import { breakEven, type BreakEven } from './break-even.js';
-import {
-  buildBudget,
-  checkGuestCount,
-  rescaleGuests,
-  type Budget,
-  type WeightHint,
-} from './budget.js';
+import { buildBudget, checkGuestCount, rescaleGuests, type Budget } from './budget.js';
 import type { IsoDate } from './dates.js';
 import { ideaFit, standardIdeas, type Idea, type IdeaFit } from './ideas.js';
 import { eventDateOf, schedule, type Schedule, type ScheduleError } from './schedule.js';
@@ -29,8 +23,6 @@ import { planShifts, type ShiftPlan } from './volunteers.js';
 export interface AiAddenda {
   readonly summary: string;
   readonly ideas: readonly Idea[];
-  /** Distinct template categories, factors within `LIMITS.ai.factorMin..factorMax`. */
-  readonly weightHints: readonly WeightHint[];
   /** Ids `ai-task-N`; whole-number days; they follow only active template tasks. */
   readonly extraTasks: readonly TaskDef[];
   /** Questions for each vendor the plan needs, by vendor id. */
@@ -76,8 +68,9 @@ export interface Plan {
 export type PlanError = Extract<ScheduleError, { kind: 'invalid_date' }>;
 
 /**
- * Builds the plan from inputs that are already valid. Weight hints apply when the budget is
- * planned, before any rescale, and the budget is rescaled at most once.
+ * Builds the plan from inputs that are already valid. The budget is planned at `plannedGuests` and
+ * rescaled at most once; the AI never changes it, so an idea is checked against the same category
+ * amounts the prompt showed.
  * @throws Error starting `invariant:` if the timeline cannot be built. Templates are acyclic and
  * normalized AI tasks only follow template tasks, so that is a bug, not a user error.
  * @throws RangeError if `plannedGuests` is not a whole number within the brief limits.
@@ -87,14 +80,10 @@ export function assemblePlan(input: PlanInput): Plan {
   // plannedGuests comes from stored state, not the brief schema, so it is checked here.
   checkGuestCount(plannedGuests, 'Planned guest count');
   const template = templateFor(brief.kind);
-  const hints = addenda?.weightHints ?? [];
   const budget =
     plannedGuests === brief.guests
-      ? buildBudget(brief, template, hints)
-      : rescaleGuests(
-          buildBudget({ ...brief, guests: plannedGuests }, template, hints),
-          brief.guests,
-        );
+      ? buildBudget(brief, template)
+      : rescaleGuests(buildBudget({ ...brief, guests: plannedGuests }, template), brief.guests);
   const timeline = schedule(
     [...template.tasks, ...(addenda?.extraTasks ?? [])],
     brief,

@@ -73,7 +73,6 @@ const suggestions: AiSuggestions = {
       personalization: 'Diwali festival, outdoor venue',
     },
   ],
-  weightHints: [{ categoryId: 'decor', factor: 1.2 }],
   extraTasks: [
     {
       title: 'Order clay diyas',
@@ -487,7 +486,10 @@ describe('loadPlan: tampered AI (the plan survives)', () => {
     ['an unknown vendor id', { vendorQuestions: [{ vendorId: 'nope', questions: [] }] }],
     ['a missing field', { ideas: undefined }],
     ['a field of the wrong type', { summary: 7 }],
-    ['a number that is not a number', { weightHints: [{ categoryId: 'decor', factor: null }] }],
+    [
+      'a number that is not a number',
+      { ideas: [{ ...suggestions.ideas[0], estimatedCost: null }] },
+    ],
     ['an unknown key', { extra: 'x' }],
   ])('restores without AI for %s', (_name, over) => {
     withoutAi({ suggestions: { ...suggestions, ...over }, meta });
@@ -529,7 +531,6 @@ describe('loadPlan: tampered AI (the plan survives)', () => {
         estimatedCost: i === 0 ? 1e12 : -50,
         personalization: '',
       })),
-      weightHints: [{ categoryId: 'decor', factor: 9 }],
       extraTasks: Array.from({ length: 50 }, (_, i) => ({
         title: `Task ${i}`,
         categoryId: 'decor',
@@ -553,7 +554,16 @@ describe('loadPlan: tampered AI (the plan survives)', () => {
       expect(idea.estimatedCost).toBeGreaterThanOrEqual(0);
     }
     expect(back.plan.addenda?.extraTasks.length).toBeLessThanOrEqual(5);
-    expect(back.plan.addenda?.weightHints).toEqual([{ categoryId: 'decor', factor: 2 }]);
+  });
+
+  it('restores an answer saved with the retired weight hints, silently dropping them', () => {
+    const legacy = { ...suggestions, weightHints: [{ categoryId: 'decor', factor: 1.2 }] };
+    const back = loaded(tampered({ ai: { suggestions: legacy, meta } }));
+    expect(back.ai).toEqual({ status: 'applied', suggestions, meta });
+    expect(back.adjustments).toEqual([]);
+    expect(back.plan).toEqual(state.plan);
+    // Still strict about everything else: a key that never existed costs the AI part.
+    withoutAi({ suggestions: { ...legacy, extra: 1 }, meta });
   });
 });
 
@@ -570,7 +580,6 @@ function midPlanWithWeddingAi(): ReadyState {
         personalization: 'traditional',
       },
     ],
-    weightHints: [],
     extraTasks: [],
     vendorQuestions: [],
   };

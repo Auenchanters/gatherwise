@@ -10,7 +10,6 @@
  */
 import { LIMITS } from '../shared/limits.js';
 import type { AiSuggestions, Currency, EventBrief } from '../shared/schema.js';
-import type { WeightHint } from './budget.js';
 import type { Idea } from './ideas.js';
 import { formatMoney, isMinor, MINOR_PER_MAJOR, toMinor, type Minor } from './money.js';
 import { assemblePlan, type AiAddenda, type Plan } from './plan.js';
@@ -22,7 +21,7 @@ export interface Adjustment {
   readonly kind: 'clamped' | 'dropped' | 'truncated';
   /** Where in the response, such as `ideas[2].estimatedCost` or `extraTasks[0].after[1]`. */
   readonly target: string;
-  /** One short sentence with the values formatted, e.g. "Weight hint for Décor clamped from 9 to 2". */
+  /** One short sentence with the values formatted, e.g. "Duration of 'Print flyers' in days clamped from 90 to 60". */
   readonly detail: string;
 }
 
@@ -172,29 +171,6 @@ function normalizeIdeas(ideas: AiSuggestions['ideas'], p: Pass): Idea[] {
   return out;
 }
 
-function normalizeHints(hints: AiSuggestions['weightHints'], p: Pass): WeightHint[] {
-  const out: WeightHint[] = [];
-  const list = p.list(hints, ai.weightHintsMax, 'weightHints', 'weight hints');
-  for (const [i, { categoryId, factor }] of list.entries()) {
-    const at = `weightHints[${i}]`;
-    const label = p.categories.get(categoryId);
-    if (label === undefined) {
-      p.dropped(at, 'Dropped a weight hint for a budget category that is not in this plan');
-    } else if (!Number.isFinite(factor)) {
-      p.dropped(at, `Dropped the weight hint for ${label}: its factor is not a usable number`);
-    } else if (out.some((h) => h.categoryId === categoryId)) {
-      p.dropped(at, `Dropped a second weight hint for ${label}`);
-    } else {
-      const kept = clamp(factor, ai.factorMin, ai.factorMax);
-      if (kept !== factor) {
-        p.clamped(`${at}.factor`, `Weight hint for ${label} clamped from ${factor} to ${kept}`);
-      }
-      out.push({ categoryId, factor: kept });
-    }
-  }
-  return out;
-}
-
 /**
  * The dependencies an extra task keeps: active template tasks that are due no later than the extra
  * task must start (`lead(dep) >= lead + duration`), each once. That is the rule every template edge
@@ -307,8 +283,8 @@ function normalizeQuestions(
  * Turns a model response into addenda the engine can use, and lists every change made.
  * Strings are trimmed and cut to `LIMITS.ai` by code point; an item whose required text is empty
  * is dropped. Lists keep their first `LIMITS.ai` items. Ids the template or the brief cannot use
- * are dropped. Costs become whole major units from 0 to the brief's budget; weight factors are
- * clamped to their band; durations and lead times are rounded and clamped to whole days.
+ * are dropped. Costs become whole major units from 0 to the brief's budget; durations and lead
+ * times are rounded and clamped to whole days.
  * Rounding alone is never logged.
  *
  * No response can create a dependency cycle: extra tasks may only follow active template tasks
@@ -324,7 +300,6 @@ export function normalizeSuggestions(
   const addenda: AiAddenda = {
     summary: p.text(cut(s.summary, ai.summaryMax), 'summary', 'Summary'),
     ideas: normalizeIdeas(s.ideas, p),
-    weightHints: normalizeHints(s.weightHints, p),
     extraTasks: normalizeTasks(s.extraTasks, p),
     vendorQuestions: normalizeQuestions(s.vendorQuestions, p),
   };
@@ -339,7 +314,8 @@ export function normalizeSuggestions(
  * the response order, so re-merging a stored response with the user's done set keeps their ticks.
  * Without it, the ticked template tasks are read from the plan; old AI ticks are left out so they
  * cannot land on a different task that reuses the id.
- * The budget total never changes: hints only re-weight the categories within it.
+ * The budget never changes: the AI has no lever on it, so every idea is checked against the same
+ * category amounts the prompt showed.
  */
 export function mergeSuggestions(
   plan: Plan,

@@ -141,9 +141,6 @@ describe('LIMITS', () => {
       ideaDescriptionMax: 300,
       personalizationMax: 160,
       summaryMax: 400,
-      weightHintsMax: 10,
-      factorMin: 0.5,
-      factorMax: 2,
       extraTasksMax: 5,
       taskTitleMax: 80,
       durationMin: 1,
@@ -306,7 +303,6 @@ describe('aiSuggestionsSchema', () => {
   const ai = {
     summary: 'A warm community Diwali evening.',
     ideas: [idea],
-    weightHints: [{ categoryId: 'decor', factor: 1.2 }],
     extraTasks: [task],
     vendorQuestions: [
       { vendorId: 'sound_lighting', questions: ['Do you bring your own generator?'] },
@@ -318,14 +314,11 @@ describe('aiSuggestionsSchema', () => {
   it('accepts a valid response and types it as AiSuggestions', () => {
     const parsed: AiSuggestions = schema.parse(ai);
     expect(parsed.ideas[0]?.categoryId).toBe('decor');
-    expect(
-      accepts({ ...ai, ideas: [], weightHints: [], extraTasks: [], vendorQuestions: [] }),
-    ).toBe(true);
+    expect(accepts({ ...ai, ideas: [], extraTasks: [], vendorQuestions: [] })).toBe(true);
   });
 
   it('rejects ids that are not in the template, in every position', () => {
     expect(accepts({ ...ai, ideas: [{ ...idea, categoryId: 'not_a_category' }] })).toBe(false);
-    expect(accepts({ ...ai, weightHints: [{ categoryId: 'nope', factor: 1 }] })).toBe(false);
     expect(accepts({ ...ai, extraTasks: [{ ...task, categoryId: 'nope' }] })).toBe(false);
     expect(accepts({ ...ai, extraTasks: [{ ...task, after: ['ghost_task'] }] })).toBe(false);
     expect(accepts({ ...ai, vendorQuestions: [{ vendorId: 'ghost', questions: [] }] })).toBe(false);
@@ -346,7 +339,6 @@ describe('aiSuggestionsSchema', () => {
         title: 't'.repeat(1_000),
         estimatedCost: 1e12,
       })),
-      weightHints: Array.from({ length: 50 }, () => ({ categoryId: 'decor', factor: 9 })),
       extraTasks: Array.from({ length: 50 }, () => ({
         ...task,
         durationDays: -5,
@@ -371,7 +363,6 @@ describe('aiSuggestionsSchema', () => {
       expect(json).toContain(`"${id}"`);
     expect(json).toContain('"additionalProperties":false');
     expect(json).toContain(`${LIMITS.ai.ideasMax} ideas`);
-    expect(json).toContain(`${LIMITS.ai.factorMin} and ${LIMITS.ai.factorMax}`);
     expect(json).toContain(`${LIMITS.ai.durationMin} to ${LIMITS.ai.durationMax}`);
     expect(json).toContain(`${LIMITS.ai.leadMin} to ${LIMITS.ai.leadMax}`);
     expect(json).not.toContain('"maxItems"');

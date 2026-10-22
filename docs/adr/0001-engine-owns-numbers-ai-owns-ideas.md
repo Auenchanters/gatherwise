@@ -12,7 +12,7 @@ Gatherwise must produce budgets, timelines, vendor checklists and personalized i
 Split the work by what each side can be trusted with.
 
 - A pure TypeScript engine in `src/domain/` computes every number and date. Money is integer minor units, split with a largest-remainder allocation so the lines always add up (`src/domain/money.ts`, `src/domain/budget.ts`). The timeline is a backward critical-path schedule with an honest status on each task (`src/domain/schedule.ts`). Vendors, book-by dates, volunteer shifts and break-even come from template rules and arithmetic (`src/domain/vendors.ts`, `src/domain/volunteers.ts`, `src/domain/break-even.ts`).
-- Gemini supplies what an engine cannot: ideas tailored to the brief, a summary, weight hints that nudge a category up or down, extra tasks the template missed, and questions to ask each vendor. The system instruction tells it never to compute totals, sums, dates or deadlines, and the prompt never includes the total budget or the expected income (`src/shared/prompt.ts`).
+- Gemini supplies what an engine cannot: ideas tailored to the brief, a summary, extra tasks the template missed, and questions to ask each vendor. The system instruction tells it never to compute totals, sums, dates or deadlines, and the prompt never includes the total budget or the expected income (`src/shared/prompt.ts`).
 - Every AI value reaches the plan only through `src/domain/merge.ts`, which clamps or drops numbers to the ranges in `src/shared/limits.ts`, drops ids the plan cannot use, caps strings, and records each change as an adjustment shown in the **AI at work** panel. Extra tasks may only follow template tasks, so they cannot create a dependency cycle.
 - AI text is always labelled "AI · personalized" and template text "Standard suggestion".
 
@@ -27,7 +27,7 @@ Split the work by what each side can be trusted with.
 ### Negative
 
 - Each event kind needs a hand-written template (`src/domain/templates/`) with categories, tasks, lead times and vendor rules, and those templates have to be maintained.
-- The model cannot add a budget category or a vendor type the template lacks; its only lever on money is a bounded weight hint.
+- The model cannot add a budget category or a vendor type the template lacks, and it has no lever on money at all. An earlier version let it send bounded weight hints that re-split the categories; the engine then checked each idea against the re-split amounts while the model had priced it against the amounts in the prompt, so ideas that fit the prompt showed as over budget. The hints were removed: the prompt, the **Budget** tab and every idea's fit now use the same amounts, and a property test in `tests/unit/merge.test.ts` pins it.
 - Lead times are typical heuristics rather than local rules, so permit tasks point the organizer to the local authority.
 
 ## Alternatives considered

@@ -232,7 +232,6 @@ export const aiSuggestions: AiSuggestions = {
       personalization: 'subtype: festival',
     },
   ],
-  weightHints: [{ categoryId: 'decor', factor: 1.2 }],
   extraTasks: [
     {
       title: 'Order clay diyas',

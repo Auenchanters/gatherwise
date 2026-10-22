@@ -151,7 +151,6 @@ describe('parseSuggestions', () => {
         personalization: 'vibe',
       },
     ],
-    weightHints: [],
     extraTasks: [],
     vendorQuestions: [],
   };

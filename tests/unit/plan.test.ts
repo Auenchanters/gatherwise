@@ -58,7 +58,6 @@ const addenda: AiAddenda = {
       source: 'ai',
     },
   ],
-  weightHints: [{ categoryId: 'decor', factor: 1.5 }],
   extraTasks: [
     {
       id: 'ai-task-1',
@@ -196,17 +195,16 @@ describe('buildPlan', () => {
     for (const i of plan.ideas) expect(i.source).toBe('template');
   });
 
-  it('folds weight hints into the budget and keeps the total', () => {
+  it('leaves the budget exactly as it is without AI suggestions', () => {
     const b = brief('community');
-    const plan = planOf(b, { addenda });
-    expect(plan.budget).toEqual(buildBudget(b, communityTemplate, addenda.weightHints));
-    expect(plan.budget.total).toBe(planOf(b).budget.total);
+    expect(planOf(b, { addenda }).budget).toEqual(planOf(b).budget);
+    expect(planOf(b, { addenda }).budget).toEqual(buildBudget(b, communityTemplate));
   });
 
-  it('applies weight hints before the rescale, never chaining rescales', () => {
+  it('rescales the planned budget once, with or without AI suggestions', () => {
     const b = brief('community', { guests: 400 });
     const plan = planOf(b, { addenda, plannedGuests: 250 });
-    const base = buildBudget({ ...b, guests: 250 }, communityTemplate, addenda.weightHints);
+    const base = buildBudget({ ...b, guests: 250 }, communityTemplate);
     expect(plan.budget).toEqual(rescaleGuests(base, 400));
   });
 

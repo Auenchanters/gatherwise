@@ -35,7 +35,7 @@ describe('workspace wording', () => {
   });
 
   it('names a budget category by id, and shows an unknown id as it is', () => {
-    const budget = buildBudget(brief('community'), templateFor('community'), []);
+    const budget = buildBudget(brief('community'), templateFor('community'));
     expect(categoryLabel(budget, 'decor')).toBe('Décor');
     expect(categoryLabel(budget, 'nope')).toBe('nope');
   });
