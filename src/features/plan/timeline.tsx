@@ -21,6 +21,7 @@ import { LiveRegion, Panel } from './panel.js';
 import type { PlannerStore } from './planner-store.js';
 import { STATUS_UI } from './status-ui.js';
 import { utcStamp } from './utc-stamp.js';
+import './timeline.css';
 
 /** How long the downloaded file's address stays valid; browsers have started the save well before. */
 const RELEASE_AFTER_MS = 30_000;

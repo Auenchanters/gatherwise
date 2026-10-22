@@ -1,0 +1,60 @@
+/* The Volunteers tab: shift table and roles. */
+
+.volunteers__lead {
+  margin: 0 0 0.25rem;
+  color: var(--color-accent);
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.volunteers__detail {
+  max-width: 48rem;
+  margin: 0 0 1rem;
+  color: var(--color-muted);
+}
+
+.volunteers__table {
+  max-width: 40rem;
+  margin-bottom: 1.5rem;
+}
+
+.volunteers__table tbody th {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.volunteers__roles-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
+}
+
+.roles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.role {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.role dt {
+  font-weight: 700;
+}
+
+.role dd {
+  margin: 0.125rem 0 0;
+  color: var(--color-muted);
+}
+
+@media print {
+  .role {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+}

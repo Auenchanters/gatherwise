@@ -19,6 +19,7 @@ import { categoryLabel, formatCount } from './format.js';
 import { LiveRegion, Panel } from './panel.js';
 import type { PlannerStore } from './planner-store.js';
 import { STATUS_UI } from './status-ui.js';
+import './ideas.css';
 
 type AiStatus = AiState['status'];
 

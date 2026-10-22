@@ -12,6 +12,7 @@ import { StatusChip } from './chips.js';
 import { countOf, showDate } from './format.js';
 import { Panel } from './panel.js';
 import { STATUS_UI } from './status-ui.js';
+import './volunteers.css';
 
 /** Props for {@link Volunteers}. */
 export interface VolunteersProps {

@@ -30,6 +30,7 @@ import { errorText } from './notices.js';
 import { Panel } from './panel.js';
 import type { PlannerStore } from './planner-store.js';
 import { STATUS_UI } from './status-ui.js';
+import './budget.css';
 
 const shareFormat = new Intl.NumberFormat('en-IN', { style: 'percent' });
 

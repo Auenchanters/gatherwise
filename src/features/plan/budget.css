@@ -1,0 +1,169 @@
+/* The Budget tab: the controls, the share meters and the break-even ledger. */
+
+.budget__layout {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.controls {
+  align-self: start;
+  padding: 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+}
+
+.controls__fields {
+  display: grid;
+  gap: 0 1rem;
+}
+
+.controls__status {
+  margin: 0 0 0.5rem;
+  color: var(--status-ok);
+  font-weight: 600;
+}
+
+.controls__status:empty {
+  margin: 0;
+}
+
+.controls__note {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+}
+
+.share {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+/* Five columns fit a phone only with the share as a number; the meter joins it from 40rem. */
+.share__meter {
+  display: none;
+  width: 100%;
+  min-width: 2.5rem;
+  max-width: 8rem;
+  height: 0.625rem;
+}
+
+.share__meter::-webkit-meter-bar {
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-track);
+}
+
+.share__meter::-webkit-meter-optimum-value {
+  border-radius: 999px;
+  background: var(--color-accent);
+}
+
+.share__meter::-moz-meter-bar {
+  border-radius: 999px;
+  background: var(--color-accent);
+}
+
+.share__pct {
+  min-width: 2.5rem;
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Break-even ledger */
+
+.break-even {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.break-even__title {
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem;
+}
+
+.ledger {
+  margin: 0;
+}
+
+.ledger > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.375rem 0;
+  border-bottom: 1px dotted var(--color-border);
+}
+
+.ledger dt {
+  color: var(--color-muted);
+}
+
+.ledger dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger__subtotal dt,
+.ledger__subtotal dd {
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.ledger__result {
+  border-bottom: 0;
+  color: var(--status-ok);
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.ledger__result dt {
+  color: inherit;
+}
+
+.ledger__result--bad {
+  color: var(--status-bad);
+}
+
+.break-even__note {
+  margin: 0.75rem 0 0;
+  color: var(--color-muted);
+}
+
+@media (min-width: 40rem) {
+  .controls__fields {
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  }
+
+  .share__meter {
+    display: block;
+  }
+}
+
+@media (min-width: 60rem) {
+  .budget__layout {
+    grid-template-columns: 18rem 1fr;
+    align-items: start;
+  }
+
+  .controls {
+    position: sticky;
+    top: 1rem;
+  }
+
+  .controls__fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  .controls {
+    display: none;
+  }
+}

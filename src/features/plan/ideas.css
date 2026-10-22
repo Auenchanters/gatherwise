@@ -1,0 +1,83 @@
+/* The Ideas tab: the refresh bar and what each idea card adds to the shared card. */
+
+.ideas__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.ideas__note {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+}
+
+.ideas__pending {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+  color: var(--color-muted);
+  font-weight: 600;
+}
+
+.idea__description {
+  margin: 0 0 0.75rem;
+}
+
+.idea__why {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--color-ai);
+  border-radius: var(--radius-sm);
+  background: var(--color-ai-soft);
+  font-size: 0.9375rem;
+}
+
+.idea__why-label {
+  color: var(--color-ai);
+  font-weight: 700;
+}
+
+.idea__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.5rem;
+  margin: 0 0 0.75rem;
+}
+
+.idea__facts dt {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.idea__facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.idea__fit {
+  margin: 0;
+}
+
+.idea__fit .status {
+  border-radius: var(--radius-sm);
+  white-space: normal;
+}
+
+@media print {
+  .ideas__bar,
+  .ideas__pending {
+    display: none;
+  }
+
+  .idea {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+}

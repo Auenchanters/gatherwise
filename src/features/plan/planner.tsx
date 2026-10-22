@@ -8,6 +8,8 @@
  * Never does: call the AI except through `startPlan` (one call) and the store's commands; read the
  * clock except through `todayIso`.
  */
+// First, so the styles every panel shares come before the panels' own, which build on them.
+import './workspace.css';
 import { useEffect, useRef, type ReactElement, type ReactNode } from 'react';
 import type { EventBrief } from '../../shared/schema.js';
 import { createPlanClient, type PlanClient } from '../client/api-client.js';
@@ -16,7 +18,6 @@ import { createPlannerStore, type PlannerStorage, type PlannerStore } from './pl
 import { todayIso } from './today.js';
 import { usePlanner } from './use-planner.js';
 import { Workspace } from './workspace.js';
-import './workspace.css';
 
 /** What the app shell hands the planner. */
 export interface PlannerSetup {

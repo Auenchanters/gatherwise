@@ -11,6 +11,7 @@ import { formatMoney } from '../../domain/money.js';
 import type { ReadyState } from '../../domain/reducer.js';
 import { KIND_LABELS, SUBTYPE_LABELS } from '../brief/labels.js';
 import { countOf, showDate } from './format.js';
+import './header.css';
 
 /** The id of the event name heading, which takes focus whenever a plan opens. */
 export const PLAN_HEADING_ID = 'plan-heading';

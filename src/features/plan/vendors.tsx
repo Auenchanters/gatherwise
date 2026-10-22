@@ -24,6 +24,7 @@ import { showDate } from './format.js';
 import { LiveRegion, Panel } from './panel.js';
 import type { PlannerStore } from './planner-store.js';
 import { STATUS_UI } from './status-ui.js';
+import './vendors.css';
 
 /** What the organizer calls each stage of a vendor. */
 const STATUS_LABELS: Readonly<Record<VendorStatus, string>> = {

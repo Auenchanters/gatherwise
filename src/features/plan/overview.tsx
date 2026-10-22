@@ -17,6 +17,7 @@ import { AiBadge } from './chips.js';
 import { countOf, formatCount, showDate } from './format.js';
 import { Panel } from './panel.js';
 import type { PlannerSnapshot } from './planner-store.js';
+import './overview.css';
 
 /** Task statuses that need the organizer's attention. */
 const NEEDS_ATTENTION: ReadonlySet<Status> = new Set(['at_risk', 'infeasible', 'overdue']);

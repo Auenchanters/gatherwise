@@ -1,0 +1,79 @@
+/* The Overview tab: the summary paragraph and the stat tiles. */
+
+.summary {
+  max-width: 48rem;
+  margin: 0 0 1.5rem;
+  font-size: 1.125rem;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+  gap: 0.75rem;
+  margin: 0 0 1.5rem;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--color-border);
+  border-top: 4px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+}
+
+.tile dd {
+  margin: 0;
+}
+
+.tile__label {
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.tile__value {
+  margin: 0.125rem 0 0.25rem;
+  font-size: 1.625rem;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile__note {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+.tile--accent {
+  border-top-color: var(--color-accent);
+}
+
+.tile--accent .tile__value {
+  color: var(--color-accent);
+}
+
+.tile--risk {
+  border-top-color: var(--status-risk);
+}
+
+.tile--risk .tile__value {
+  color: var(--status-risk);
+}
+
+.tile--bad {
+  border-top-color: var(--status-bad);
+}
+
+.tile--bad .tile__value {
+  color: var(--status-bad);
+}
+
+@media (min-width: 60rem) {
+  .tiles {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

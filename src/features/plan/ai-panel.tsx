@@ -19,6 +19,7 @@ import { buildPrompt } from '../../shared/prompt.js';
 import type { EventBrief } from '../../shared/schema.js';
 import { callCount, formatCount } from './format.js';
 import type { AiView } from './planner-store.js';
+import './ai-panel.css';
 
 const ADJUSTMENT_LABELS: Record<Adjustment['kind'], string> = {
   clamped: 'Clamped',
