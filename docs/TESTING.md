@@ -1,6 +1,6 @@
 # Testing
 
-`npm run verify` runs lint, type-checking, the unit and component tests with coverage, knip, the production build (with its bundle and runtime checks) and the Prettier check. At this commit it runs 1,450 Vitest tests, and every measured file is at 100% statements, branches, functions and lines. CI (`.github/workflows/ci.yml`) runs on every push and pull request: `npm run verify`, then the Playwright journeys against the build that `verify` just made, and `npm audit`. `.github/workflows/live.yml` runs the live smoke against the deployment once a day and on demand.
+`npm run verify` runs lint, type-checking, the unit and component tests with coverage, knip, the production build (with its bundle and runtime checks) and the Prettier check. At this commit it runs 1,451 Vitest tests, and every measured file is at 100% statements, branches, functions and lines. CI (`.github/workflows/ci.yml`) runs on every push and pull request: `npm run verify`, then the Playwright journeys against the build that `verify` just made, and `npm audit`. `.github/workflows/live.yml` runs the live smoke against the deployment once a day and on demand.
 
 ## Layers
 
