@@ -1,10 +1,11 @@
 /** Strict typed linting, accessible JSX and hook rules are enforced for application code. */
 import js from '@eslint/js';
+import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import reactHooks from 'eslint-plugin-react-hooks';
 
-export default tseslint.config(
+export default defineConfig(
   {
     // Suppression comments are banned outright: they are ignored and reported if present.
     linterOptions: { noInlineConfig: true, reportUnusedDisableDirectives: 'error' },
@@ -52,8 +53,8 @@ export default tseslint.config(
     },
   },
   {
-    // Shipped code may not cast; `as const` stays allowed by this rule.
-    files: ['src/**/*.{ts,tsx}', 'server/**/*.ts'],
+    // No type assertions anywhere, tests included; `as const` stays allowed by this rule.
+    files: ['**/*.{ts,tsx}'],
     rules: {
       '@typescript-eslint/consistent-type-assertions': ['error', { assertionStyle: 'never' }],
     },

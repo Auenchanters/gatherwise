@@ -209,9 +209,10 @@ describe('the model-call budget', () => {
 
 describe('the cache key', () => {
   it('ignores key order, at the top level and inside nested objects', async () => {
-    // The same value with the keys of one object in reverse order.
+    // The same value with the keys of one object in reverse order: `fromEntries` fixes the order
+    // and `assign` writes the values back without moving a key.
     const flip = <T extends object>(value: T): T =>
-      Object.fromEntries(Object.entries(value).reverse()) as T;
+      Object.assign(Object.fromEntries(Object.entries(value).reverse()), value);
     const income = {
       ticketPrice: 100,
       expectedPaidAttendance: 50,
@@ -236,20 +237,20 @@ describe('the cache key', () => {
     // Types forbid these shapes; a stray one must still not cost a second request, because
     // JSON.stringify sends the same body for both.
     const base = brief('community');
-    const loose = (value: object): EventBrief => value as EventBrief;
+    const loose = (fields: object): EventBrief => Object.assign({}, base, fields);
     const fetchImpl = serving();
     const planner = client(fetchImpl);
 
     await planner.suggest(base, never);
-    await planner.suggest(loose({ ...base, income: undefined }), never);
+    await planner.suggest(loose({ income: undefined }), never);
     expect(fetchImpl).toHaveBeenCalledTimes(1);
 
-    await planner.suggest(loose({ ...base, dietary: [null] }), never);
-    await planner.suggest(loose({ ...base, dietary: [undefined] }), never);
+    await planner.suggest(loose({ dietary: [null] }), never);
+    await planner.suggest(loose({ dietary: [undefined] }), never);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     // Different from an empty list, and from a list with a real value.
-    await planner.suggest(loose({ ...base, dietary: [] }), never);
-    await planner.suggest(loose({ ...base, dietary: ['vegan'] }), never);
+    await planner.suggest(loose({ dietary: [] }), never);
+    await planner.suggest(loose({ dietary: ['vegan'] }), never);
     expect(fetchImpl).toHaveBeenCalledTimes(4);
   });
 

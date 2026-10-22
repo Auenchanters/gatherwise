@@ -4,8 +4,8 @@
  * Does: walks every field's human message (blank, too small, out of range, too long), every date
  * reason from `eventDateOf`, the one-error-per-field rule and the form-order listing, and checks a
  * valid draft comes back as the schema's (trimmed) brief.
- * Never does: render anything or read the clock; `today` is fixed. Casts appear only to forge
- * values the typed draft cannot hold, so the defensive messages are covered too.
+ * Never does: render anything or read the clock; `today` is fixed. A few rows overlay values the
+ * typed draft cannot hold, so the defensive messages are covered too.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { addDays } from '../../src/domain/dates.js';
@@ -18,12 +18,16 @@ import { TODAY as today } from '../support/fixtures.js';
 
 const valid = draftFromBrief(sampleBrief('community', today));
 const blankIncome = draftFromBrief(sampleBrief('birthday', today)).income;
-const draftWith = (overrides: Partial<BriefDraft>): BriefDraft => ({ ...valid, ...overrides });
-const income = (key: keyof BriefDraft['income'], value: string): Partial<BriefDraft> => ({
+/**
+ * Field overrides. Their values are not held to the draft's field types: a few rows overlay a value
+ * the typed draft cannot hold (a kind that is not offered, 'yes' for a boolean field), to reach a
+ * defensive message. `Object.assign` keeps the intersection with `BriefDraft`, so no cast is needed.
+ */
+type Overrides = { readonly [K in keyof BriefDraft]?: unknown };
+const draftWith = (overrides: Overrides): BriefDraft => Object.assign({}, valid, overrides);
+const income = (key: keyof BriefDraft['income'], value: string): Overrides => ({
   income: { ...valid.income, [key]: value },
 });
-/** A value the typed draft cannot hold, forged to reach a defensive branch. */
-const forge = (value: unknown): never => value as never;
 
 const errorsOf = (draft: BriefDraft): readonly FieldError[] => {
   const result = validateBrief(draft, today);
@@ -52,8 +56,8 @@ describe('validateBrief: valid drafts', () => {
 
 describe('validateBrief: one human message per field', () => {
   const huge = '100000001';
-  it.each<[string, Partial<BriefDraft>, string]>([
-    ['kind', { kind: forge('party') }, 'Choose the kind of event'],
+  it.each<[string, Overrides, string]>([
+    ['kind', { kind: 'party' }, 'Choose the kind of event'],
     ['subtype', { subtype: 'kids' }, 'Choose the type of event'],
     ['name', { name: '' }, 'Enter the event name'],
     ['name', { name: '   ' }, 'Enter the event name'],
@@ -94,13 +98,9 @@ describe('validateBrief: one human message per field', () => {
     ['dietary', { dietary: ['vegan', 'vegan'] }, 'Choose each dietary need once, up to 6'],
     ['dietary', { dietary: ['pizza'] }, 'Choose each dietary need once, up to 6'],
     ['accessibility', { accessibility: ['ramp'] }, 'Choose each accessibility need once, up to 6'],
-    [
-      'amplifiedSound',
-      { amplifiedSound: forge('yes') },
-      'Say whether there will be amplified sound',
-    ],
-    ['servesFood', { servesFood: forge('yes') }, 'Say whether you will serve food'],
-    ['servesAlcohol', { servesAlcohol: forge('no') }, 'Say whether you will serve alcohol'],
+    ['amplifiedSound', { amplifiedSound: 'yes' }, 'Say whether there will be amplified sound'],
+    ['servesFood', { servesFood: 'yes' }, 'Say whether you will serve food'],
+    ['servesAlcohol', { servesAlcohol: 'no' }, 'Say whether you will serve alcohol'],
     ['vibe', { vibe: 'x'.repeat(121) }, 'Vibe must be 120 characters or fewer'],
     ['notes', { notes: 'x'.repeat(501) }, 'Notes must be 500 characters or fewer'],
     [
@@ -209,7 +209,7 @@ describe('validateBrief: numbers the browser could not read', () => {
   const MONEY = 'Enter the amount as digits only, like 150000';
   const COUNT = 'Enter digits only, like 12';
 
-  it.each<[string, Partial<BriefDraft>, string]>([
+  it.each<[string, Overrides, string]>([
     ['budget', { budget: '' }, MONEY],
     ['income.sponsors', income('sponsors', ''), MONEY],
     ['income.stallFee', income('stallFee', ''), MONEY],
@@ -234,12 +234,16 @@ describe('validateBrief: an issue no message knows about', () => {
   });
 
   it('still fails visibly, pointing at the first field', () => {
-    vi.spyOn(eventBriefSchema, 'safeParse').mockReturnValue(
-      forge({
-        success: false,
-        error: { issues: [{ code: 'custom', path: ['future'], message: 'x', input: 1 }] },
-      }),
-    );
+    // A real failed parse whose only issue is one no message knows about.
+    const failed = eventBriefSchema.safeParse({});
+    if (failed.success) throw new Error('an empty object must not parse');
+    failed.error.issues.splice(0, failed.error.issues.length, {
+      code: 'custom',
+      path: ['future'],
+      message: 'x',
+      input: 1,
+    });
+    vi.spyOn(eventBriefSchema, 'safeParse').mockReturnValue(failed);
     expect(validateBrief(valid, today)).toEqual({
       ok: false,
       errors: [{ field: 'kind', message: 'Check the highlighted details' }],

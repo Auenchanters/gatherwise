@@ -16,7 +16,15 @@ const DOMAIN_DIR = 'src/domain';
 const SHARED_DIR = 'src/shared';
 /** Shared modules domain code may import at runtime; both must stay free of imports. */
 const RUNTIME_SHARED_ALLOWLIST = ['src/shared/limits', 'src/shared/result'];
-const FORBIDDEN_TOKENS = ['Date.now', 'Math.random', 'fetch(', 'localStorage'];
+/** What domain code may not mention, by name: the clock, randomness, I/O and storage. */
+const FORBIDDEN_TOKENS = new Map([
+  ['Date.now', /Date\.now/u],
+  ['Math.random', /Math\.random/u],
+  ['fetch(', /fetch\(/u],
+  ['localStorage', /localStorage/u],
+  // `new Date(x)` parses or formats a given value; with no argument it reads the clock.
+  ['new Date()', /new Date\(\s*\)/u],
+]);
 
 /** Repo-relative POSIX paths of every .ts/.tsx file under `dir` (empty if it does not exist). */
 function sourceFiles(dir: string): string[] {
@@ -62,7 +70,8 @@ function moduleReferences(source: string): { specifier: string; typeOnly: boolea
 const isInside = (dir: string, path: string): boolean => path === dir || path.startsWith(`${dir}/`);
 
 /**
- * Imports in `file` (repo-relative) that leave src/domain, excluding type imports from src/shared and allowlisted modules.
+ * Imports in `file` (repo-relative) that leave src/domain, excluding type imports from src/shared
+ * and allowlisted modules.
  * A trailing `.js` is dropped first: Node ESM needs it on disk, but it names the same module.
  */
 function boundaryViolations(file: string, source: string): string[] {
@@ -83,10 +92,14 @@ function boundaryViolations(file: string, source: string): string[] {
 
 /** Forbidden tokens present anywhere in the text, comments included. */
 const forbiddenTokens = (source: string): string[] =>
-  FORBIDDEN_TOKENS.filter((token) => source.includes(token));
+  [...FORBIDDEN_TOKENS].filter(([, pattern]) => pattern.test(source)).map(([name]) => name);
 
 describe('domain boundary', () => {
   const files = sourceFiles(DOMAIN_DIR);
+
+  it('scans the domain files, so the checks below cannot pass on an empty list', () => {
+    expect(files.length).toBeGreaterThan(10);
+  });
 
   it('has no runtime imports outside src/domain', () => {
     for (const file of files) {
@@ -94,7 +107,7 @@ describe('domain boundary', () => {
     }
   });
 
-  it('never touches Date.now, Math.random, fetch or localStorage', () => {
+  it('never reads the clock, randomness, the network or storage', () => {
     for (const file of files) {
       expect(forbiddenTokens(readFileSync(file, 'utf8')), file).toEqual([]);
     }
@@ -194,8 +207,13 @@ describe('boundary checker', () => {
     ]);
   });
 
-  it.each(FORBIDDEN_TOKENS)('flags %s even inside a comment', (token) => {
+  it.each([...FORBIDDEN_TOKENS.keys()])('flags %s even inside a comment', (token) => {
     expect(forbiddenTokens(`// do not use ${token}`)).toEqual([token]);
+  });
+
+  it('flags an argument-less Date however it is spaced, and allows one given a value', () => {
+    expect(forbiddenTokens('const now = new Date(  );')).toEqual(['new Date()']);
+    expect(forbiddenTokens('const day = new Date(0); const t = new Date(time);')).toEqual([]);
   });
 
   it('passes clean source', () => {
