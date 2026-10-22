@@ -53,7 +53,7 @@ The first page loads only the entry chunk. Focusing or pressing **Generate my pl
 | Module                 | Does                                                                                                                                                                                                                                                                             | Never does                                                                                                  |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `src/domain/`          | Computes every number and date: money, the budget, break-even, the schedule and task statuses, vendors and book-by dates, volunteer shifts, idea fit, plan assembly, merging AI output, the edit reducer and the ICS export. Templates hold the domain knowledge per event kind. | Read the clock (`today` is a parameter), call the network, touch storage, use `Math.random`, or import zod. |
-| `src/shared/`          | Holds what browser and server share: the zod contracts, numeric caps, option lists, the `Result` type, the prompt builder and the text sanitizer.                                                                                                                                | Do I/O, read the clock, or put user text into the system instruction.                                       |
+| `src/shared/`          | Holds what browser and server share: the zod contracts, numeric caps, option lists, the `Result` type, the prompt builder and the text sanitizer. The prompt builder reads the engine (see below).                                                                               | Do I/O, read the clock, or put user text into the system instruction.                                       |
 | `server/`              | Runs the API: routing, the request gate, quotas, the concurrency gate, the Gemini adapter, reading and sanitizing the answer, the error catalog and one log line per request.                                                                                                    | Retry a model call, return a provider message, log brief or model text, or cache.                           |
 | `src/features/brief/`  | The landing, the single-page brief form, its draft handling and on-submit validation, and the sample briefs.                                                                                                                                                                     | Validate while typing, call the API, or read the clock (`today` is a prop).                                 |
 | `src/features/client/` | The browser's API client: cache, call counter, timeout, response validation, and one copy catalog for failures.                                                                                                                                                                  | Retry automatically, return unvalidated data, cache a failure, or count a cache hit as a call.              |
@@ -76,7 +76,19 @@ Key files:
 - Those two allowlisted modules must themselves have no imports, so they cannot pull zod in through a back door.
 - Anything else is a violation: packages (zod included, even type-only), Node built-ins, the server, the features, and a path that climbs out of the domain. An inline type modifier (`import { type X } …`) still counts as a runtime import.
 - A trailing `.js` on a specifier is ignored, so a specifier with the extension Node ESM needs names the same module as one without it.
-- No domain file may contain the text `Date.now`, `Math.random`, `fetch(` or `localStorage`, comments included.
+- No domain file may contain the text `Date.now`, `Math.random`, `fetch(`, `localStorage` or an argument-less `new Date()`, comments included.
+
+**One import points the other way.** `src/shared/prompt.ts` imports from `src/domain` (`src/domain/money.ts`, the `Plan` type and the templates), while `src/domain` takes only types, `src/shared/limits.ts` and `src/shared/result.ts` from `src/shared`. The prompt is made from the engine's plan, and its response schema from each template's category, task and vendor ids, so it cannot sit below the domain. It lives in `src/shared` because the server and the browser's **AI at work** panel must build the same prompt from one function. No domain file imports `src/shared/prompt.ts`, so the two directions never form a cycle.
+
+## Type-check projects
+
+`tsc -b` (the `typecheck` script, and the first step of `build`) checks three projects that share the strict flags in `tsconfig.base.json`:
+
+- `tsconfig.app.json`: `src/`, with the DOM libs and Vite's client types and no Node types, so a reference to `process` in browser code is a compile error.
+- `tsconfig.node.json`: `server/`, `api/`, `scripts/*.ts` and the root config files, with Node types and no DOM.
+- `tsconfig.test.json`: `tests/`, with both. Vitest's types bring Node globals into any program that imports them, so tests cannot share a project with `src/` without making `process` legal there.
+
+`tsconfig.server.json` extends the node project and emits the API, which `scripts/runtime-smoke.mjs` loads in plain Node.
 
 ## Data contracts
 
