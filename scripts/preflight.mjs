@@ -1,5 +1,9 @@
-/** Verify the public-submission size, branch and file-hygiene gates before publishing. */
+/**
+ * Verify the public-submission size, branch, file-hygiene and documentation gates before publishing.
+ * The Markdown checks are pure functions in doc-checks.ts (unit-tested), which Node runs directly.
+ */
 import { execFileSync, spawnSync } from 'node:child_process';
+import { docPaths, hasLiveUrl, missingHeadings, missingPaths } from './doc-checks.ts';
 
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8' });
 const split = (text, separator) => text.split(separator).filter(Boolean);
@@ -67,5 +71,26 @@ if (remotes.length > 0) {
     remoteRefs.every((ref) => isRemoteRef(ref, 'HEAD') || isRemoteRef(ref, 'main')),
   );
 }
+
+// The docs as staged: every path they name must exist, and the README needs its four headings.
+const staged = (file) => git('show', `:${file}`);
+const docs = tracked.filter((file) => file.endsWith('.md'));
+const missing = docs.flatMap((file) =>
+  missingPaths(docPaths(staged(file), file), tracked).map((path) => `${file}: ${path}`),
+);
+verify(
+  `Every repo path named in the ${docs.length} tracked Markdown files exists`,
+  !missing.length,
+);
+for (const line of missing) process.stdout.write(`  missing ${line}\n`);
+
+const readme = tracked.includes('README.md') ? staged('README.md') : '';
+const headings = missingHeadings(readme);
+verify('README has the four required headings', headings.length === 0);
+for (const heading of headings) process.stdout.write(`  missing heading: ${heading}\n`);
+
+// A warning, not a failure, until the first deploy adds the link to the README.
+const live = hasLiveUrl(readme) ? 'PASS' : 'WARN';
+process.stdout.write(`${live} README links the live demo (https://….vercel.app)\n`);
 
 if (checks.some((check) => !check.passed)) process.exitCode = 1;
