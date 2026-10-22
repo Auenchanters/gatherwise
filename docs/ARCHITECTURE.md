@@ -88,7 +88,7 @@ Key files:
 - `tsconfig.node.json`: `server/`, `api/`, `scripts/*.ts` and the root config files, with Node types and no DOM.
 - `tsconfig.test.json`: `tests/`, with both. Vitest's types bring Node globals into any program that imports them, so tests cannot share a project with `src/` without making `process` legal there.
 
-`tsconfig.server.json` extends the node project and emits the API, which `scripts/runtime-smoke.mjs` loads in plain Node. `api/tsconfig.json` also extends the node project: Vercel compiles each function with the tsconfig nearest its entry file, and the root one only lists references.
+`tsconfig.server.json` extends the node project and emits the API, which `scripts/runtime-smoke.mjs` loads in plain Node. The root `tsconfig.json` lists the three projects and also extends the base, so tools that read only the root (Vercel, when it compiles the functions) get the same strict settings.
 
 ## Data contracts
 

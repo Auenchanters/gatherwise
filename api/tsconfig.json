@@ -1,5 +1,0 @@
-{
-  // Vercel compiles each function with the tsconfig nearest its entry file. The root tsconfig only
-  // lists project references, so this points the function build at the `node` project's settings.
-  "extends": "../tsconfig.node.json"
-}

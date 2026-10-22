@@ -6,6 +6,9 @@
   // render into jsdom or a browser page and also run in Node, and vitest's own types pull in
   // `node` globally, so a test file in the `app` project would make `process` legal in src/.
   // `tsconfig.base.json` holds the shared strictness; `tsconfig.server.json` is the emit build.
+  // Extending the base here gives tools that read only this file, such as Vercel when it compiles
+  // the functions, the same strict settings.
+  "extends": "./tsconfig.base.json",
   "files": [],
   "references": [
     { "path": "./tsconfig.app.json" },
