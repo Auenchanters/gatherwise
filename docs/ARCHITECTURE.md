@@ -23,7 +23,7 @@ flowchart TD
   subgraph Vercel["Vercel Function api/plan.ts"]
     gate["server/handler.ts and server/request.ts: method, content type, origin, body cap, rate limit, JSON, zod brief, date"]
     plan["Engine plan: the same buildPlan"]
-    prompt["src/shared/prompt.ts: buildPrompt"]
+    prompt["src/ai/prompt.ts: buildPrompt"]
     capacity["server/capacity.ts: 3 calls in flight"]
     provider["server/provider.ts: one generateContent"]
     gemini(["Gemini"])
@@ -53,7 +53,9 @@ The first page loads only the entry chunk. Focusing or pressing **Generate my pl
 | Module                 | Does                                                                                                                                                                                                                                                                             | Never does                                                                                                  |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `src/domain/`          | Computes every number and date: money, the budget, break-even, the schedule and task statuses, vendors and book-by dates, volunteer shifts, idea fit, plan assembly, merging AI output, the edit reducer and the ICS export. Templates hold the domain knowledge per event kind. | Read the clock (`today` is a parameter), call the network, touch storage, use `Math.random`, or import zod. |
-| `src/shared/`          | Holds what browser and server share: the zod contracts, numeric caps, option lists, the `Result` type, the prompt builder and the text sanitizer. The prompt builder reads the engine (see below).                                                                               | Do I/O, read the clock, or put user text into the system instruction.                                       |
+| `src/shared/`          | Holds what browser and server share: the zod contracts, numeric caps, option lists, the `Result` type and the text sanitizers. The bottom layer: it imports nothing from the app.                                                                                                | Do I/O, read the clock, or import another layer.                                                            |
+| `src/ai/`              | The prompt builder: a fixed system instruction, the plan as JSON data, and the per-template response schema. Runs on the server and in the browser's **AI at work** panel.                                                                                                       | Call the network, or put user text into the system instruction.                                             |
+| `src/ui/`              | Number and date wording in the product's locale (`LOCALE`), shared by the brief form and the workspace.                                                                                                                                                                          | Compute a figure; every number it shows comes from the engine.                                              |
 | `server/`              | Runs the API: routing, the request gate, quotas, the concurrency gate, the Gemini adapter, reading and sanitizing the answer, the error catalog and one log line per request.                                                                                                    | Retry a model call, return a provider message, log brief or model text, or cache.                           |
 | `src/features/brief/`  | The landing, the single-page brief form, its draft handling and on-submit validation, and the sample briefs.                                                                                                                                                                     | Validate while typing, call the API, or read the clock (`today` is a prop).                                 |
 | `src/features/client/` | The browser's API client: cache, call counter, timeout, response validation, and one copy catalog for failures.                                                                                                                                                                  | Retry automatically, return unvalidated data, cache a failure, or count a cache hit as a call.              |
@@ -63,22 +65,39 @@ The first page loads only the entry chunk. Focusing or pressing **Generate my pl
 Key files:
 
 - **Engine:** `src/domain/money.ts` (integer minor units and largest-remainder allocation), `src/domain/budget.ts` (contingency and guest rescaling), `src/domain/break-even.ts`, `src/domain/schedule.ts` (backward critical path and statuses), `src/domain/vendors.ts`, `src/domain/volunteers.ts`, `src/domain/ideas.ts`, `src/domain/plan.ts` (assembly), `src/domain/merge.ts` (AI normalization), `src/domain/reducer.ts` (edits), `src/domain/ics.ts` (calendar export) and the templates in `src/domain/templates/`.
-- **Shared:** `src/shared/schema.ts`, `src/shared/limits.ts`, `src/shared/options.ts`, `src/shared/result.ts`, `src/shared/prompt.ts`, `src/shared/sanitize-text.ts` and `src/shared/sanitize-suggestions.ts` (bounding an AI answer, on the server and in the prompt).
+- **Shared:** `src/shared/schema.ts`, `src/shared/limits.ts`, `src/shared/options.ts`, `src/shared/result.ts`, `src/shared/sanitize-text.ts` and `src/shared/sanitize-suggestions.ts` (bounding an AI answer, on the server and in the prompt).
+- **AI and wording:** `src/ai/prompt.ts` (the one prompt builder) and `src/ui/format.ts` (counts, dates and the locale).
 - **Server:** `server/handler.ts` (routing and the log line), `server/request.ts` (the gate), `server/rate-limit.ts`, `server/capacity.ts`, `server/provider.ts` (Gemini), `server/answer.ts` (reading the answer), `server/errors.ts` (the catalog) and `server/log.ts`.
 - **Browser:** `src/features/client/api-client.ts`, `src/features/client/messages.ts`, `src/features/plan/planner-store.ts`, `src/features/plan/persist.ts`, `src/features/plan/today.ts`.
 - **Function entry points:** `api/plan.ts` and `api/health.ts`.
 
-## The import boundary
+## The import boundaries
 
-`tests/unit/architecture.test.ts` reads every `.ts` and `.tsx` file under `src/domain/` and enforces:
+`tests/unit/architecture.test.ts` enforces two rules on every `.ts` and `.tsx` file.
 
-- A domain file may import, re-export, `import()` or `require` only modules inside `src/domain`, with two exceptions: type-only statements (`import type …`, `export type … from`) from `src/shared`, and runtime imports of `src/shared/limits.ts` and `src/shared/result.ts`.
-- Those two allowlisted modules must themselves have no imports, so they cannot pull zod in through a back door.
-- Anything else is a violation: packages (zod included, even type-only), Node built-ins, the server, the features, and a path that climbs out of the domain. An inline type modifier (`import { type X } …`) still counts as a runtime import.
-- A trailing `.js` on a specifier is ignored, so a specifier with the extension Node ESM needs names the same module as one without it.
-- No domain file may contain the text `Date.now`, `Math.random`, `fetch(`, `localStorage` or an argument-less `new Date()`, comments included.
+**The layer order.** Each folder imports only from itself and the folders below it, so the import graph between folders has no cycles:
 
-**One import points the other way.** `src/shared/prompt.ts` imports from `src/domain` (`src/domain/money.ts`, the `Plan` type and the templates), while `src/domain` takes only types, `src/shared/limits.ts` and `src/shared/result.ts` from `src/shared`. The prompt is made from the engine's plan, and its response schema from each template's category, task and vendor ids, so it cannot sit below the domain. It lives in `src/shared` because the server and the browser's **AI at work** panel must build the same prompt from one function. No domain file imports `src/shared/prompt.ts`, so the two directions never form a cycle.
+| Layer                  | May import from                                                    |
+| ---------------------- | ------------------------------------------------------------------ |
+| `src/shared/`          | nothing in the app                                                 |
+| `src/domain/`          | `src/shared/` (narrowed further below)                             |
+| `src/ai/`, `src/ui/`   | `src/shared/`, `src/domain/`                                       |
+| `src/features/client/` | `src/shared/`, `src/domain/`, `src/ai/`                            |
+| `src/features/brief/`  | `src/shared/`, `src/domain/`, `src/ui/`                            |
+| `src/features/plan/`   | all of the above, `src/features/brief/` and `src/features/client/` |
+| `server/`              | `src/shared/`, `src/domain/`, `src/ai/`                            |
+
+The prompt builder sits in `src/ai/`, above the engine, because it is made from the engine's plan and each template's ids; the browser's **AI at work** panel and the server both import it, so they build the same prompt from one function.
+
+**The domain engine** is held to more. Every file under `src/domain/`:
+
+- may import, re-export, `import()` or `require` only modules inside `src/domain`, with two exceptions: type-only statements (`import type …`, `export type … from`) from `src/shared`, and runtime imports of `src/shared/limits.ts`, `src/shared/result.ts` and `src/shared/cap-text.ts`;
+- those three allowlisted modules must themselves have no imports, so they cannot pull zod in through a back door;
+- anything else is a violation: packages (zod included, even type-only), Node built-ins, the server, the features, and a path that climbs out of the domain. An inline type modifier (`import { type X } …`) still counts as a runtime import;
+- a trailing `.js` on a specifier is ignored, so a specifier with the extension Node ESM needs names the same module as one without it;
+- no domain file may contain the text `Date.now`, `Math.random`, `fetch(`, `localStorage` or an argument-less `new Date()`, comments included.
+
+Both checkers are pure functions over a path and its source, tested against synthetic bad input as well as the real tree.
 
 ## Type-check projects
 
@@ -100,19 +119,19 @@ All contracts are zod schemas in `src/shared/schema.ts`, and the TypeScript type
 - **The API request** is `{ brief }`, or `{ brief, adjust: { change, previous? } }` for **Adjust with AI**: `change` is at most 200 code points (blank asks for fresh ideas) and `previous` is the plan's current validated answer, checked against the brief's template schema. A bad `adjust` is 400 `INVALID_ADJUSTMENT`. The body cap is 64 KB.
 - **The API response** is `{ suggestions, meta }`, and every error is `{ error: { code, message } }`, with `fields` for a bad brief (`server/errors.ts`).
 
-**One prompt builder.** `buildPrompt(plan, adjust?)` in `src/shared/prompt.ts` is the only code that builds a prompt. The server calls it on the plan it rebuilt from the brief; the browser calls it on the same brief (and the same adjustment) to show "What we sent to Gemini" in the **AI at work** panel. For an adjustment it adds `previous`, bounded by `sanitizeSuggestions` (`src/shared/sanitize-suggestions.ts`), and `change`, sanitized, to the same JSON data message; the fixed system instruction says to revise `previous` to satisfy `change` and that `change` never overrides its rules. The prompt is never sent back over the wire. Brief text in it is cleaned by `sanitizeText` (`src/shared/sanitize-text.ts`), the same function the server uses on the answer.
+**One prompt builder.** `buildPrompt(plan, adjust?)` in `src/ai/prompt.ts` is the only code that builds a prompt. The server calls it on the plan it rebuilt from the brief; the browser calls it on the same brief (and the same adjustment) to show "What we sent to Gemini" in the **AI at work** panel. For an adjustment it adds `previous`, bounded by `sanitizeSuggestions` (`src/shared/sanitize-suggestions.ts`), and `change`, sanitized, to the same JSON data message; the fixed system instruction says to revise `previous` to satisfy `change` and that `change` never overrides its rules. The prompt is never sent back over the wire. Brief text in it is cleaned by `sanitizeText` (`src/shared/sanitize-text.ts`), the same function the server uses on the answer.
 
 **One normalization chokepoint.** An answer from the network and an answer restored from `localStorage` both reach the plan only through `mergeSuggestions` in `src/domain/merge.ts`, called from `restorePlanState` in `src/domain/reducer.ts`.
 
 ## Bundle split
 
-From `npm run build` at this commit, as `scripts/bundle-budget.mjs` reports them (kB = 1000 bytes; Vite's own gzip column differs slightly). Vite derives the names of shared chunks, so `format` does not describe its contents: it holds zod, its JSON Schema converter and the shared brief and AI-answer schemas.
+From `npm run build` at this commit, as `scripts/bundle-budget.ts` reports them (kB = 1000 bytes; Vite's own gzip column differs slightly). Vite names a shared chunk after one of its modules: `schema` holds zod, its JSON Schema converter and the shared brief and AI-answer schemas.
 
 | Chunk                                                                | Loaded                              | Raw       | Gzip     |
 | -------------------------------------------------------------------- | ----------------------------------- | --------- | -------- |
-| `index` (entry: React, the app shell, landing and brief form)        | first page                          | 243.99 kB | 76.51 kB |
+| `index` (entry: React, the app shell, landing and brief form)        | first page                          | 244.60 kB | 76.75 kB |
 | `validate` (brief validation)                                        | on submit                           | 2.86 kB   | 1.23 kB  |
-| `format` (zod and the shared schemas)                                | with validation or the planner      | 100.14 kB | 28.69 kB |
-| `planner` (store, engine, templates, client, persistence, workspace) | after a valid submit, or to restore | 87.36 kB  | 27.89 kB |
+| `schema` (zod and the shared schemas)                                | with validation or the planner      | 99.73 kB  | 28.47 kB |
+| `planner` (store, engine, templates, client, persistence, workspace) | after a valid submit, or to restore | 87.87 kB  | 28.07 kB |
 
-The build fails if the entry chunk exceeds 250 kB raw or 80 kB gzip (`scripts/bundle-budget.mjs`). Styles are split the same way: the entry stylesheet is 8.69 kB and the planner's is 18.07 kB, raw, as Vite reports them.
+The build fails if the entry chunk exceeds 250 kB raw or 80 kB gzip (`scripts/bundle-budget.ts`). Styles are split the same way: the entry stylesheet is 9.60 kB and the planner's is 18.93 kB, raw, as Vite reports them.

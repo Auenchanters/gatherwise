@@ -9,7 +9,7 @@ The planner is one interactive page whose engine runs entirely in the browser. T
 
 ## Decision
 
-- **Client:** React 19 built by Vite into static files in `dist/`. The first page loads only the entry chunk; validation, zod and the planner load on demand (see the bundle split in `docs/ARCHITECTURE.md`). `scripts/bundle-budget.mjs` fails the build if the entry exceeds 250 kB raw or 80 kB gzip.
+- **Client:** React 19 built by Vite into static files in `dist/`. The first page loads only the entry chunk; validation, zod and the planner load on demand (see the bundle split in `docs/ARCHITECTURE.md`). `scripts/bundle-budget.ts` fails the build if the entry exceeds 250 kB raw or 80 kB gzip.
 - **API:** two Vercel Functions, `api/plan.ts` and `api/health.ts`, each exporting `{ fetch: handlerFromEnv(process.env) }`. They hand Web-standard `Request` objects to one handler built by `createHandler` in `server/handler.ts`, whose dependencies (the model call, the clock, the rate limiter, the allowed origin) are injectable for tests; `handlerFromEnv` reads the environment once per warm instance and passes it in, so tests never stub the environment.
 - **Local development** runs the same handler on `@hono/node-server` (`scripts/dev-server.ts`) behind Vite's `/api` proxy, which keeps the browser's `Host` so the same-origin check behaves as in production (`vite.config.ts`).
 - **ESM that runs as emitted:** every relative import in `src/domain`, `src/shared`, `server` and `api` has an explicit `.js` extension. `npm run build` compiles the API with `tsconfig.server.json` and `scripts/runtime-smoke.mjs` imports the emitted modules in plain Node, so a specifier that only works under a bundler fails the build.
@@ -45,5 +45,5 @@ The planner is one interactive page whose engine runs entirely in the browser. T
 - `server/handler.ts`
 - `scripts/dev-server.ts`
 - `scripts/runtime-smoke.mjs`
-- `scripts/bundle-budget.mjs`
+- `scripts/bundle-budget.ts`
 - `tsconfig.server.json`
