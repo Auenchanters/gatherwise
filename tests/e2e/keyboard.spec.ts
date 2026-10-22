@@ -3,10 +3,10 @@
  * production CSP, with `/api/plan` mocked.
  *
  * Does: goes from the landing to a finished plan and its tabs with Tab, Shift+Tab, the arrow keys,
- * Enter and Space alone: skip link, sample, Generate, every tab and its heading, a ticked task, a
- * vendor's status, "Refresh ideas". Checks that every stop shows a focus ring (`:focus-visible`
- * with a drawn outline), that a page-wide listener never saw a pointer, and the model-call count:
- * 1 to create the plan, 2 after Refresh ideas.
+ * Enter and Space alone: skip link, the three samples, Generate, every tab and its heading, a
+ * ticked task, a vendor's status, "Refresh ideas". Checks that every stop shows a focus ring
+ * (`:focus-visible` with a drawn outline), that a page-wide listener never saw a pointer, and the
+ * model-call count: 1 to create the plan, 2 after Refresh ideas.
  * Never does: use the mouse, or reach a real model.
  */
 import { expect, test, type Locator, type Page } from '@playwright/test';
@@ -72,13 +72,20 @@ test('the whole journey works with the keyboard alone', async ({ page }) => {
   const { requests, errors } = await prepare(page);
   await page.goto('/');
 
-  // Skip link first, then the community sample; Enter fills the form and focuses its heading.
+  // Skip link first, then the three samples in the order the headline names the events; Enter on
+  // the community one fills the form and focuses its heading.
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'Skip to main content' })).toBeFocused();
   expect(await focusIsVisible(page)).toBe(true);
-  await page.keyboard.press('Tab');
-  await expect(page.getByRole('button', { name: 'Try a sample community event' })).toBeFocused();
-  expect(await focusIsVisible(page)).toBe(true);
+  for (const name of [
+    'Try a sample wedding',
+    'Try a sample birthday',
+    'Try a sample community event',
+  ]) {
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('button', { name })).toBeFocused();
+    expect(await focusIsVisible(page)).toBe(true);
+  }
   await page.keyboard.press('Enter');
   await expect(page.getByRole('textbox', { name: 'Event name' })).toHaveValue(SAMPLE_NAME);
   await expect(page.getByRole('heading', { name: 'Tell us about your event' })).toBeFocused();
