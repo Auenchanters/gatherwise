@@ -4,7 +4,7 @@ A GenAI planning assistant for community events, weddings and birthdays, with bu
 
 AI proposes, the engine guarantees.
 
-**Live demo:** _link added after the first deploy_
+**Live demo:** https://gatherwise-zeta.vercel.app
 
 ## 60-second demo path
 

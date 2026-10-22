@@ -89,8 +89,6 @@ const headings = missingHeadings(readme);
 verify('README has the four required headings', headings.length === 0);
 for (const heading of headings) process.stdout.write(`  missing heading: ${heading}\n`);
 
-// A warning, not a failure, until the first deploy adds the link to the README.
-const live = hasLiveUrl(readme) ? 'PASS' : 'WARN';
-process.stdout.write(`${live} README links the live demo (https://….vercel.app)\n`);
+verify('README links the live demo (https://….vercel.app)', hasLiveUrl(readme));
 
 if (checks.some((check) => !check.passed)) process.exitCode = 1;
