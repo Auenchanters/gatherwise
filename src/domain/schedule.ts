@@ -58,9 +58,12 @@ export interface Schedule {
   readonly overdueCount: number;
 }
 
-/** Why no schedule could be built: a dependency cycle, or an event date outside the planning window. */
+/**
+ * Why no schedule could be built: a dependency cycle, or an event date outside the planning
+ * window.
+ */
 export type ScheduleError =
-  | { readonly kind: 'cycle'; readonly path: TaskId[] }
+  | { readonly kind: 'cycle'; readonly path: readonly TaskId[] }
   | { readonly kind: 'invalid_date'; readonly reason: 'invalid' | 'past' | 'too_far' };
 
 /**

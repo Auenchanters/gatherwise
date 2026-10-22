@@ -26,13 +26,16 @@ interface Progress {
   readonly checklistDone: readonly string[];
 }
 
+/** Why the AI step produced no suggestions, as the browser's client reports it. */
+export type AiErrorCode = 'network' | 'timeout' | 'rate_limited' | 'unavailable' | 'invalid';
+
 /** Where the one model call for this plan stands. Absent fields are left out, never `undefined`. */
 export interface AiState {
   readonly status: 'idle' | 'pending' | 'applied' | 'failed';
   readonly suggestions?: AiSuggestions;
   readonly meta?: AiMeta;
-  /** A short client error code, set only while `status` is `failed`. */
-  readonly error?: string;
+  /** Why the call failed; set only while `status` is `failed`. */
+  readonly error?: AiErrorCode;
 }
 
 /** Why an action was refused. The plan before it is kept. */
@@ -76,7 +79,7 @@ export type PlanAction =
       readonly suggestions: AiSuggestions;
       readonly meta: AiMeta;
     }
-  | { readonly type: 'ai/failed'; readonly generation: number; readonly error: string }
+  | { readonly type: 'ai/failed'; readonly generation: number; readonly error: AiErrorCode }
   | { readonly type: 'guests/changed'; readonly guests: number }
   | { readonly type: 'budget/changed'; readonly budget: number }
   | { readonly type: 'date/changed'; readonly date: string }
@@ -176,13 +179,13 @@ function submit(state: PlanState, brief: EventBrief, today: IsoDate): PlanState 
  * The generation only ever goes up: a submitted brief takes the next one, and `plan/reset` keeps it.
  *
  * Every edit re-derives the plan locally and leaves `ai` as it was, so only `ai/*` actions concern
- * the model (the zero-call guarantee). A vendor status or checklist tick cannot change the plan, so it
- * keeps the same `plan` object (stable for memoisation) and only the progress is new. Guests change `brief.guests` but not `plannedGuests`, so the
- * budget rescales; a new budget re-plans at the current guest count. Actions that need a plan do
- * nothing on an empty state, `ai/*` actions do nothing when their `generation` is not the current
- * one, and a task, vendor or checklist id the plan does not have is ignored (progress stays bounded).
- * A new response replaces the old, so ticks on `ai-task-N` ids are cleared: the same id could be
- * a different task now.
+ * the model (the zero-call guarantee). A vendor status or checklist tick cannot change the plan, so
+ * it keeps the same `plan` object (stable for memoisation) and only the progress is new. Guests
+ * change `brief.guests` but not `plannedGuests`, so the budget rescales; a new budget re-plans at
+ * the current guest count. Actions that need a plan do nothing on an empty state, `ai/*` actions do
+ * nothing when their `generation` is not the current one, and a task, vendor or checklist id the
+ * plan does not have is ignored (progress stays bounded). A new response replaces the old, so ticks
+ * on `ai-task-N` ids are cleared: the same id could be a different task now.
  */
 export function planReducer(state: PlanState, action: PlanAction): PlanState {
   if (action.type === 'plan/reset') return { phase: 'empty', generation: state.generation };

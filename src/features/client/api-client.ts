@@ -9,11 +9,11 @@
  * none (edits never reach this client), an explicit refresh costs one, an identical brief costs none.
  */
 import { z } from 'zod';
-import { templateFor, templateIds } from '../../domain/templates/index.js';
+import type { AiErrorCode } from '../../domain/reducer.js';
+import { suggestionsSchemaFor } from '../../shared/prompt.js';
 import { err, ok, type Result } from '../../shared/result.js';
 import {
   aiMetaSchema,
-  aiSuggestionsSchema,
   type AiMeta,
   type AiSuggestions,
   type EventBrief,
@@ -37,7 +37,7 @@ export interface SuggestResponse {
 
 /** Why a request produced no suggestions; the plan itself is unaffected. */
 export interface ClientError {
-  readonly code: 'network' | 'timeout' | 'rate_limited' | 'unavailable' | 'invalid';
+  readonly code: AiErrorCode;
   /** Only for `rate_limited`, only when the server's `Retry-After` was a sane 1 to 3600. */
   readonly retryAfterSeconds?: number;
 }
@@ -182,7 +182,7 @@ function interpret(brief: EventBrief, reply: Reply): Result<SuggestResponse, Cli
   const body = parseJson(reply.text);
   if (reply.status !== 200) return err(failureOf(reply.status, body, reply.retryAfter));
   const expected = z.object({
-    suggestions: aiSuggestionsSchema(templateIds(templateFor(brief.kind))),
+    suggestions: suggestionsSchemaFor(brief.kind),
     meta: aiMetaSchema,
   });
   const parsed = expected.safeParse(body);

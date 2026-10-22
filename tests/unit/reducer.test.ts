@@ -277,12 +277,14 @@ describe('the AI lifecycle', () => {
 
   it('keeps an earlier result when a refresh fails or is pending', () => {
     const before = applied();
-    const failed = ready(planReducer(before, { type: 'ai/failed', generation: 1, error: 'busy' }));
+    const failed = ready(
+      planReducer(before, { type: 'ai/failed', generation: 1, error: 'rate_limited' }),
+    );
     expect(failed.ai).toEqual({
       status: 'failed',
       suggestions: clean,
       meta,
-      error: 'busy',
+      error: 'rate_limited',
     });
     expect(failed.plan).toEqual(before.plan);
     const pending = ready(planReducer(before, { type: 'ai/requested', generation: 1 }));
@@ -293,7 +295,7 @@ describe('the AI lifecycle', () => {
   it.each<PlanAction>([
     { type: 'ai/requested', generation: 0 },
     { type: 'ai/applied', generation: 2, suggestions: clean, meta },
-    { type: 'ai/failed', generation: 7, error: 'late' },
+    { type: 'ai/failed', generation: 7, error: 'network' },
   ])('ignores a stale or foreign $type', (action) => {
     const state = submitted();
     expect(planReducer(state, action)).toBe(state);
@@ -628,7 +630,7 @@ describe('rejected edits keep the plan and set an error; the next good edit clea
     const failed = ready(planReducer(inProgress(), { type: 'guests/changed', guests: 0 }));
     const good: readonly PlanAction[] = [
       { type: 'ai/requested', generation: 1 },
-      { type: 'ai/failed', generation: 1, error: 'x' },
+      { type: 'ai/failed', generation: 1, error: 'unavailable' },
       { type: 'ai/applied', generation: 1, suggestions: clean, meta },
       { type: 'budget/changed', budget: 160_000 },
       { type: 'date/changed', date: '2026-12-13' },
@@ -687,7 +689,7 @@ describe('plan/reset and the empty state', () => {
     expect(second.ai).toEqual({ status: 'idle' });
     for (const action of [
       { type: 'ai/applied', generation: 1, suggestions: clean, meta },
-      { type: 'ai/failed', generation: 1, error: 'late' },
+      { type: 'ai/failed', generation: 1, error: 'invalid' },
       { type: 'ai/requested', generation: 1 },
     ] satisfies PlanAction[]) {
       expect(planReducer(second, action), action.type).toBe(second);

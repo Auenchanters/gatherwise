@@ -25,9 +25,10 @@ export const isOutdoor: Condition = (b) =>
 /** True unless the event is held at home, where there is no venue to book. */
 export const hostedOutsideHome: Condition = (b) => b.venue !== 'home';
 
-const MINUTES_PER_HOUR = 60;
+/** Minutes in an hour. */
+export const MINUTES_PER_HOUR = 60;
 
-/** Minutes after midnight for an `HH:MM` string. Also used by the volunteer shift planner. */
+/** Minutes after midnight for an `HH:MM` string. */
 export const minutesOf = (hhmm: string): number =>
   Number(hhmm.slice(0, 2)) * MINUTES_PER_HOUR + Number(hhmm.slice(3, 5));
 

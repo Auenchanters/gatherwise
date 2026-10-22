@@ -3,12 +3,13 @@
  * Outlook calendars import.
  * Does: writes one all-day event for the event itself, then one for each task that is not done, on
  * the task's latest start. Every text value is escaped (backslash, semicolon, comma, line breaks as
- * `\n`) and every other control character, line separator and lone surrogate is dropped, so no
- * title, note or name can end its line and start a property or an event of its own. Lines over 75
- * octets are folded between code points, so a UTF-8 sequence or a surrogate pair is never cut in
- * half. Task events are marked free (`TRANSP:TRANSPARENT`) so reminders do not block the user's days.
- * A task Gemini added (see `isAiTask`) says "AI · personalized" at the start
- * of its description, so the label travels with the text into the user's calendar.
+ * `\n`), a tab becomes a space, and every other control character, line separator and lone
+ * surrogate is dropped, so no title, note or name can end its line and start a property or an
+ * event of its own. Lines over 75 octets are folded between code points, so a UTF-8 sequence or a
+ * surrogate pair is never cut in half. Task events are marked free (`TRANSP:TRANSPARENT`) so
+ * reminders do not block the user's days. A task Gemini added (see `isAiTask`) says
+ * "AI · personalized" at the start of its description, so the label travels with the text into
+ * the user's calendar.
  * Never does: read the clock (the `DTSTAMP` is a parameter); emit unescaped user or model text;
  * modify its inputs.
  */

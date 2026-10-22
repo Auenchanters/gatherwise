@@ -133,7 +133,7 @@ export function buildBudget(
   );
   const drafts = template.categories.map((category, i): LineDraft => {
     // `allocate` returns one share per weight, so the default only satisfies the indexed access.
-    const [allocated = minor(0)] = shares.slice(i);
+    const allocated = shares[i] ?? minor(0);
     return { categoryId: category.id, label: category.label, allocated, scales: category.scales };
   });
   const { currency, guests } = brief;

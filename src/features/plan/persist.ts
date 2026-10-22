@@ -16,16 +16,11 @@ import {
   type PlanState,
   type ReadyState,
 } from '../../domain/reducer.js';
-import { templateFor, templateIds } from '../../domain/templates/index.js';
 import { VENDOR_STATUSES } from '../../domain/vendors.js';
 import { LIMITS } from '../../shared/limits.js';
+import { suggestionsSchemaFor } from '../../shared/prompt.js';
 import { err, type Result } from '../../shared/result.js';
-import {
-  aiMetaSchema,
-  aiSuggestionsSchema,
-  eventBriefSchema,
-  type EventBrief,
-} from '../../shared/schema.js';
+import { aiMetaSchema, eventBriefSchema, type EventBrief } from '../../shared/schema.js';
 import { STORAGE_KEY } from './storage-key.js';
 
 // The key lives in an import-free module so the first page can check for a saved plan cheaply.
@@ -68,7 +63,7 @@ const envelopeSchema = z.strictObject({
 /** The AI part of a stored plan: both halves, with ids that exist in this brief's template. */
 const aiSchemaFor = (kind: EventBrief['kind']) =>
   z.strictObject({
-    suggestions: aiSuggestionsSchema(templateIds(templateFor(kind))),
+    suggestions: suggestionsSchemaFor(kind),
     meta: aiMetaSchema,
   });
 

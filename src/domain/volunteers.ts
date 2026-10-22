@@ -10,7 +10,7 @@
  * show it.
  */
 import type { EventBrief } from '../shared/schema.js';
-import { minutesOf } from './templates/conditions.js';
+import { MINUTES_PER_HOUR, minutesOf } from './templates/conditions.js';
 
 /** Length of a full shift in hours. */
 export const SHIFT_HOURS = 3;
@@ -19,7 +19,6 @@ export const GUESTS_PER_VOLUNTEER = 25;
 /** The fewest volunteers a shift ever needs, even for a tiny crowd. */
 export const MIN_PER_SHIFT = 2;
 
-const MINUTES_PER_HOUR = 60;
 const MINUTES_PER_DAY = 24 * MINUTES_PER_HOUR;
 
 /** One block of the event and how well it is staffed. */
