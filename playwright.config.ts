@@ -2,6 +2,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const origin = 'http://127.0.0.1:4173';
+const serve = 'npm run preview -- --port 4173 --strictPort';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -26,7 +27,8 @@ export default defineConfig({
     ? {}
     : {
         webServer: {
-          command: 'npm run build && npm run preview -- --port 4173 --strictPort',
+          // CI has already built (`npm run verify` runs first), so it only serves that build.
+          command: process.env.CI ? serve : `npm run build && ${serve}`,
           url: origin,
           reuseExistingServer: !process.env.CI,
           timeout: 120_000,
