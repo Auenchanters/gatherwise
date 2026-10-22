@@ -2,8 +2,8 @@
  * The zod contracts shared by browser and server: the user's EventBrief (strict, validated at the
  * trust boundary), the per-template AiSuggestions Gemini returns (strict on shape and ids only) and
  * the AiMeta that travels beside them.
- * Never trusts model numbers: the LIMITS.ai bounds (limits.ts) are hints in the JSON Schema and
- * are enforced by the engine.
+ * Never trusts model numbers: the LIMITS.ai bounds (limits.ts) go to Gemini in its JSON Schema,
+ * and the engine enforces them whatever comes back.
  */
 import { z } from 'zod';
 import { LIMITS } from './limits.js';
@@ -97,65 +97,84 @@ export interface TemplateIds {
   readonly vendors: readonly [string, ...string[]];
 }
 
-// Strict on shape and ids, lenient on quantities: absurd numbers must reach the engine so it can
-// clamp and log them rather than reject a paid response. The bounds travel as `.describe()` hints.
-const buildAiSchema = (ids: TemplateIds) => {
+/**
+ * Gemini's answer for one template: strict on shape and ids (every id field is an enum of that
+ * template's ids). `bounded` is for the copy Gemini is given: it adds the string and number caps
+ * from `LIMITS.ai` as `maxLength`, `minimum` and `maximum`. List caps stay descriptions only: with
+ * `maxItems` on three or more lists, Gemini refused the whole request (400 INVALID_ARGUMENT, checked
+ * live on 2026-10-22), so the server caps lists instead (sanitize.ts). The copy that parses answers
+ * has no caps at all, so an absurd value reaches the engine to be clamped and listed instead of
+ * costing the whole paid answer.
+ */
+const buildAiSchema = (ids: TemplateIds, bounded: boolean) => {
   const ai = LIMITS.ai;
+  const text = (max: number, hint: string) =>
+    (bounded ? z.string().max(max) : z.string()).describe(hint);
+  const count = (min: number, max: number, hint: string) =>
+    (bounded ? z.number().min(min).max(max) : z.number()).describe(hint);
+  const list = <T extends z.ZodType>(item: T, hint: string) => z.array(item).describe(hint);
   const categoryId = z.enum(ids.categories);
   return z.strictObject({
-    summary: z.string().describe(`Plan summary, at most ${ai.summaryMax} characters.`),
-    ideas: z
-      .array(
-        z.strictObject({
-          title: z.string().describe(`At most ${ai.ideaTitleMax} characters.`),
-          description: z.string().describe(`At most ${ai.ideaDescriptionMax} characters.`),
-          categoryId,
-          estimatedCost: z.number().describe('Whole major currency units, 0 or more.'),
-          personalization: z
-            .string()
-            .describe(
-              `Names the brief fields this idea answers to, at most ${ai.personalizationMax} characters.`,
-            ),
-        }),
-      )
-      .describe(`At most ${ai.ideasMax} ideas.`),
-    extraTasks: z
-      .array(
-        z.strictObject({
-          title: z.string().describe(`At most ${ai.taskTitleMax} characters.`),
-          categoryId,
-          durationDays: z
-            .number()
-            .describe(`Duration in days, ${ai.durationMin} to ${ai.durationMax}.`),
-          leadDays: z
-            .number()
-            .describe(
-              `Days before the event (negative means after), ${ai.leadMin} to ${ai.leadMax}.`,
-            ),
-          after: z
-            .array(z.enum(ids.tasks))
-            .describe(`At most ${ai.afterMax} task ids this follows.`),
-        }),
-      )
-      .describe(`At most ${ai.extraTasksMax} tasks.`),
-    vendorQuestions: z
-      .array(
-        z.strictObject({
-          vendorId: z.enum(ids.vendors),
-          questions: z
-            .array(z.string().describe(`At most ${ai.questionMax} characters each.`))
-            .describe(`At most ${ai.questionsPerVendorMax} questions.`),
-        }),
-      )
-      .describe(`At most ${ai.vendorQuestionsMax} vendors.`),
+    summary: text(ai.summaryMax, `Plan summary, at most ${ai.summaryMax} characters.`),
+    ideas: list(
+      z.strictObject({
+        title: text(ai.ideaTitleMax, `At most ${ai.ideaTitleMax} characters.`),
+        description: text(ai.ideaDescriptionMax, `At most ${ai.ideaDescriptionMax} characters.`),
+        categoryId,
+        estimatedCost: count(
+          0,
+          LIMITS.brief.budgetMax,
+          'Whole major currency units, 0 or more, within the category amount.',
+        ),
+        personalization: text(
+          ai.personalizationMax,
+          `Names the brief fields this idea answers to, at most ${ai.personalizationMax} characters.`,
+        ),
+      }),
+      `At most ${ai.ideasMax} ideas.`,
+    ),
+    extraTasks: list(
+      z.strictObject({
+        title: text(ai.taskTitleMax, `At most ${ai.taskTitleMax} characters.`),
+        categoryId,
+        durationDays: count(
+          ai.durationMin,
+          ai.durationMax,
+          `Duration in whole days, ${ai.durationMin} to ${ai.durationMax}.`,
+        ),
+        leadDays: count(
+          ai.leadMin,
+          ai.leadMax,
+          `Whole days before the event (negative means after), ${ai.leadMin} to ${ai.leadMax}.`,
+        ),
+        after: list(z.enum(ids.tasks), `At most ${ai.afterMax} task ids this follows.`),
+      }),
+      `At most ${ai.extraTasksMax} tasks.`,
+    ),
+    vendorQuestions: list(
+      z.strictObject({
+        vendorId: z.enum(ids.vendors),
+        questions: list(
+          text(ai.questionMax, `At most ${ai.questionMax} characters each.`),
+          `At most ${ai.questionsPerVendorMax} questions.`,
+        ),
+      }),
+      `At most ${ai.vendorQuestionsMax} vendors.`,
+    ),
   });
 };
+/** The zod schema of one template's answer; its `shape` gives each section's own schema. */
+export type AiSuggestionsSchema = ReturnType<typeof buildAiSchema>;
 /** Gemini's structured response, with ids as plain strings (the schema narrows them per template). */
-export type AiSuggestions = z.infer<ReturnType<typeof buildAiSchema>>;
+export type AiSuggestions = z.infer<AiSuggestionsSchema>;
 
-/** Builds the response schema for one template, so the model cannot reference unknown ids. */
-export const aiSuggestionsSchema = (ids: TemplateIds): z.ZodType<AiSuggestions> =>
-  buildAiSchema(ids);
+/** The schema answers are parsed with: strict shape and ids, no caps on quantities. */
+export const aiSuggestionsSchema = (ids: TemplateIds): AiSuggestionsSchema =>
+  buildAiSchema(ids, false);
+
+/** The schema Gemini is given, as JSON Schema: the parse schema plus the string and number caps. */
+export const aiResponseJsonSchema = (ids: TemplateIds): z.core.JSONSchema.BaseSchema =>
+  z.toJSONSchema(buildAiSchema(ids, true));
 
 /** What the server reports about one model call, shown in the "AI at work" panel and kept with the plan. */
 export const aiMetaSchema = z.strictObject({

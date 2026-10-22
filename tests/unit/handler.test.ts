@@ -368,11 +368,49 @@ describe('request matrix', () => {
     expect((await errorOf(response)).code).toBe('INVALID_RESPONSE');
   });
 
-  it('502 INVALID_RESPONSE when the model names an unknown category', async () => {
-    const bad = { ...SUGGESTIONS, ideas: [{ ...SUGGESTIONS.ideas[0], categoryId: 'yacht' }] };
+  it('200 without the one item that names an unknown category, and the drop is logged', async () => {
+    const [idea] = SUGGESTIONS.ideas;
+    const bad = { ...SUGGESTIONS, ideas: [{ ...idea, categoryId: 'yacht' }, idea] };
     const response = await handlerWith({ generate: answering(JSON.stringify(bad)) })(post());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ suggestions: SUGGESTIONS });
+    expect(JSON.parse(String(info.mock.calls[0]?.[0]))).toMatchObject({ status: 200, dropped: 1 });
+  });
+
+  it('502 INVALID_RESPONSE when nothing in the answer is usable', async () => {
+    const empty = { summary: '', ideas: [{ categoryId: 'yacht' }], extraTasks: [] };
+    const response = await handlerWith({ generate: answering(JSON.stringify(empty)) })(post());
     expect(response.status).toBe(502);
     expect((await errorOf(response)).code).toBe('INVALID_RESPONSE');
+  });
+
+  it('502 INVALID_RESPONSE, logged as truncated, when the model stopped at its output cap', async () => {
+    const cut = JSON.stringify(SUGGESTIONS).slice(0, 80);
+    const generate = vi.fn<Generate>(() =>
+      Promise.resolve({ text: cut, inputTokens: 900, outputTokens: 4096, truncated: true }),
+    );
+    const response = await handlerWith({ generate })(post());
+    expect(response.status).toBe(502);
+    expect((await errorOf(response)).code).toBe('INVALID_RESPONSE');
+    expect(JSON.parse(String(error.mock.calls[0]?.[0]))).toMatchObject({
+      status: 502,
+      code: 'INVALID_RESPONSE',
+      event: 'truncated',
+      outputTokens: 4096,
+    });
+  });
+
+  it('still uses a truncated answer that parses, and logs that it was truncated', async () => {
+    const generate = vi.fn<Generate>(() =>
+      Promise.resolve({
+        text: JSON.stringify(SUGGESTIONS),
+        inputTokens: 1,
+        outputTokens: 1,
+        truncated: true,
+      }),
+    );
+    expect((await handlerWith({ generate })(post())).status).toBe(200);
+    expect(JSON.parse(String(info.mock.calls[0]?.[0]))).toMatchObject({ event: 'truncated' });
   });
 
   it('200 with suggestions, validated meta and no-store for a valid request', async () => {
@@ -502,11 +540,13 @@ describe('request logging', () => {
     expect(success).toMatchObject({
       route: '/api/plan',
       status: 200,
-      event: 'community',
+      eventKind: 'community',
       inputTokens: 300,
       outputTokens: 420,
     });
     expect(success).not.toHaveProperty('kind');
+    expect(success).not.toHaveProperty('event');
+    expect(success).not.toHaveProperty('dropped');
     expect(success).toHaveProperty('latencyMs', expect.any(Number));
     expect(invalid).toMatchObject({ status: 502, code: 'INVALID_RESPONSE', inputTokens: 300 });
     expect(unavailable).toMatchObject({ status: 502, code: 'AI_UNAVAILABLE' });

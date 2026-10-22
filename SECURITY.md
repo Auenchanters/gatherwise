@@ -33,10 +33,12 @@ interface RequestLog {
   readonly status: number;
   readonly code?: ErrorCode; // the catalogued error code, on failures
   readonly kind?: 'internal'; // marks an unexpected fault (a 500) without logging its message
-  readonly event?: 'community' | 'wedding' | 'birthday'; // once the brief has parsed
+  readonly event?: 'truncated'; // the model stopped at its output-token cap
+  readonly eventKind?: 'community' | 'wedding' | 'birthday'; // once the brief has parsed
   readonly latencyMs: number;
   readonly inputTokens?: number;
   readonly outputTokens?: number;
+  readonly dropped?: number; // answer items that failed the schema and were left out
 }
 ```
 
@@ -49,7 +51,7 @@ A line from the runtime smoke test in `npm run build`:
   "status": 503,
   "code": "AI_NOT_CONFIGURED",
   "latencyMs": 10,
-  "event": "community"
+  "eventKind": "community"
 }
 ```
 

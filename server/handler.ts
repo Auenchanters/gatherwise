@@ -40,7 +40,9 @@ export interface HandlerOptions {
 
 /** Facts about a request gathered for its log line as handling proceeds. */
 interface Trace {
-  event?: EventKind;
+  eventKind?: EventKind;
+  event?: 'truncated';
+  dropped?: number;
   inputTokens?: number;
   outputTokens?: number;
   /** Set for an unexpected fault, so a 500 is traceable without logging what was thrown. */
@@ -99,7 +101,7 @@ export function createHandler(
     validateTransport(request, origin);
     rateLimit(clientId(request), now().getTime());
     const brief = await readBrief(request);
-    trace.event = brief.kind;
+    trace.eventKind = brief.kind;
     const plan = planFor(brief, now());
     if (!generate) throw new AppError('AI_NOT_CONFIGURED');
     request.signal.throwIfAborted();
@@ -110,7 +112,10 @@ export function createHandler(
     const { inputTokens, outputTokens } = generation;
     trace.inputTokens = inputTokens;
     trace.outputTokens = outputTokens;
-    const suggestions = parseSuggestions(generation.text, brief.kind);
+    // A cut-off answer rarely parses; if one does, what it holds is still used.
+    if (generation.truncated === true) trace.event = 'truncated';
+    const { suggestions, dropped } = parseSuggestions(generation.text, brief.kind);
+    if (dropped > 0) trace.dropped = dropped;
     // Checked at runtime too: a bad model id or token count must not reach the client's store.
     const meta = aiMetaSchema.safeParse({ model, latencyMs, inputTokens, outputTokens, requestId });
     if (!meta.success) throw new AppError('INVALID_RESPONSE');

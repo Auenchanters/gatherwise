@@ -16,6 +16,7 @@ import {
   SUBTYPES,
   VENUES,
   aiMetaSchema,
+  aiResponseJsonSchema,
   aiSuggestionsSchema,
   eventBriefSchema,
   type AiSuggestions,
@@ -356,7 +357,7 @@ describe('aiSuggestionsSchema', () => {
     expect(accepts({ ...ai, ideas: [{ ...idea, estimatedCost: Infinity }] })).toBe(false);
   });
 
-  it('converts to JSON Schema with ids as enums, strict objects and the bounds as hints', () => {
+  it('converts to JSON Schema with ids as enums, strict objects and the bounds as hints only', () => {
     const json = JSON.stringify(z.toJSONSchema(schema));
     expect(json).toContain('"enum"');
     for (const id of [...ids.categories, ...ids.tasks, ...ids.vendors])
@@ -368,6 +369,23 @@ describe('aiSuggestionsSchema', () => {
     expect(json).not.toContain('"maxItems"');
     expect(json).not.toContain('"maxLength"');
     expect(json).not.toContain('"maximum"');
+  });
+
+  it('gives Gemini the string and number caps as keywords, but not the list caps', () => {
+    const json = JSON.stringify(aiResponseJsonSchema(ids));
+    for (const cap of [
+      `"maxLength":${LIMITS.ai.summaryMax}`,
+      `"maxLength":${LIMITS.ai.ideaTitleMax}`,
+      `"maxLength":${LIMITS.ai.questionMax}`,
+      `"minimum":${LIMITS.ai.leadMin}`,
+      `"maximum":${LIMITS.ai.leadMax}`,
+      `"maximum":${LIMITS.brief.budgetMax}`,
+    ]) {
+      expect(json).toContain(cap);
+    }
+    // Gemini refuses a request whose schema has maxItems on three or more lists.
+    expect(json).not.toContain('"maxItems"');
+    expect(json).toContain(`${LIMITS.ai.ideasMax} ideas`);
   });
 });
 

@@ -14,7 +14,7 @@ import { templateFor } from '../../src/domain/templates/index.js';
 import { LIMITS } from '../../src/shared/limits.js';
 import { buildPrompt, buildUserPrompt, SYSTEM_INSTRUCTION } from '../../src/shared/prompt.js';
 import { sanitizeText } from '../../src/shared/sanitize-text.js';
-import { eventBriefSchema, type EventBrief } from '../../src/shared/schema.js';
+import { EVENT_KINDS, eventBriefSchema, type EventBrief } from '../../src/shared/schema.js';
 import { brief, TODAY } from '../support/fixtures.js';
 
 function planOf(b: EventBrief): Plan {
@@ -93,6 +93,45 @@ describe('buildUserPrompt', () => {
     expect(indoor.tasks.length).toBeLessThan(template.tasks.length);
   });
 
+  it.each(EVENT_KINDS)(
+    'gives Gemini a %s schema that uses only JSON Schema keywords it accepts',
+    (kind) => {
+      // The keywords the @google/genai docs list for responseJsonSchema, plus `maxLength` and the
+      // top-level `$schema`, both accepted live. `maxItems` is listed there but refused on three or
+      // more lists (400 INVALID_ARGUMENT), so the list caps travel as descriptions instead.
+      const accepted = new Set([
+        '$schema',
+        'type',
+        'properties',
+        'required',
+        'additionalProperties',
+        'enum',
+        'items',
+        'description',
+        'maxLength',
+        'minimum',
+        'maximum',
+      ]);
+      const used = new Set<string>();
+      /** Collects the keywords of a schema node; under `properties` the keys are field names. */
+      const walk = (node: unknown, fields = false): void => {
+        if (typeof node !== 'object' || node === null) return;
+        for (const [key, value] of Object.entries(node)) {
+          if (fields) {
+            walk(value);
+          } else {
+            used.add(key);
+            if (key === 'properties') walk(value, true);
+            else if (key === 'items' || key === 'additionalProperties') walk(value);
+          }
+        }
+      };
+      walk(buildPrompt(planOf(brief(kind))).schema);
+      expect([...used].filter((keyword) => !accepted.has(keyword))).toEqual([]);
+      for (const keyword of ['enum', 'maxLength', 'maximum']) expect(used).toContain(keyword);
+    },
+  );
+
   it('builds the full prompt from the fixed instruction and the kind-specific schema', () => {
     const wedding = buildPrompt(planOf(brief('wedding')));
     expect(wedding.system).toBe(SYSTEM_INSTRUCTION);
@@ -140,39 +179,73 @@ describe('injection corpus', () => {
 });
 
 describe('parseSuggestions', () => {
+  const idea = {
+    title: '<script>alert(1)</script>Lantern walk',
+    description: 'Paper lanterns along the path.',
+    categoryId: 'decor',
+    estimatedCost: 5000,
+    personalization: 'vibe',
+  };
   const valid = {
     summary: 'A bright <b>festival</b>',
-    ideas: [
-      {
-        title: '<script>alert(1)</script>Lantern walk',
-        description: 'Paper lanterns along the path.',
-        categoryId: 'decor',
-        estimatedCost: 5000,
-        personalization: 'vibe',
-      },
-    ],
+    ideas: [idea],
     extraTasks: [],
     vendorQuestions: [],
   };
+  const read = (value: unknown) => parseSuggestions(JSON.stringify(value), 'community');
 
-  it('returns schema-valid suggestions with every string sanitized', () => {
-    const parsed = parseSuggestions(JSON.stringify(valid), 'community');
-    expect(parsed.summary).toBe('A bright festival');
-    expect(parsed.ideas[0]?.title).toBe('alert(1) Lantern walk');
+  it('returns schema-valid suggestions with every string sanitized and nothing dropped', () => {
+    const { suggestions, dropped } = read(valid);
+    expect(suggestions.summary).toBe('A bright festival');
+    expect(suggestions.ideas[0]?.title).toBe('alert(1) Lantern walk');
+    expect(dropped).toBe(0);
+  });
+
+  it('drops only the items that fail the schema and counts them', () => {
+    const { suggestions, dropped } = read({
+      ...valid,
+      ideas: [
+        { ...idea, categoryId: 'yacht' },
+        idea,
+        { ...idea, categoryId: 'catering' },
+        { ...idea, rating: 5 },
+      ],
+      extraTasks: [
+        { title: 'Print kits', categoryId: 'decor', durationDays: 2, leadDays: 9, after: ['x'] },
+      ],
+      vendorQuestions: [{ vendorId: 'tent_shamiana', questions: ['Rain-proof?'] }, 'junk'],
+    });
+    expect(suggestions.ideas).toHaveLength(1);
+    expect(suggestions.extraTasks).toEqual([]);
+    expect(suggestions.vendorQuestions).toEqual([
+      { vendorId: 'tent_shamiana', questions: ['Rain-proof?'] },
+    ]);
+    expect(dropped).toBe(5);
+  });
+
+  it('keeps the other sections when one is missing or of the wrong type', () => {
+    expect(read({ ideas: [idea], extraTasks: 'none', summary: 7 })).toEqual({
+      suggestions: {
+        summary: '',
+        ideas: [{ ...idea, title: 'alert(1) Lantern walk' }],
+        extraTasks: [],
+        vendorQuestions: [],
+      },
+      dropped: 2,
+    });
+  });
+
+  it('ignores a key outside the four sections', () => {
+    expect(read({ ...valid, apiKey: 'leak' }).suggestions).not.toHaveProperty('apiKey');
   });
 
   it.each([
     ['text that is not JSON', 'Sure! Here are some ideas'],
     ['an empty response', ''],
-    [
-      'an unknown category id',
-      JSON.stringify({ ...valid, ideas: [{ ...valid.ideas[0], categoryId: 'yacht' }] }),
-    ],
-    [
-      'a category from another template',
-      JSON.stringify({ ...valid, ideas: [{ ...valid.ideas[0], categoryId: 'catering' }] }),
-    ],
-    ['an extra key', JSON.stringify({ ...valid, apiKey: 'leak' })],
+    ['a cut-off answer', JSON.stringify(valid).slice(0, 60)],
+    ['a JSON list', '[]'],
+    ['JSON null', 'null'],
+    ['an answer with nothing usable left', JSON.stringify({ summary: ' <b></b> ', ideas: [{}] })],
   ])('rejects %s as INVALID_RESPONSE', (_name, text) => {
     let caught: unknown;
     try {

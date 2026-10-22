@@ -3,7 +3,7 @@
  * Does: pins the request config (structured JSON, fixed instruction, bounded output, minimal
  * thinking, abort propagation), the one-time client construction and the token mapping.
  */
-import { ThinkingLevel } from '@google/genai';
+import { FinishReason, ThinkingLevel } from '@google/genai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createGeminiGenerator } from '../../server/provider.js';
 import type { Prompt } from '../../src/shared/prompt.js';
@@ -57,7 +57,7 @@ describe('createGeminiGenerator', () => {
         systemInstruction: prompt.system,
         responseMimeType: 'application/json',
         responseJsonSchema: prompt.schema,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 4096,
         temperature: 0.7,
         thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
         abortSignal: signal,
@@ -71,7 +71,21 @@ describe('createGeminiGenerator', () => {
       text: '{"summary":""}',
       inputTokens: 271,
       outputTokens: 430,
+      truncated: false,
     });
+  });
+
+  it('reports an answer that stopped at the output cap as truncated', async () => {
+    const generate = createGeminiGenerator('test-key-not-a-secret', 'm');
+    for (const [finishReason, truncated] of [
+      [FinishReason.MAX_TOKENS, true],
+      [FinishReason.STOP, false],
+    ] as const) {
+      mocks.generateContent.mockResolvedValue({ text: '{"sum', candidates: [{ finishReason }] });
+      await expect(generate(prompt, new AbortController().signal)).resolves.toMatchObject({
+        truncated,
+      });
+    }
   });
 
   it('defaults missing text and usage to empty and zero', async () => {
@@ -81,6 +95,7 @@ describe('createGeminiGenerator', () => {
       text: '',
       inputTokens: 0,
       outputTokens: 0,
+      truncated: false,
     });
   });
 

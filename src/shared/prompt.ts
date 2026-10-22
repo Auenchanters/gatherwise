@@ -16,7 +16,7 @@ import { templateFor, templateIds } from '../domain/templates/index.js';
 import type { EventKind } from '../domain/templates/types.js';
 import { LIMITS } from './limits.js';
 import { sanitizeText } from './sanitize-text.js';
-import { aiSuggestionsSchema, type AiSuggestions } from './schema.js';
+import { aiResponseJsonSchema, aiSuggestionsSchema, type AiSuggestionsSchema } from './schema.js';
 
 /** Fixed for every request; nothing from the user is ever added to it. Public, not a secret. */
 export const SYSTEM_INSTRUCTION = `You are Gatherwise, an event-planning assistant that personalizes plans for community events, weddings and birthdays.
@@ -38,10 +38,13 @@ export interface Prompt {
   readonly schema: z.core.JSONSchema.BaseSchema;
 }
 
-/** The zod schema for a template and the JSON Schema Gemini is given; Gemini accepts `$schema`. */
+/**
+ * The zod schema answers are parsed with, and the bounded JSON Schema Gemini is given (Gemini
+ * accepts the top-level `$schema`).
+ */
 function contractFor(kind: EventKind) {
-  const schema = aiSuggestionsSchema(templateIds(templateFor(kind)));
-  return { schema, json: z.toJSONSchema(schema) };
+  const ids = templateIds(templateFor(kind));
+  return { schema: aiSuggestionsSchema(ids), json: aiResponseJsonSchema(ids) };
 }
 
 // Three templates, so every schema is built once at load and never per request.
@@ -52,7 +55,7 @@ const CONTRACTS = {
 } satisfies Record<EventKind, ReturnType<typeof contractFor>>;
 
 /** The zod schema for one template's response (ids narrowed to that template), built once at load. */
-export const suggestionsSchemaFor = (kind: EventKind): z.ZodType<AiSuggestions> =>
+export const suggestionsSchemaFor = (kind: EventKind): AiSuggestionsSchema =>
   CONTRACTS[kind].schema;
 
 const { brief: caps } = LIMITS;

@@ -10,9 +10,9 @@ Gemini's suggestions must point at things the engine knows: an idea is filed und
 ## Decision
 
 - Build the response schema per template: `aiSuggestionsSchema(templateIds(template))` in `src/shared/schema.ts` makes every `categoryId`, `after` entry and `vendorId` a `z.enum` of that template's ids (`src/domain/templates/index.ts`).
-- Convert it with `z.toJSONSchema` and send it as `responseJsonSchema` with `responseMimeType: 'application/json'` (`src/shared/prompt.ts`, `server/provider.ts`). The server builds the three JSON schemas once, when the module loads.
-- Parse the answer with the same zod schema on the server (`server/answer.ts`), again in the browser (`src/features/client/api-client.ts`) and again when a saved plan is restored (`src/features/plan/persist.ts`).
-- Make the schema strict on shape and ids (strict objects, every key required) and lenient on quantities: numeric ranges, string lengths and list sizes travel as `.describe()` hints, and the engine enforces `LIMITS.ai` in `src/domain/merge.ts`.
+- Convert it with `z.toJSONSchema` and send it as `responseJsonSchema` with `responseMimeType: 'application/json'` (`src/shared/prompt.ts`, `server/provider.ts`). The copy Gemini is given also carries the string and number caps from `LIMITS.ai` as `maxLength`, `minimum` and `maximum` (`aiResponseJsonSchema`). List caps stay in the descriptions: with `maxItems` on three or more lists Gemini refused the whole request (400 `INVALID_ARGUMENT`, checked live). The server builds the three JSON schemas once, when the module loads, and `tests/unit/prompt.test.ts` pins that each uses only keywords Gemini accepts.
+- Parse the answer with the same zod schema on the server (`server/answer.ts`), again in the browser (`src/features/client/api-client.ts`) and again when a saved plan is restored (`src/features/plan/persist.ts`). The server parses each section, and each item of a list, on its own: an item that fails is left out and counted in the log line (`dropped`), and the rest is returned in the strict shape the browser checks.
+- Make the parse schema strict on shape and ids (strict objects, every key required) and lenient on quantities: the server then clamps numbers, cuts lists and caps strings to `LIMITS.ai` (`server/sanitize.ts`), and the engine enforces them again in `src/domain/merge.ts`, listing what it changes.
 
 ## Consequences
 
@@ -20,7 +20,7 @@ Gemini's suggestions must point at things the engine knows: an idea is filed und
 
 - After parsing, an unknown id cannot exist: the model structurally cannot reference a category, task or vendor the template does not have.
 - One absurd number (a cost of 10¹², a negative duration) is clamped and listed as an adjustment instead of discarding a paid answer.
-- A malformed answer is a single, catalogued failure (`INVALID_RESPONSE`, 502) with no repair call.
+- One bad item costs that item, not the paid answer. Only text that is not a JSON object, or an answer with nothing usable left, is a failure (`INVALID_RESPONSE`, 502), with no repair call.
 
 ### Negative
 

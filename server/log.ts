@@ -17,11 +17,15 @@ export interface RequestLog {
   readonly code?: ErrorCode;
   /** `internal` marks an unexpected fault (a bug), so it can be traced without its message. */
   readonly kind?: 'internal';
+  /** Something worth noticing: `truncated` when the model hit its output cap. */
+  readonly event?: 'truncated';
   /** The event kind of the brief, once it has parsed. */
-  readonly event?: EventKind;
+  readonly eventKind?: EventKind;
   readonly latencyMs: number;
   readonly inputTokens?: number;
   readonly outputTokens?: number;
+  /** Items of the model's answer left out because they failed the schema; absent when none. */
+  readonly dropped?: number;
 }
 
 /** Writes one request's log line. */
