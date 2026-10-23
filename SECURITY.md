@@ -6,6 +6,21 @@ Please report vulnerabilities privately through GitHub's private vulnerability r
 
 Only the `main` branch and its live deployment are supported.
 
+## Authentication and authorization
+
+Gatherwise has no accounts, no sign-in and no server-side store of plans, by design (`docs/adr/0004-validated-local-storage.md`). A plan lives in the visitor's own browser storage (`src/features/plan/persist.ts`), so there is nothing on the server that belongs to one user and must be kept from another, and nothing to authorize.
+
+What the server does guard is cost. `POST /api/plan` is the only endpoint that spends anything (one Gemini call), and four controls sit in front of it (`server/handler.ts`):
+
+1. **The request gate** (`server/request.ts`): POST only, `application/json` only, at most 64 KB, a strict schema for the brief and the optional adjustment, and a date inside the planning window.
+2. **The origin rule** (below): another website cannot make a visitor's browser call the API. It is CSRF hygiene, not authentication: a script outside a browser can send any `Origin`.
+3. **Per-client quotas** (`server/rate-limit.ts`): 10 plan requests a minute per client, shared by every instance through Upstash Redis. A client is a SHA-256 of the first address in `x-vercel-forwarded-for`, a header set by Vercel's edge rather than by the client.
+4. **A daily budget** for the whole deployment: 300 model calls a UTC day by default (`AI_DAILY_LIMIT`).
+
+So the worst a determined caller can do is spend the daily budget from many addresses. After that the API answers 503 `AI_BUSY` until UTC midnight, and every plan still works without AI ideas (`docs/adr/0006-per-section-degradation.md`). A caller cannot read another visitor's plan, because the server never has one, and cannot reach `GEMINI_API_KEY`, which is read only on the server and is never in a response, a log line or the client bundle.
+
+`GET /api/health` is public and says only whether the AI is configured (`{"status":"ok","ai":"configured"}`). It carries no version, build or environment detail.
+
 ## Threats and mitigations
 
 | Threat                                                                                                         | Mitigation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Where                                                                                                                                                          |
@@ -65,3 +80,9 @@ For `POST /api/plan`, `validateTransport` in `server/request.ts` allows exactly 
 - A request marked `Sec-Fetch-Site: cross-site` is refused with 403, whatever its `Origin`.
 - A missing `Origin` is refused. Browsers send `Origin` on every POST, same-origin ones included, so the app's own calls always carry it, and another website cannot make a visitor's browser call the API. A script outside a browser can set any `Origin` it likes, so this check is CSRF hygiene and not an abuse control: the size cap, the strict schema, the rate limits and the daily budget are what hold such callers (see `docs/KNOWN-LIMITATIONS.md`).
 - The comparison is exact string equality, after trimming the environment value. `APP_ORIGIN` must be an origin exactly as browsers send it: scheme, host and port only, with no trailing slash and no path. `https://example.com/` never matches; `https://example.com` does.
+
+## Verified on 2026-10-23
+
+- `npm audit --omit=dev`: 0 vulnerabilities. `npm audit` (the whole tree, dev tools included): 0 vulnerabilities.
+- CodeQL (`security-extended`), Gitleaks (full history) and the Quality workflow (with both audits): green on `2116f1e`.
+- The live site, checked with `curl`: every response carries the CSP above (no `unsafe-*`, Trusted Types required), HSTS, `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy` and `Permissions-Policy`. `POST /api/plan` answers malformed JSON with 400, a non-JSON body with 415, an oversize body with 413 and a GET with 405, each as a JSON error with no stack trace, and never sends `Access-Control-Allow-Origin`.
