@@ -4,7 +4,7 @@
  * ask that vendor.
  * Does: show the plan's vendors with the organizer's status and ticks already laid over them (the
  * workspace computes that once, with `vendorView`); label every checkbox with its item and every select with its vendor; announce each change
- * politely; label the AI questions "AI · personalized".
+ * politely; label the AI questions "AI · personalized" and tag them with the plan's language.
  * Never does: call the AI, decide how urgent a booking is (`bookingStatus` does), or show a status
  * by colour alone.
  */
@@ -12,6 +12,7 @@ import { useId, useState, type ReactElement } from 'react';
 import type { ReadyState } from '../../domain/reducer.js';
 import type { IsoDate } from '../../domain/dates.js';
 import { AI_LABEL } from '../../domain/merge.js';
+import { LANGUAGE_TAGS } from '../../shared/options.js';
 import {
   bookingStatus,
   VENDOR_STATUSES,
@@ -45,6 +46,8 @@ function VendorCard(props: {
   readonly vendor: VendorItem;
   readonly today: IsoDate;
   readonly questions: readonly string[] | undefined;
+  /** The language tag for Gemini's questions. */
+  readonly aiLang: string;
   readonly onStatus: (vendor: VendorItem, status: VendorStatus) => void;
   readonly onCheck: (item: VendorItem['checklist'][number]) => void;
 }): ReactElement {
@@ -116,7 +119,7 @@ function VendorCard(props: {
           <h4 className="vendor__questions-title">
             <span aria-hidden="true">✦</span> Questions to ask ({AI_LABEL})
           </h4>
-          <ul className="vendor__question-list">
+          <ul className="vendor__question-list" lang={props.aiLang}>
             {questions.map((question, index) => (
               <li key={index} dir="auto">
                 {question}
@@ -155,6 +158,7 @@ export function Vendors({ state, vendors, store }: VendorsProps): ReactElement {
             vendor={vendor}
             today={state.today}
             questions={questions?.[vendor.id]}
+            aiLang={LANGUAGE_TAGS[state.brief.language]}
             onStatus={(item, status) => {
               store.setVendorStatus(item.id, status);
               setMessage(`Marked '${item.label}' as ${STATUS_LABELS[status].toLowerCase()}`);

@@ -25,6 +25,7 @@ import {
   type TemplateIds,
 } from '../../src/shared/schema.js';
 import { LIMITS } from '../../src/shared/limits.js';
+import { LANGUAGE_TAGS } from '../../src/shared/options.js';
 
 const income = {
   ticketPrice: 100,
@@ -128,6 +129,20 @@ describe('option tuples', () => {
     // A brief saved or sent before the field existed is English, not invalid.
     expect(eventBriefSchema.parse(valid).language).toBe('English');
     expect(accepts({ ...valid, language: 'Klingon' })).toBe(false);
+  });
+
+  it('has a BCP 47 tag for every plan language, so AI text can say which language it is in', () => {
+    expect(Object.keys(LANGUAGE_TAGS)).toEqual([...LANGUAGES]);
+    expect(LANGUAGE_TAGS).toEqual({
+      English: 'en',
+      Hindi: 'hi',
+      Tamil: 'ta',
+      Telugu: 'te',
+      Bengali: 'bn',
+      Marathi: 'mr',
+      Spanish: 'es',
+      French: 'fr',
+    });
     expect(accepts({ ...valid, language: 'hindi' })).toBe(false);
   });
 

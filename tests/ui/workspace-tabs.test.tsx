@@ -718,6 +718,73 @@ describe('ideas', () => {
   });
 });
 
+describe('the language of AI text', () => {
+  const hindi = { ...festival, language: 'Hindi' as const };
+  /** The `lang` that applies to an element from inside the app (jsdom's <html> has none). */
+  const langOf = (element: Element): string | undefined =>
+    element.closest('[lang]')?.getAttribute('lang') ?? undefined;
+
+  it("marks what Gemini wrote with the plan's language, and nothing the app wrote", async () => {
+    await setup({ start: hindi });
+    expect(langOf(panel('Overview').getByText(aiSuggestions.summary))).toBe('hi');
+
+    const idea = itemOf(
+      panel('Ideas').getByRole('heading', { level: 3, name: 'Diya-lined walkways' }),
+    );
+    expect(langOf(within(idea).getByRole('heading', { level: 3 }))).toBe('hi');
+    expect(
+      langOf(
+        within(idea).getByText('Line the step-free paths with clay diyas from local potters.'),
+      ),
+    ).toBe('hi');
+    expect(langOf(within(idea).getByText('vibe: lantern-lit; accessibility: wheelchair'))).toBe(
+      'hi',
+    );
+    // The app's own words inside an AI card stay in the page's language.
+    expect(langOf(within(idea).getByText('Why:'))).toBeUndefined();
+    expect(langOf(within(idea).getByText('AI · personalized'))).toBeUndefined();
+
+    const aiTask = panel('Timeline').getByText(must(aiSuggestions.extraTasks[0]).title);
+    expect(langOf(aiTask)).toBe('hi');
+    const templateTasks = Array.from(document.querySelectorAll('.task__title')).filter(
+      (label) => label !== aiTask,
+    );
+    expect(templateTasks.length).toBeGreaterThan(0);
+    for (const label of templateTasks) expect(langOf(label)).toBeUndefined();
+
+    const tent = card('Tent / shamiana');
+    expect(langOf(within(tent).getByText('Is the tent rain-proof?'))).toBe('hi');
+    expect(langOf(within(tent).getByRole('heading', { level: 4 }))).toBeUndefined();
+  });
+
+  it('tags an English plan\'s AI text "en"', async () => {
+    await setup();
+    expect(langOf(panel('Overview').getByText(aiSuggestions.summary))).toBe('en');
+  });
+
+  it('leaves the standard ideas untagged when there is no AI answer', async () => {
+    const client = fakeClient(() => Promise.resolve(err({ code: 'unavailable' })));
+    await setup({ client, start: hindi });
+    const titles = panel('Ideas').getAllByRole('heading', { level: 3 });
+    expect(titles.length).toBeGreaterThan(0);
+    for (const title of titles) expect(langOf(title)).toBeUndefined();
+  });
+
+  it('keeps the language when a saved plan is restored, without an AI call', async () => {
+    const client = fakeClient();
+    const { store } = await setup({
+      client,
+      storage: savedStorage(planned(hindi, { withAi: true })),
+      start: null,
+    });
+    act(() => {
+      store.hydrate();
+    });
+    expect(langOf(panel('Overview').getByText(aiSuggestions.summary))).toBe('hi');
+    expect(client.suggest).not.toHaveBeenCalled();
+  });
+});
+
 describe('volunteers', () => {
   it('shows who each shift needs, with a table, and the roles', async () => {
     await setup();

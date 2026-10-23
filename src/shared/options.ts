@@ -50,6 +50,21 @@ export const LANGUAGES = [
 ] as const;
 /** One of the plan languages. */
 export type Language = (typeof LANGUAGES)[number];
+/**
+ * Each plan language's BCP 47 tag. Gemini writes in the plan's language while the app's own words
+ * stay English, so the views put this tag on AI-written text (WCAG 3.1.2, language of parts) and a
+ * screen reader reads it with the right voice.
+ */
+export const LANGUAGE_TAGS: Readonly<Record<Language, string>> = {
+  English: 'en',
+  Hindi: 'hi',
+  Tamil: 'ta',
+  Telugu: 'te',
+  Bengali: 'bn',
+  Marathi: 'mr',
+  Spanish: 'es',
+  French: 'fr',
+};
 /** Accessibility needs a guest list can have. */
 export const ACCESSIBILITY_OPTIONS = [
   'wheelchair',

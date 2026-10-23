@@ -6,7 +6,8 @@
  * the button `aria-disabled` while a request is pending (it keeps keyboard focus, and a submit does
  * nothing); say plainly that edits never call the AI; announce what an adjustment brought,
  * truthfully (updated ideas, or nothing usable), and say nothing while it waits (the Notices region
- * does); label every idea "AI · personalized" (with why it was chosen) or "Standard suggestion";
+ * does); label every idea "AI · personalized" (with why it was chosen, tagged with the plan's language) or
+ * "Standard suggestion";
  * when no AI ideas are showing, say why.
  * An adjustment is announced here and only here: the Notices region announces the answer to the
  * first request and to Personalize, and skips one that an adjustment asked for.
@@ -18,6 +19,7 @@ import { formatMoney } from '../../domain/money.js';
 import type { Plan } from '../../domain/plan.js';
 import type { AiState, ReadyState } from '../../domain/reducer.js';
 import { LIMITS } from '../../shared/limits.js';
+import { LANGUAGE_TAGS } from '../../shared/options.js';
 import { AiBadge, StandardBadge, StatusChip } from './chips.js';
 import { categoryLabel, formatCount } from '../../ui/format.js';
 import { LiveRegion, Panel } from './panel.js';
@@ -55,10 +57,14 @@ function adjustMessage(
 function IdeaCard({
   idea,
   plan,
+  aiLang,
 }: {
   readonly idea: Plan['ideas'][number];
   readonly plan: Plan;
+  /** The language tag for Gemini's words; a standard idea is the app's own English. */
+  readonly aiLang: string;
 }): ReactElement {
+  const lang = idea.source === 'ai' ? aiLang : undefined;
   const { currency } = plan.budget;
   const category = categoryLabel(plan.budget, idea.categoryId);
   const fit = idea.fit.fits
@@ -70,18 +76,20 @@ function IdeaCard({
   return (
     <li className="idea">
       <div className="idea__head">
-        <h3 className="idea__title" dir="auto">
+        <h3 className="idea__title" dir="auto" lang={lang}>
           {idea.title}
         </h3>
         {idea.source === 'ai' ? <AiBadge /> : <StandardBadge />}
       </div>
-      <p className="idea__description" dir="auto">
+      <p className="idea__description" dir="auto" lang={lang}>
         {idea.description}
       </p>
       {idea.source === 'ai' && idea.personalization !== undefined && (
         <p className="idea__why">
           <span className="idea__why-label">Why:</span>{' '}
-          <span dir="auto">{idea.personalization}</span>
+          <span dir="auto" lang={lang}>
+            {idea.personalization}
+          </span>
         </p>
       )}
       <dl className="idea__facts">
@@ -194,7 +202,12 @@ export function Ideas({ state, calls, store }: IdeasProps): ReactElement {
       {!hasAiIdeas && <p className="callout callout--info">{STANDARD_NOTICE[status]}</p>}
       <ul className="cards">
         {ideas.map((idea) => (
-          <IdeaCard key={idea.id} idea={idea} plan={state.plan} />
+          <IdeaCard
+            key={idea.id}
+            idea={idea}
+            plan={state.plan}
+            aiLang={LANGUAGE_TAGS[state.brief.language]}
+          />
         ))}
       </ul>
     </Panel>

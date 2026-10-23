@@ -3,7 +3,7 @@
  * status chip, its dates and a checkbox, plus the calendar download and "Print plan".
  * Does: label every checkbox with the task's title and describe it by its status and dates; tell
  * a screen reader politely what a tick did; keep focus on a neighbouring task when "Hide done
- * tasks" removes the one just ticked; label tasks Gemini added "AI · personalized"; build the
+ * tasks" removes the one just ticked; label tasks Gemini added "AI · personalized" and tag their words with the plan's language; build the
  * calendar file from the schedule with the clock read once, at the click, and let go of the file's
  * address a little later (at once if another download or the tab's end comes first).
  * Never does: compute a date or status (the engine's), call the AI, or leave a task's state to
@@ -14,6 +14,7 @@ import type { ReadyState } from '../../domain/reducer.js';
 import { toIcs } from '../../domain/ics.js';
 import { isAiTask } from '../../domain/merge.js';
 import type { ScheduledTask } from '../../domain/schedule.js';
+import { LANGUAGE_TAGS } from '../../shared/options.js';
 import { AiBadge, StatusChip } from './chips.js';
 import { icsBlob, icsFilename } from './download.js';
 import { categoryLabel, showDate, showMonth } from '../../ui/format.js';
@@ -44,11 +45,14 @@ function byMonth(
 function TaskRow(props: {
   readonly task: ScheduledTask;
   readonly category: string;
+  /** The language tag for Gemini's words; a template task is the app's own English. */
+  readonly aiLang: string;
   /** Where the row lists its checkbox, so a neighbour can take focus when this task is hidden. */
   readonly inputs: Map<string, HTMLInputElement>;
   readonly onToggle: (task: ScheduledTask) => void;
 }): ReactElement {
   const { task, category, inputs, onToggle } = props;
+  const lang = isAiTask(task.id) ? props.aiLang : undefined;
   const id = useId();
   const ui = STATUS_UI.task[task.status];
   // Stable between renders, so React does not detach and re-attach every row's ref each time.
@@ -74,7 +78,7 @@ function TaskRow(props: {
           onToggle(task);
         }}
       />
-      <label className="task__title" htmlFor={id} dir="auto">
+      <label className="task__title" htmlFor={id} dir="auto" lang={lang}>
         {task.title}
       </label>
       <div className="task__details" id={`${id}-details`}>
@@ -87,7 +91,7 @@ function TaskRow(props: {
           Start by {showDate(task.latestStart)} · finish by {showDate(task.latestEnd)}
         </p>
         {task.note !== undefined && (
-          <p className="task__note" dir="auto">
+          <p className="task__note" dir="auto" lang={lang}>
             {task.note}
           </p>
         )}
@@ -216,6 +220,7 @@ export function Timeline({ state, store }: TimelineProps): ReactElement {
                 key={task.id}
                 task={task}
                 category={categoryLabel(plan.budget, task.categoryId)}
+                aiLang={LANGUAGE_TAGS[brief.language]}
                 inputs={inputs}
                 onToggle={toggle}
               />
