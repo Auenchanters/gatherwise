@@ -2,7 +2,7 @@
  * Shared pieces of the plan workspace's browser journeys.
  * Does: serve every response under the production CSP, answer `/api/plan` with the fixed answer
  * (shaped like the real API) or, when a test passes one, a failure, while recording each request
- * body and console error; run axe at WCAG 2.1 A and AA; check for sideways page scroll; fill the
+ * body and console error; run axe at WCAG 2.2 A and AA plus its best-practice rules; check for sideways page scroll; fill the
  * form from a landing sample; and open the community sample's plan.
  * Never does: reach a real model.
  */
@@ -31,13 +31,14 @@ export const WEDDING_SAMPLE: Sample = {
 /** The line the AI panel shows once the fixed answer has landed. */
 export const AI_DONE = 'Personalized by gemini-3.5-flash-lite in one call.';
 
-const WCAG_AA = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
+/** WCAG 2.0, 2.1 and 2.2 at A and AA, and axe's best-practice rules (landmarks, heading order…). */
+const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
 
-/** WCAG 2.1 A and AA violations on the page as it is now. */
+/** Violations of {@link AXE_TAGS} on the page as it is now. */
 export const axeViolations = async (
   page: Page,
 ): Promise<Awaited<ReturnType<AxeBuilder['analyze']>>['violations']> =>
-  (await new AxeBuilder({ page }).withTags(WCAG_AA).analyze()).violations;
+  (await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze()).violations;
 
 /** The Content-Security-Policy the production deployment sends. */
 export const CSP = /"Content-Security-Policy",\s*"value":\s*"([^"]+)"/u.exec(

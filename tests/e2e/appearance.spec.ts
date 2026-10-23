@@ -1,6 +1,6 @@
 /**
  * The app in the visitor's own colour settings.
- * Does: with a dark colour scheme, check the dark palette is in force and run axe (WCAG 2.1 A and
+ * Does: with a dark colour scheme, check the dark palette is in force and run axe (WCAG 2.2 A and
  * AA, colour contrast included) on the landing page, the filled form and every tab of the
  * community plan, the AI panel open; check AI text in a Hindi plan is tagged `lang="hi"` while the
  * page stays English; with a forced palette, check the progress bar stays visible.

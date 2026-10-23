@@ -7,7 +7,7 @@
  * to create the plan, none for guests 250 → 400 (which still rescales the budget), none for a
  * reload that restores it, and none for submitting the same brief again after that reload (the
  * restored answer seeds the cache). Checks the AI panel shows the prompt that was sent, axe at
- * WCAG 2.1 AA on Overview and Budget, no horizontal page scroll, and a clean console. Also opens
+ * WCAG 2.2 AA and best practice on Overview and Budget, no horizontal page scroll, and a clean console. Also opens
  * the wedding sample, whose plan is calm, lists the bar vendor and has no Volunteers tab.
  * Never does: reach a real model.
  */
