@@ -1,8 +1,8 @@
 /**
  * The banner for deadlines that cannot be met: shown whenever the timeline has infeasible or
  * overdue tasks, naming up to five of them with their status (tasks Gemini added carry the AI
- * label), and linking to the timeline. Tasks that cannot be done in time come first, then overdue
- * ones, each group in schedule order.
+ * label, and their titles the plan's language), and linking to the timeline. Tasks that cannot be
+ * done in time come first, then overdue ones, each group in schedule order.
  * Never does: soften a deadline or hide that a task cannot be done in time.
  */
 import { useId, type MouseEvent, type ReactElement } from 'react';
@@ -17,6 +17,8 @@ const SHOWN = 5;
 /** Props for {@link InfeasibleBanner}. */
 export interface InfeasibleBannerProps {
   readonly schedule: Schedule;
+  /** The language tag for the titles of tasks Gemini added. */
+  readonly aiLang: string;
   /** The timeline panel's id, for the link's target. */
   readonly timelineId: string;
   /** Switches to the timeline; the link still works as a plain anchor without it. */
@@ -26,6 +28,7 @@ export interface InfeasibleBannerProps {
 /** Infeasible and overdue tasks, or nothing when every deadline can be met. */
 export function InfeasibleBanner({
   schedule,
+  aiLang,
   timelineId,
   onSeeTimeline,
 }: InfeasibleBannerProps): ReactElement | null {
@@ -55,7 +58,9 @@ export function InfeasibleBanner({
           return (
             <li className="banner__item" key={task.id}>
               <span className="banner__task">
-                <span dir="auto">{task.title}</span>
+                <span dir="auto" lang={isAiTask(task.id) ? aiLang : undefined}>
+                  {task.title}
+                </span>
                 {isAiTask(task.id) && <AiBadge />}
               </span>
               <StatusChip ui={ui} label={ui.label} />

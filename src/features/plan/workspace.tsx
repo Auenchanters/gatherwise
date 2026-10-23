@@ -9,6 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { vendorView, type ReadyState } from '../../domain/reducer.js';
+import { LANGUAGE_TAGS } from '../../shared/options.js';
 import { BriefForm } from '../brief/brief-form.js';
 import { Budget } from './budget.js';
 import { Header } from './header.js';
@@ -140,6 +141,7 @@ export function Workspace({ state, snapshot, store }: WorkspaceProps): ReactElem
         <>
           <InfeasibleBanner
             schedule={state.plan.schedule}
+            aiLang={LANGUAGE_TAGS[state.brief.language]}
             timelineId={panelId('timeline')}
             onSeeTimeline={() => {
               setTab('timeline');

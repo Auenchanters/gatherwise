@@ -1,8 +1,9 @@
 /**
  * Browser journeys for the landing state, run against the production build on desktop and mobile.
  *
- * Does: checks the landmarks and single h1, that the skip link comes first, axe at WCAG 2.2 AA and best practice on
- * the empty page, the sample-filled form and the error summary, and a clean console under the CSP.
+ * Does: checks the landmarks and single h1, that the skip link comes first, axe at WCAG 2.2 AA and
+ * best practice on the empty page, the sample-filled form and the error summary, and a clean
+ * console under the CSP.
  * Never does: generate a plan; tests/e2e/planner.spec.ts covers that, with the API mocked.
  */
 import { expect, test } from '@playwright/test';

@@ -8,7 +8,8 @@
  * announcements of the timeline; the ICS download (type, file name, content, DTSTAMP, done tasks
  * left out, a non-Latin name); the vendor cards, booking chips, status select and checklist; the
  * idea cards with their fit and source badges and the honest notice when there is no AI answer;
- * the volunteer table with a shortfall and with spare volunteers; heading order; and `dir="auto"`.
+ * the volunteer table with a shortfall and with spare volunteers; heading order; `dir="auto"`; and
+ * `lang` on AI-written text only.
  * Never does: call the network or read the clock (today is fixed; Date is faked where a stamp is checked).
  */
 import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';

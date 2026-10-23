@@ -2,8 +2,8 @@
  * Shared pieces of the plan workspace's browser journeys.
  * Does: serve every response under the production CSP, answer `/api/plan` with the fixed answer
  * (shaped like the real API) or, when a test passes one, a failure, while recording each request
- * body and console error; run axe at WCAG 2.2 A and AA plus its best-practice rules; check for sideways page scroll; fill the
- * form from a landing sample; and open the community sample's plan.
+ * body and console error; run axe at WCAG 2.2 A and AA plus its best-practice rules; check for
+ * sideways page scroll; fill the form from a landing sample; and open the community sample's plan.
  * Never does: reach a real model.
  */
 import { readFileSync } from 'node:fs';
@@ -31,7 +31,7 @@ export const WEDDING_SAMPLE: Sample = {
 /** The line the AI panel shows once the fixed answer has landed. */
 export const AI_DONE = 'Personalized by gemini-3.5-flash-lite in one call.';
 
-/** WCAG 2.0, 2.1 and 2.2 at A and AA, and axe's best-practice rules (landmarks, heading order…). */
+/** WCAG 2.0 to 2.2 at A and AA, plus axe's best-practice rules (landmarks, headings…). */
 const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];
 
 /** Violations of {@link AXE_TAGS} on the page as it is now. */

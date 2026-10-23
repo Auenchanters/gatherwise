@@ -3,8 +3,9 @@
  * build on desktop and mobile, under the production CSP, with `/api/plan` mocked.
  *
  * Does: walks every tab with the keyboard (arrows, Home, End, Tab into the panel) and runs axe at
- * WCAG 2.2 AA and best practice on each new tab with no sideways scroll; downloads the calendar and checks it is an
- * iCalendar file; checks that printing shows every tab and no buttons; and counts requests through
+ * WCAG 2.2 AA and best practice on each new tab with no sideways scroll; downloads the calendar and
+ * checks it is an iCalendar file; checks that printing shows every tab and no buttons; and counts
+ * requests through
  * the model-call budget journey: generating is 1 request, five edits (guests, budget, date, a
  * ticked task, a vendor status) leave it at 1, and "Adjust with AI" makes it 2.
  * Never does: reach a real model.

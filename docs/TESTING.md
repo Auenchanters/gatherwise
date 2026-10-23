@@ -35,7 +35,7 @@ Coverage is collected by `@vitest/coverage-v8` as configured in `vitest.config.t
 - **Measured:** `src/domain/**`, `src/shared/**`, `src/features/**/*.ts`, every `.tsx` component under `src/` and `server/**`.
 - **Excluded:** Vitest's default exclusions, `**/*.d.ts` (ambient declarations compile to nothing) and `src/main.tsx`.
 - **Thresholds** (the run fails below them): 100% lines, statements, functions and branches, so any untested line in the measured scope fails `npm run verify` and CI.
-- **At this commit** (`npm run test:coverage`, 74 files fully covered): statements 100% (1948 of 1948), branches 100% (1036 of 1036), functions 100% (616 of 616), lines 100% (1678 of 1678). No coverage-ignore comments are used anywhere; a branch is either reached by a test or the code that made it is gone.
+- **At this commit** (`npm run test:coverage`, 74 files fully covered): statements 100% (1948 of 1948), branches 100% (1038 of 1038), functions 100% (616 of 616), lines 100% (1678 of 1678). No coverage-ignore comments are used anywhere; a branch is either reached by a test or the code that made it is gone.
 
 What is outside the measured scope, and why:
 

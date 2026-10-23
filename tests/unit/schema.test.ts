@@ -129,6 +129,7 @@ describe('option tuples', () => {
     // A brief saved or sent before the field existed is English, not invalid.
     expect(eventBriefSchema.parse(valid).language).toBe('English');
     expect(accepts({ ...valid, language: 'Klingon' })).toBe(false);
+    expect(accepts({ ...valid, language: 'hindi' })).toBe(false);
   });
 
   it('has a BCP 47 tag for every plan language, so AI text can say which language it is in', () => {
@@ -143,7 +144,6 @@ describe('option tuples', () => {
       Spanish: 'es',
       French: 'fr',
     });
-    expect(accepts({ ...valid, language: 'hindi' })).toBe(false);
   });
 
   it('keep the discriminated union in step with EVENT_KINDS', () => {

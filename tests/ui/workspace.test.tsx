@@ -503,6 +503,7 @@ describe('workspace: infeasible deadlines', () => {
     render(
       <InfeasibleBanner
         schedule={{ tasks, infeasibleCount: 2, overdueCount: 2 }}
+        aiLang="en"
         timelineId="timeline"
         onSeeTimeline={() => undefined}
       />,
@@ -535,13 +536,20 @@ describe('workspace: infeasible deadlines', () => {
     const client = fakeClient(() =>
       Promise.resolve(ok({ suggestions, meta: aiMeta, cached: false })),
     );
-    await setup({ client, start: { ...festival, date: addDays(today, 200) } });
+    await setup({
+      client,
+      start: { ...festival, language: 'Hindi', date: addDays(today, 200) },
+    });
     const banner = screen.getByRole('region', { name: "Some deadlines can't be met" });
     const [item, ...rest] = within(banner).getAllByRole('listitem');
     expect(rest).toHaveLength(0);
     expect(item?.textContent).toContain('Book the lantern makers');
     expect(item?.textContent).toContain('AI · personalized');
     expect(item?.textContent).toContain('Overdue');
+    // Gemini's title carries the plan's language; the app's own words beside it do not.
+    const title = within(must(item)).getByText('Book the lantern makers');
+    expect(title.closest('[lang]')?.getAttribute('lang')).toBe('hi');
+    expect(within(must(item)).getByText('Overdue').closest('[lang]')).toBeNull();
   });
 });
 

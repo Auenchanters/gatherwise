@@ -1,11 +1,12 @@
 /**
  * The Timeline tab: the schedule's tasks grouped by the month they must start in, each with a
  * status chip, its dates and a checkbox, plus the calendar download and "Print plan".
- * Does: label every checkbox with the task's title and describe it by its status and dates; tell
- * a screen reader politely what a tick did; keep focus on a neighbouring task when "Hide done
- * tasks" removes the one just ticked; label tasks Gemini added "AI · personalized" and tag their words with the plan's language; build the
- * calendar file from the schedule with the clock read once, at the click, and let go of the file's
- * address a little later (at once if another download or the tab's end comes first).
+ * Does: label every checkbox with the task's title and describe it by its status and dates; tell a
+ * screen reader politely what a tick did; keep focus on a neighbouring task when "Hide done tasks"
+ * removes the one just ticked; label tasks Gemini added "AI · personalized" and tag their words
+ * with the plan's language; build the calendar file from the schedule with the clock read once, at
+ * the click, and let go of the file's address a little later (at once if another download or the
+ * tab's end comes first).
  * Never does: compute a date or status (the engine's), call the AI, or leave a task's state to
  * colour alone (every status is an icon and words too).
  */
@@ -91,7 +92,7 @@ function TaskRow(props: {
           Start by {showDate(task.latestStart)} · finish by {showDate(task.latestEnd)}
         </p>
         {task.note !== undefined && (
-          <p className="task__note" dir="auto" lang={lang}>
+          <p className="task__note" dir="auto">
             {task.note}
           </p>
         )}

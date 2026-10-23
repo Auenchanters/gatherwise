@@ -1,8 +1,8 @@
 /**
  * The Overview tab: the plan in one paragraph, the figures that matter as stat tiles, and the
  * "AI at work" panel with the session's AI-call counter.
- * Does: label the AI summary "AI · personalized" and tag it with the plan's language; fall back to a sentence built from the engine's
- * figures when there is none.
+ * Does: label the AI summary "AI · personalized" and tag it with the plan's language; fall back to
+ * a sentence built from the engine's figures when there is none.
  * Never does: compute a figure (each one is the engine's) or call the AI except through the panel's
  * buttons.
  */

@@ -6,9 +6,8 @@
  * the button `aria-disabled` while a request is pending (it keeps keyboard focus, and a submit does
  * nothing); say plainly that edits never call the AI; announce what an adjustment brought,
  * truthfully (updated ideas, or nothing usable), and say nothing while it waits (the Notices region
- * does); label every idea "AI · personalized" (with why it was chosen, tagged with the plan's language) or
- * "Standard suggestion";
- * when no AI ideas are showing, say why.
+ * does); label every idea "AI · personalized" (its title, description and why it was chosen tagged
+ * with the plan's language) or "Standard suggestion"; when no AI ideas are showing, say why.
  * An adjustment is announced here and only here: the Notices region announces the answer to the
  * first request and to Personalize, and skips one that an adjustment asked for.
  * Never does: call the AI from anywhere else, compute a fit (the engine did), or show AI text

@@ -14,8 +14,8 @@ What the server does guard is cost. `POST /api/plan` is the only endpoint that s
 
 1. **The request gate** (`server/request.ts`): POST only, `application/json` only, at most 64 KB, a strict schema for the brief and the optional adjustment, and a date inside the planning window.
 2. **The origin rule** (below): another website cannot make a visitor's browser call the API. It is CSRF hygiene, not authentication: a script outside a browser can send any `Origin`.
-3. **Per-client quotas** (`server/rate-limit.ts`): 10 plan requests a minute per client, shared by every instance through Upstash Redis. A client is a SHA-256 of the first address in `x-vercel-forwarded-for`, a header set by Vercel's edge rather than by the client.
-4. **A daily budget** for the whole deployment: 300 model calls a UTC day by default (`AI_DAILY_LIMIT`).
+3. **Per-client quotas** (`server/rate-limit.ts`): 10 plan requests a minute per client, shared by every instance through Upstash Redis (if the store is missing or fails, each instance counts on its own; see **Abuse and cost** below). A client is a SHA-256 of the first address in `x-vercel-forwarded-for`, a header set by Vercel's edge rather than by the client.
+4. **A daily budget** for the whole deployment, kept in the same store: 300 model calls a UTC day by default (`AI_DAILY_LIMIT`).
 
 So the worst a determined caller can do is spend the daily budget from many addresses. After that the API answers 503 `AI_BUSY` until UTC midnight, and every plan still works without AI ideas (`docs/adr/0006-per-section-degradation.md`). A caller cannot read another visitor's plan, because the server never has one, and cannot reach `GEMINI_API_KEY`, which is read only on the server and is never in a response, a log line or the client bundle.
 
