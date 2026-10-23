@@ -1,6 +1,6 @@
 # Testing
 
-`npm run verify` runs lint, type-checking, the unit and component tests with coverage, knip, the production build (with its bundle and runtime checks) and the Prettier check. At this commit it runs 1,463 Vitest tests, and every measured file is at 100% statements, branches, functions and lines. CI (`.github/workflows/ci.yml`) runs on every push and pull request: `npm run verify`, then the Playwright journeys against the build that `verify` just made, and `npm audit`. `.github/workflows/live.yml` runs the live smoke against the deployment once a day and on demand.
+`npm run verify` runs lint, type-checking, the unit and component tests with coverage, knip, the production build (with its bundle and runtime checks) and the Prettier check. At this commit it runs 1,468 Vitest tests, and every measured file is at 100% statements, branches, functions and lines. CI (`.github/workflows/ci.yml`) runs on every push and pull request: `npm run verify`, then the Playwright journeys against the build that `verify` just made, and `npm audit`. `.github/workflows/live.yml` runs the live smoke against the deployment once a day and on demand.
 
 ## Layers
 
@@ -35,13 +35,21 @@ Coverage is collected by `@vitest/coverage-v8` as configured in `vitest.config.t
 - **Measured:** `src/domain/**`, `src/shared/**`, `src/features/**/*.ts`, every `.tsx` component under `src/` and `server/**`.
 - **Excluded:** Vitest's default exclusions, `**/*.d.ts` (ambient declarations compile to nothing) and `src/main.tsx`.
 - **Thresholds** (the run fails below them): 100% lines, statements, functions and branches, so any untested line in the measured scope fails `npm run verify` and CI.
-- **At this commit** (`npm run test:coverage`, 74 files fully covered): statements 100% (1945 of 1945), branches 100% (1032 of 1032), functions 100% (616 of 616), lines 100% (1675 of 1675). No coverage-ignore comments are used anywhere; a branch is either reached by a test or the code that made it is gone.
+- **At this commit** (`npm run test:coverage`, 74 files fully covered): statements 100% (1948 of 1948), branches 100% (1036 of 1036), functions 100% (616 of 616), lines 100% (1678 of 1678). No coverage-ignore comments are used anywhere; a branch is either reached by a test or the code that made it is gone.
 
 What is outside the measured scope, and why:
 
 - **`src/main.tsx`.** It finds `#root` and renders `<App />` in `StrictMode`, which needs a real page. Every Playwright journey loads it through the production build, and `App` itself is measured through `tests/ui/app.test.tsx`.
 - **`api/plan.ts` and `api/health.ts`.** Each is two statements: import the handler factory and export the handler it builds from `process.env`. The factory (`handlerFromEnv`) and the handler are measured in full, with the environment passed as a plain object, and the runtime smoke imports the emitted entry points after every build.
 - **`scripts/`.** `scripts/bundle-budget.ts` and `scripts/runtime-smoke.mjs` run inside every build. `scripts/live-checks.ts` and `scripts/doc-checks.ts` are unit-tested but sit outside `src` and `server`. `scripts/preflight.ts`, `scripts/live-smoke.ts` and `scripts/dev-server.ts` are thin wrappers run by hand.
+
+## Measured on the live site
+
+On 2026-10-23, against https://gatherwise-zeta.vercel.app at `3e6950b`:
+
+- **Lighthouse 13 (mobile emulation), the landing page:** Performance 100, Accessibility 100, Best Practices 100, SEO 100, in three consecutive runs. First Contentful Paint 1.2 s, Largest Contentful Paint 1.3 s, Total Blocking Time 10 ms, Cumulative Layout Shift 0.
+- **axe 4 at WCAG 2.2 A and AA plus best practice:** 0 violations in 40 states: the landing page, the empty-submit error summary, the filled form, all six workspace tabs (with the AI panel open) and the edit form, each on desktop and mobile in light and in dark mode, with `/api/plan` answered by the fixed test answer.
+- **Language of AI text:** a Hindi plan's ideas resolve to `lang="hi"` while the page stays `lang="en"`.
 
 ## Running each layer
 

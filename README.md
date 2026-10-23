@@ -93,6 +93,8 @@ The "AI calls this session" counter on **Overview** is the browser client's coun
 | Testing                     | `vitest.config.ts`, `tests/unit/`, `tests/ui/`, `tests/e2e/`, `docs/TESTING.md`                                                                           | Property tests, the handler matrix, injection corpora, golden ICS, purity and tampered-storage tests, RTL and Playwright with axe.                                                                                                         |
 | Accessibility               | `src/features/plan/tabs.tsx`, `src/features/brief/error-summary.tsx`, `src/styles/base.css`, `tests/e2e/keyboard.spec.ts`, `tests/e2e/appearance.spec.ts` | WAI-ARIA tabs, the GOV.UK error summary, visible focus, reduced motion, a dark mode whose every text pair meets AA, forced-colours support, a keyboard-only journey, and axe at WCAG 2.2 A and AA plus best practice in light and dark.    |
 
+Measured on the live site on 2026-10-23: Lighthouse 100 for Performance, Accessibility, Best Practices and SEO, and 0 axe violations at WCAG 2.2 AA plus best practice across 40 states, light and dark (`docs/TESTING.md`, "Measured on the live site").
+
 ## Security
 
 No accounts and no server-side plans: a plan stays in the visitor's browser, and the server guards only the cost of the one AI call (request gate, origin rule, per-client quotas and a daily budget). The full threat model, the headers and the decisions behind them are in [SECURITY.md](SECURITY.md). Checked on 2026-10-23: `npm audit` reports 0 vulnerabilities, and CodeQL and Gitleaks are green.

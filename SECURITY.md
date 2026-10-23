@@ -84,5 +84,5 @@ For `POST /api/plan`, `validateTransport` in `server/request.ts` allows exactly 
 ## Verified on 2026-10-23
 
 - `npm audit --omit=dev`: 0 vulnerabilities. `npm audit` (the whole tree, dev tools included): 0 vulnerabilities.
-- CodeQL (`security-extended`), Gitleaks (full history) and the Quality workflow (with both audits): green on `2116f1e`.
+- CodeQL (`security-extended`), Gitleaks (full history) and the Quality workflow (with both audits): green on `3e6950b`.
 - The live site, checked with `curl`: every response carries the CSP above (no `unsafe-*`, Trusted Types required), HSTS, `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy` and `Permissions-Policy`. `POST /api/plan` answers malformed JSON with 400, a non-JSON body with 415, an oversize body with 413 and a GET with 405, each as a JSON error with no stack trace, and never sends `Access-Control-Allow-Origin`.
